@@ -45,12 +45,18 @@ function parse(raw: Record<string, unknown> | null, fields: Field[]): Partial<Sh
   return out;
 }
 
+function toRecord(raw: unknown, fields: Field[]): Record<string, unknown> | null {
+  if (!Array.isArray(raw)) return raw as Record<string, unknown> | null;
+  return Object.fromEntries(fields.map((f, i) => [f, raw[i]]));
+}
+
 class RedisStore implements Store {
   constructor(private redis: Redis) {}
 
   async get(id: string, fields: Field[]) {
-    const raw = await this.redis.hmget<Record<string, unknown>>(PREFIX + id, ...fields);
-    return parse(raw, fields);
+    // Sin deserialización automática, Upstash devuelve los valores como arreglo, en el orden pedido.
+    const raw: unknown = await this.redis.hmget(PREFIX + id, ...fields);
+    return parse(toRecord(raw, fields), fields);
   }
 
   async create(id: string, record: ShareRecord) {
