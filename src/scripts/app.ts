@@ -14,7 +14,7 @@ import {
 } from './faces';
 import { deleteGame, findByShareId, listGames, loadGame, saveGame } from './games';
 import { renderHistory } from './history';
-import { canvasToBlob, fileToDataUrl, thumbFrom } from './image';
+import { canvasToBlob, fileToDataUrl, qrFromFile, thumbFrom } from './image';
 import {
   createShare,
   deleteShare,
@@ -24,6 +24,7 @@ import {
   publicUrl,
   pushShare,
   ShareError,
+  type PayInfo,
   type ShareLink,
 } from './share';
 import {
@@ -66,6 +67,14 @@ const els = {
   gameForm: $<HTMLDivElement>('gameForm'),
   doneGame: $<HTMLButtonElement>('doneGame'),
   title: $<HTMLInputElement>('title'),
+  payNote: $<HTMLTextAreaElement>('payNote'),
+  payQrFile: $<HTMLInputElement>('payQrFile'),
+  payQrPreview: $<HTMLImageElement>('payQrPreview'),
+  payQrLabel: $<HTMLSpanElement>('payQrLabel'),
+  payQrRemove: $<HTMLButtonElement>('payQrRemove'),
+  payChip: $<HTMLParagraphElement>('payChip'),
+  payChipQr: $<HTMLImageElement>('payChipQr'),
+  payChipNote: $<HTMLSpanElement>('payChipNote'),
   currency: $<HTMLInputElement>('currency'),
   cost: $<HTMLInputElement>('cost'),
   rounding: $<HTMLSelectElement>('rounding'),
@@ -107,8 +116,10 @@ const HINTS: Record<Mode, string> = {
 
 /** Campos que ven los demás en el link: si cambian, se sincroniza. */
 const SHARED_FIELDS: (keyof State)[] = ['faces', 'cost', 'currency', 'title', 'rounding'];
+/** Datos para pagar: van al link aparte, solo cuando cambian. */
+const PAY_FIELDS: (keyof State)[] = ['payNote', 'payQr'];
 /** Campos del partido: si cambian, el partido sube en el historial. */
-const GAME_FIELDS: (keyof State)[] = [...SHARED_FIELDS, 'image', 'share'];
+const GAME_FIELDS: (keyof State)[] = [...SHARED_FIELDS, ...PAY_FIELDS, 'image', 'share'];
 
 let mode: Mode = 'pay';
 let scanning = false;
@@ -157,6 +168,13 @@ document.addEventListener('visibilitychange', () => {
 });
 
 const touches = (patch: Partial<State>, fields: (keyof State)[]) => fields.some((k) => k in patch);
+let payDirty = false;
+
+function queueShareSync(patch: Partial<State>) {
+  const pay = touches(patch, PAY_FIELDS);
+  payDirty ||= pay;
+  if (pay || touches(patch, SHARED_FIELDS)) scheduleSync();
+}
 
 /** Aplica cambios, guarda y repinta. `sync: false` cuando los datos ya vienen del servidor. */
 function update(patch: Partial<State>, sync = true) {
@@ -164,7 +182,7 @@ function update(patch: Partial<State>, sync = true) {
   state = { ...state, ...patch, updatedAt };
   persist();
   render();
-  if (sync && state.share && touches(patch, SHARED_FIELDS)) scheduleSync();
+  if (sync && state.share) queueShareSync(patch);
 }
 
 // ——— Render ———
@@ -182,11 +200,26 @@ function renderFaces() {
   syncFaces(els.faces, faceEls, state.faces, { interactive: true, label: (f, i) => faceLabel(f, i, mode) });
 }
 
+function renderPay() {
+  const note = state.payNote.trim();
+  const qr = state.payQr;
+  els.payQrPreview.hidden = !qr;
+  els.payQrRemove.hidden = !qr;
+  els.payQrLabel.textContent = qr ? 'Cambiar QR' : 'Subir QR de Yape o Plin';
+  if (qr) els.payQrPreview.src = qr;
+  // Con la ficha plegada, un resumen de lo que verá el grupo.
+  els.payChip.hidden = formOpen || !(note || qr);
+  els.payChipNote.textContent = note || 'QR';
+  els.payChipQr.hidden = !qr;
+  if (qr) els.payChipQr.src = qr;
+}
+
 function renderGameCard() {
   els.gameTitle.textContent = state.title.trim() || 'Nuevo partido';
   els.gameMeta.textContent = gameMetaText(state);
   els.gameForm.hidden = !formOpen;
   els.editGame.setAttribute('aria-expanded', String(formOpen));
+  renderPay();
 }
 
 const isSettled = () => {
@@ -245,6 +278,7 @@ function render() {
 
 function fillForm() {
   els.title.value = state.title;
+  els.payNote.value = state.payNote;
   els.currency.value = state.currency;
   els.cost.value = state.cost == null ? '' : String(state.cost);
   els.rounding.value = String(state.rounding);
@@ -459,6 +493,18 @@ const parseCost = (value: string) => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 els.title.addEventListener('input', () => update({ title: els.title.value }));
+els.payNote.addEventListener('input', () => update({ payNote: els.payNote.value }));
+els.payQrFile.addEventListener('change', async () => {
+  const file = els.payQrFile.files?.[0];
+  els.payQrFile.value = '';
+  if (!file?.type.startsWith('image/')) return;
+  try {
+    update({ payQr: await qrFromFile(file) });
+  } catch {
+    announce('No pudimos abrir esa imagen del QR.');
+  }
+});
+els.payQrRemove.addEventListener('click', () => update({ payQr: null }));
 els.currency.addEventListener('input', () => update({ currency: els.currency.value.trim() }));
 els.cost.addEventListener('input', () => update({ cost: parseCost(els.cost.value) }));
 els.rounding.addEventListener('change', () => update({ rounding: parseFloat(els.rounding.value) }));
@@ -551,12 +597,15 @@ function scheduleSync() {
 }
 
 async function pushOnce(link: ShareLink) {
+  const withPay = payDirty;
+  payDirty = false;
   try {
-    await pushShare(link, state);
+    await pushShare(link, state, withPay);
     if (!dirty) setSync(LIVE, 'ok');
   } catch (err) {
     console.error(err);
     if (dropLinkOn(err)) return;
+    payDirty ||= withPay;
     setSync('Sin conexión. Reintentando…', 'error');
     queueSync(5000);
   }
@@ -573,11 +622,14 @@ async function runSync() {
   syncing = null;
 }
 
+/** Nota y QR tal como vinieron del link (si vinieron). */
+const payFields = (pay?: PayInfo): Partial<State> => (pay ? { payNote: pay.note, payQr: pay.qr } : {});
+
 /** Trae los pagos del servidor: otro equipo con el link maestro pudo haberlos cambiado. */
 async function pullShared(link: ShareLink) {
   try {
-    const loaded = await loadShare(link, false);
-    if (state.share?.id === link.id) update(loaded.state, false);
+    const loaded = await loadShare(link, false, true);
+    if (state.share?.id === link.id) update({ ...loaded.state, ...payFields(loaded.pay) }, false);
     setSync(LIVE, 'ok');
   } catch (err) {
     if (!dropLinkOn(err)) setSync('Sin conexión: mostrando lo guardado aquí.', 'error');
@@ -679,6 +731,7 @@ async function switchTo(game: Game) {
   scanning = false;
   clearTimeout(syncTimer);
   dirty = false;
+  payDirty = false;
   setPeek(false);
   setSync('');
   state = { ...game, faces: refreshEmojis(game.faces, state.blocked), includePhoto: state.includePhoto, blocked: state.blocked };
@@ -695,8 +748,9 @@ function ensureThumb() {
   if (state.image && !state.thumb) makeThumb(state.image);
 }
 
-type GameBase = Pick<Game, 'title' | 'cost' | 'currency' | 'rounding'>;
-const baseOf = ({ title, cost, currency, rounding }: GameBase): GameBase => ({ title, cost, currency, rounding });
+type GameBase = Pick<Game, 'title' | 'cost' | 'currency' | 'rounding' | 'payNote' | 'payQr'>;
+/** Lo que se repite de un partido a otro: nombre, costo y cómo pagar. */
+const baseOf = ({ title, cost, currency, rounding, payNote, payQr }: GameBase): GameBase => ({ title, cost, currency, rounding, payNote, payQr });
 
 async function startNewGame(base: Partial<GameBase> = { currency: state.currency, rounding: state.rounding }) {
   els.history.close();
@@ -794,7 +848,7 @@ async function openMasterLink(link: ShareLink) {
     const base = await gameForLink(link);
     const image = loaded.image ?? base.image;
     const thumb = base.thumb ?? (image ? await thumbFrom(image).catch(() => null) : null);
-    await switchTo({ ...base, ...loaded.state, image, thumb, share: link, updatedAt: Date.now() });
+    await switchTo({ ...base, ...loaded.state, ...payFields(loaded.pay), image, thumb, share: link, updatedAt: Date.now() });
     setSync(LIVE, 'ok');
   } catch (err) {
     console.error(err);

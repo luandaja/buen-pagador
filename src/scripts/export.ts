@@ -5,7 +5,8 @@ import { computeTotals, money, type Face, type State, type Totals } from './stat
 type Ctx = CanvasRenderingContext2D;
 type Box = { x: number; y: number; w: number; h: number };
 /** Lo que necesita la tarjeta: datos del partido y si va con foto. */
-export type CardInput = Pick<State, 'image' | 'faces' | 'cost' | 'currency' | 'title' | 'rounding' | 'includePhoto'>;
+export type CardInput = Pick<State, 'image' | 'faces' | 'cost' | 'currency' | 'title' | 'rounding' | 'includePhoto'> &
+  Partial<Pick<State, 'payNote' | 'payQr'>>;
 
 const C = {
   court: '#2340c8',
@@ -281,24 +282,71 @@ async function loadFonts() {
   await Promise.all(faces.map((f) => document.fonts.load(f))).catch(() => {});
 }
 
+const NOTE_H = 52;
+const QR_LABEL_H = 64;
+
+/** Cajas del cuerpo: la nota de pago empuja todo hacia abajo y el QR va sobre el termómetro. */
+export function bodyBoxes(hasNote: boolean, hasQr: boolean) {
+  const top = LAYOUT.bodyTop + (hasNote ? NOTE_H : 0);
+  const h = LAYOUT.bodyH - (hasNote ? NOTE_H : 0);
+  const thermoX = SIZE - PAD - THERMO_W;
+  const qr: Box | null = hasQr ? { x: thermoX, y: top, w: THERMO_W, h: THERMO_W } : null;
+  const shift = qr ? THERMO_W + QR_LABEL_H : 0;
+  return {
+    noteBaseline: LAYOUT.bodyTop + 30,
+    left: { x: PAD, y: top, w: CONTENT_W - THERMO_W - GAP, h },
+    thermo: { x: thermoX, y: top + shift, w: THERMO_W, h: h - shift },
+    qr,
+  };
+}
+
+function drawPayNote(ctx: Ctx, note: string, baseline: number) {
+  const text = `Para pagar: ${note}`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = C.ball;
+  fitText(ctx, text, CONTENT_W, 30, 700, BODY);
+  ctx.fillText(text, PAD, baseline);
+}
+
+function drawQr(ctx: Ctx, qr: HTMLImageElement, box: Box) {
+  roundRect(ctx, box.x, box.y, box.w, box.h, 16);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  const inner = containBox(qr.naturalWidth / qr.naturalHeight, { x: box.x + 10, y: box.y + 10, w: box.w - 20, h: box.h - 20 });
+  ctx.drawImage(qr, inner.x, inner.y, inner.w, inner.h);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = C.chalkDim;
+  ctx.font = `700 18px ${BODY}`;
+  ctx.fillText('ESCANEA PARA PAGAR', box.x + box.w / 2, box.y + box.h + 24);
+}
+
+const loadIf = (src: string | null | undefined, wanted = true) => (src && wanted ? loadImage(src) : null);
+
+/** Foto (o porcentaje), nota y QR, según lo que tenga el partido. */
+function drawBody(ctx: Ctx, state: CardInput, t: Totals, img: HTMLImageElement | null, qr: HTMLImageElement | null) {
+  const note = state.payNote?.trim() ?? '';
+  const boxes = bodyBoxes(!!note, !!qr);
+  if (note) drawPayNote(ctx, note, boxes.noteBaseline);
+  if (img) drawPhoto(ctx, img, state.faces, containBox(img.naturalWidth / img.naturalHeight, boxes.left));
+  else drawPercent(ctx, state, t, boxes.left);
+  if (qr && boxes.qr) drawQr(ctx, qr, boxes.qr);
+  drawThermo(ctx, boxes.thermo, t.pct);
+}
+
 export async function renderCard(state: CardInput): Promise<HTMLCanvasElement> {
   await loadFonts();
   const t = computeTotals(state);
-  const img = state.includePhoto && state.image ? await loadImage(state.image) : null;
+  const [img, qr] = await Promise.all([loadIf(state.image, state.includePhoto), loadIf(state.payQr)]);
 
   const canvas = document.createElement('canvas');
   canvas.width = SIZE;
   canvas.height = SIZE;
   const ctx = canvas.getContext('2d')!;
 
-  const left: Box = { x: PAD, y: LAYOUT.bodyTop, w: CONTENT_W - THERMO_W - GAP, h: LAYOUT.bodyH };
-  const thermo: Box = { x: SIZE - PAD - THERMO_W, y: LAYOUT.bodyTop, w: THERMO_W, h: LAYOUT.bodyH };
-
   drawBackground(ctx);
   drawHeader(ctx, state.title);
-  if (img) drawPhoto(ctx, img, state.faces, containBox(img.naturalWidth / img.naturalHeight, left));
-  else drawPercent(ctx, state, t, left);
-  drawThermo(ctx, thermo, t.pct);
+  drawBody(ctx, state, t, img, qr);
   drawStatus(ctx, t);
   drawStats(ctx, statCells(state, t));
   return canvas;

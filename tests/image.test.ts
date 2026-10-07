@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { bytesToDataUrl, canvasToBlob, fileToDataUrl, loadImage, resizeToCanvas, shareImageBytes, thumbFrom } from '../src/scripts/image';
+import { bytesToDataUrl, canvasToBlob, fileToDataUrl, loadImage, resizeToCanvas, qrFromFile, shareImageBytes, thumbFrom } from '../src/scripts/image';
 import { FakeImage, installFakeCanvas } from './helpers/canvas';
 
 beforeEach(() => {
@@ -42,6 +42,13 @@ describe('codificación', () => {
     installFakeCanvas();
     const bytes = await shareImageBytes('data:ok');
     expect(new TextDecoder().decode(bytes)).toBe('fake-image');
+  });
+
+  it('qrFromFile achica el QR y libera la URL temporal', async () => {
+    installFakeCanvas();
+    const revoke = vi.spyOn(URL, 'revokeObjectURL');
+    expect(await qrFromFile(new File(['x'], 'qr.png', { type: 'image/png' }))).toMatch(/^data:image\/jpeg/);
+    expect(revoke).toHaveBeenCalled();
   });
 
   it('thumbFrom genera una miniatura JPEG', async () => {

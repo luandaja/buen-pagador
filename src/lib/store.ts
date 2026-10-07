@@ -13,6 +13,10 @@ export interface ShareRecord {
   edit: string;
   /** Versión, sube con cada cambio. */
   v: number;
+  /** Datos para pagar cifrados (nota y QR), opcional. Viaja aparte porque el QR pesa. */
+  pay?: string;
+  /** Versión de los datos para pagar: la vista pública solo los vuelve a pedir si cambia. */
+  pv?: number;
 }
 
 type Field = keyof ShareRecord;
@@ -25,7 +29,8 @@ const PREFIX = 'bp:share:';
 interface Store {
   get(id: string, fields: Field[]): Promise<Partial<ShareRecord> | null>;
   create(id: string, record: ShareRecord): Promise<void>;
-  updateState(id: string, state: string): Promise<number>;
+  /** Guarda el estado (y los datos para pagar, si vienen). Devuelve la nueva versión. */
+  updateState(id: string, state: string, pay?: string): Promise<number>;
   remove(id: string): Promise<void>;
 }
 
@@ -41,7 +46,7 @@ function parse(raw: Record<string, unknown> | null, fields: Field[]): Partial<Sh
   for (const f of fields) {
     const value = raw[f];
     if (value == null) continue;
-    if (f === 'v') out.v = Number(value);
+    if (f === 'v' || f === 'pv') out[f] = Number(value);
     else out[f] = String(value);
   }
   return out;
@@ -64,16 +69,18 @@ class RedisStore implements Store {
   async create(id: string, record: ShareRecord) {
     const key = PREFIX + id;
     const tx = this.redis.multi();
-    tx.hset(key, { ...record, v: String(record.v) });
+    const { pay, pv, ...rest } = record;
+    tx.hset(key, { ...rest, v: String(rest.v), pv: String(pv ?? 0), ...(pay ? { pay } : {}) });
     tx.expire(key, TTL_SECONDS);
     await tx.exec();
   }
 
-  async updateState(id: string, state: string) {
+  async updateState(id: string, state: string, pay?: string) {
     const key = PREFIX + id;
     const tx = this.redis.multi();
-    tx.hset(key, { state });
+    tx.hset(key, pay ? { state, pay } : { state });
     tx.hincrby(key, 'v', 1);
+    if (pay) tx.hincrby(key, 'pv', 1);
     tx.expire(key, TTL_SECONDS);
     const [, v] = await tx.exec<[number, number, number]>();
     return Number(v);
@@ -113,11 +120,12 @@ class MemoryStore implements Store {
     this.data.set(id, { record: { ...record }, expires: Date.now() + TTL_SECONDS * 1000 });
   }
 
-  async updateState(id: string, state: string) {
+  async updateState(id: string, state: string, pay?: string) {
     const entry = this.live(id);
     if (!entry) return 0;
     entry.record.state = state;
     entry.record.v += 1;
+    if (pay) Object.assign(entry.record, { pay, pv: (entry.record.pv ?? 0) + 1 });
     entry.expires = Date.now() + TTL_SECONDS * 1000;
     return entry.record.v;
   }
@@ -176,9 +184,9 @@ class FileStore extends MemoryStore {
     this.save();
   }
 
-  override async updateState(id: string, state: string) {
+  override async updateState(id: string, state: string, pay?: string) {
     this.load();
-    const v = await super.updateState(id, state);
+    const v = await super.updateState(id, state, pay);
     this.save();
     return v;
   }

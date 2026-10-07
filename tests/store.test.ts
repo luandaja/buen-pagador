@@ -25,6 +25,15 @@ describe('MemoryStore', () => {
     expect(await store.updateState('abc', 'x')).toBe(0);
   });
 
+  it('guarda los datos para pagar y sube su versión solo cuando vienen', async () => {
+    const store = new MemoryStore();
+    await store.create('pay', { ...record, pay: 'p1', pv: 1 });
+    await store.updateState('pay', 's2');
+    expect(await store.get('pay', ['pay', 'pv'])).toEqual({ pay: 'p1', pv: 1 });
+    await store.updateState('pay', 's3', 'p2');
+    expect(await store.get('pay', ['pay', 'pv'])).toEqual({ pay: 'p2', pv: 2 });
+  });
+
   it('expira a los 30 días', async () => {
     vi.useFakeTimers();
     const store = new MemoryStore();
@@ -83,10 +92,16 @@ describe('RedisStore', () => {
   it('crea con expiración y actualiza subiendo la versión', async () => {
     const { store, tx, redis } = fakeRedis(null);
     await store.create('id', record);
-    expect(tx.hset).toHaveBeenCalledWith('bp:share:id', { ...record, v: '1' });
+    expect(tx.hset).toHaveBeenCalledWith('bp:share:id', { ...record, v: '1', pv: '0' });
     expect(tx.expire).toHaveBeenCalledWith('bp:share:id', TTL_SECONDS);
     expect(await store.updateState('id', 'nuevo')).toBe(7);
     expect(tx.hincrby).toHaveBeenCalledWith('bp:share:id', 'v', 1);
+    expect(tx.hincrby).not.toHaveBeenCalledWith('bp:share:id', 'pv', 1);
+    await store.create('id2', { ...record, pay: 'p', pv: 1 });
+    expect(tx.hset).toHaveBeenLastCalledWith('bp:share:id2', { ...record, v: '1', pv: '1', pay: 'p' });
+    await store.updateState('id2', 'nuevo', 'p2');
+    expect(tx.hset).toHaveBeenLastCalledWith('bp:share:id2', { state: 'nuevo', pay: 'p2' });
+    expect(tx.hincrby).toHaveBeenLastCalledWith('bp:share:id2', 'pv', 1);
     await store.remove('id');
     expect(redis.del).toHaveBeenCalledWith('bp:share:id');
   });

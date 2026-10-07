@@ -36,6 +36,13 @@ describe('historial en IndexedDB', () => {
     expect(await loadGame('nada')).toBeNull();
   });
 
+  it('completa los campos nuevos en partidos de versiones anteriores', async () => {
+    const { payNote: _n, payQr: _q, ...old } = newGame({ title: 'Viejo' });
+    await saveGame(old as never);
+    expect(await loadGame(old.id)).toMatchObject({ title: 'Viejo', payNote: '', payQr: null });
+    expect((await listGames())[0]).toMatchObject({ payNote: '', payQr: null });
+  });
+
   it('borra el partido y su foto', async () => {
     const game = { ...newGame(), image: 'data:foto' };
     await saveGame(game);

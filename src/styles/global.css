@@ -891,7 +891,8 @@ select {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   width: 100%;
   min-width: 0;
   min-height: 44px;
@@ -906,12 +907,14 @@ select {
   color: var(--ink);
 }
 
+.field textarea::placeholder,
 .field input::placeholder {
   color: rgba(247, 248, 252, 0.6);
 }
 
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   outline: none;
   border-color: var(--ball);
   box-shadow: 0 0 0 3px rgba(255, 106, 19, 0.25);
@@ -1667,4 +1670,126 @@ html:has(.drawer[open]) {
 .history-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ——— Datos para pagar ——— */
+.field textarea {
+  resize: vertical;
+  font: inherit;
+  line-height: 1.4;
+}
+
+.optional {
+  font-weight: 500;
+  color: rgba(247, 248, 252, 0.6);
+}
+
+.qr-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.qr-preview {
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  object-fit: contain;
+  background: #fff;
+}
+
+.file-btn {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.file-btn:focus-within {
+  outline: 3px solid var(--ball);
+  outline-offset: 2px;
+}
+
+.pay-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 106, 19, 0.12);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.pay-chip img {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: contain;
+  background: #fff;
+}
+
+.pay-chip-label {
+  font-weight: 700;
+  color: #ffb48a;
+}
+
+/* Vista pública: cómo pagar */
+.pay-box {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255, 106, 19, 0.5);
+  background: rgba(255, 106, 19, 0.08);
+}
+
+.pay-box h3 {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ball);
+}
+
+.pay-note {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.pay-box .secondary {
+  justify-self: start;
+}
+
+.pay-qr {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+}
+
+.pay-qr img {
+  width: min(240px, 100%);
+  aspect-ratio: 1;
+  padding: 10px;
+  border-radius: 12px;
+  object-fit: contain;
+  background: #fff;
+}
+
+.pay-qr figcaption {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  font-size: 13px;
+  text-align: center;
+  color: var(--board-dim);
 }
