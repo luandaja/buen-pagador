@@ -1,33 +1,33 @@
 export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('No pudimos abrir esa imagen. Prueba con un JPG o PNG.'));
-    img.src = src;
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Could not load image'));
+    image.src = src;
   });
 }
 
-export function resizeToCanvas(img: HTMLImageElement, max: number): HTMLCanvasElement {
-  const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+export function resizeToCanvas(image: HTMLImageElement, maxSide: number): HTMLCanvasElement {
+  const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(img.naturalWidth * scale);
-  canvas.height = Math.round(img.naturalHeight * scale);
-  canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+  canvas.width = Math.round(image.naturalWidth * scale);
+  canvas.height = Math.round(image.naturalHeight * scale);
+  canvas.getContext('2d')!.drawImage(image, 0, 0, canvas.width, canvas.height);
   return canvas;
 }
 
 export function canvasToBlob(canvas: HTMLCanvasElement, type = 'image/png', quality?: number): Promise<Blob> {
   return new Promise((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('No se pudo generar la imagen'))), type, quality),
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('Could not encode image'))), type, quality),
   );
 }
 
 export async function fileToDataUrl(file: File): Promise<string> {
-  const url = URL.createObjectURL(file);
+  const objectUrl = URL.createObjectURL(file);
   try {
-    return resizeToCanvas(await loadImage(url), 1600).toDataURL('image/jpeg', 0.88);
+    return resizeToCanvas(await loadImage(objectUrl), 1600).toDataURL('image/jpeg', 0.88);
   } finally {
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(objectUrl);
   }
 }
 
@@ -50,10 +50,10 @@ export async function thumbFrom(dataUrl: string): Promise<string> {
 }
 
 export async function qrFromFile(file: File): Promise<string> {
-  const url = URL.createObjectURL(file);
+  const objectUrl = URL.createObjectURL(file);
   try {
-    return resizeToCanvas(await loadImage(url), 480).toDataURL('image/jpeg', 0.9);
+    return resizeToCanvas(await loadImage(objectUrl), 480).toDataURL('image/jpeg', 0.9);
   } finally {
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(objectUrl);
   }
 }

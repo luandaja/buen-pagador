@@ -1,0 +1,63 @@
+---
+import Layout from '../components/Layout.astro';
+import Progress from '../components/Progress.astro';
+import { es } from '../i18n/es';
+
+const v = es.viewer;
+---
+
+<Layout title={es.meta.viewerTitle}>
+  <main class="layout is-viewer">
+    <section class="stage-col">
+      <div class="viewer-state" id="viewerState" role="status">
+        <span class="dropzone-ball" aria-hidden="true">🏀</span>
+        <strong id="viewerStateTitle">{v.opening}</strong>
+        <span id="viewerStateText">{v.decrypting}</span>
+      </div>
+
+      <div class="stage-wrap" id="stageWrap" hidden>
+        <div class="stage-toolbar">
+          <p class="hint viewer-hint">{v.readOnly}</p>
+          <span class="read-only-badge"><span aria-hidden="true">👀</span> {v.badge}</span>
+        </div>
+        <div class="stage-area" id="stageArea">
+          <div class="stage is-readonly" id="stage">
+            <img id="photo" alt={es.upload.photoAlt} />
+            <div class="faces" id="faces"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel" id="panel" aria-labelledby="viewTitle" hidden>
+      <section class="game">
+        <h2 class="game-title" id="viewTitle"></h2>
+        <p class="game-meta" id="updated"></p>
+      </section>
+
+      <Progress perspective="public" />
+
+      <section class="pay-box" id="payBox" aria-labelledby="payTitle" hidden>
+        <h3 id="payTitle">{es.pay.title}</h3>
+        <p class="pay-note" id="payNoteOut"></p>
+        <button type="button" class="secondary small" id="copyPayNote">{es.pay.copy}</button>
+        <figure class="pay-qr" id="payQrBox" hidden>
+          <img id="payQrOut" alt={es.pay.qrPublicAlt} />
+          <figcaption>
+            <a class="link" id="payQrSave" download={es.pay.qrFileName}>{es.pay.saveQr}</a>
+            <span>{es.pay.qrHelp}</span>
+          </figcaption>
+        </figure>
+      </section>
+
+      <div class="panel-actions">
+        <button type="button" class="primary" id="download">{es.image.save}</button>
+      </div>
+      <p class="export-msg" id="exportMsg" role="status"></p>
+    </aside>
+  </main>
+
+  <script>
+    import '../scripts/viewer.ts';
+  </script>
+</Layout>

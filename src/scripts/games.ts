@@ -12,11 +12,11 @@ interface Schema extends DBSchema {
 let dbPromise: Promise<IDBPDatabase<Schema>> | null = null;
 const savedImages = new Map<string, string>();
 
-function db() {
+function database() {
   dbPromise ??= openDB<Schema>('buen-pagador', 1, {
-    upgrade(database) {
-      database.createObjectStore('games', { keyPath: 'id' });
-      database.createObjectStore('images');
+    upgrade(upgradingDatabase) {
+      upgradingDatabase.createObjectStore('games', { keyPath: 'id' });
+      upgradingDatabase.createObjectStore('images');
     },
   });
   return dbPromise;
@@ -25,37 +25,37 @@ function db() {
 const withDefaults = (meta: StoredGame): GameMeta => ({ payNote: '', payQr: null, ...meta });
 
 export async function listGames(): Promise<GameMeta[]> {
-  const all = await (await db()).getAll('games');
-  return all.map(withDefaults).sort((a, b) => b.updatedAt - a.updatedAt);
+  const storedGames = await (await database()).getAll('games');
+  return storedGames.map(withDefaults).sort((first, second) => second.updatedAt - first.updatedAt);
 }
 
-export async function loadGame(id: string): Promise<Game | null> {
-  const database = await db();
-  const [meta, image] = await Promise.all([database.get('games', id), database.get('images', id)]);
+export async function loadGame(gameId: string): Promise<Game | null> {
+  const connection = await database();
+  const [meta, image] = await Promise.all([connection.get('games', gameId), connection.get('images', gameId)]);
   if (!meta) return null;
-  if (image) savedImages.set(id, image);
+  if (image) savedImages.set(gameId, image);
   return { ...withDefaults(meta), image: image ?? null };
 }
 
 export async function saveGame(game: Game): Promise<void> {
   const { image, ...meta } = game;
-  const tx = (await db()).transaction(['games', 'images'], 'readwrite');
-  const writes: Promise<unknown>[] = [tx.objectStore('games').put(meta)];
+  const transaction = (await database()).transaction(['games', 'images'], 'readwrite');
+  const writes: Promise<unknown>[] = [transaction.objectStore('games').put(meta)];
   if (image && savedImages.get(game.id) !== image) {
-    writes.push(tx.objectStore('images').put(image, game.id));
+    writes.push(transaction.objectStore('images').put(image, game.id));
     savedImages.set(game.id, image);
   }
-  await Promise.all([...writes, tx.done]);
+  await Promise.all([...writes, transaction.done]);
 }
 
-export async function deleteGame(id: string): Promise<void> {
-  const tx = (await db()).transaction(['games', 'images'], 'readwrite');
-  await Promise.all([tx.objectStore('games').delete(id), tx.objectStore('images').delete(id), tx.done]);
-  savedImages.delete(id);
+export async function deleteGame(gameId: string): Promise<void> {
+  const transaction = (await database()).transaction(['games', 'images'], 'readwrite');
+  await Promise.all([transaction.objectStore('games').delete(gameId), transaction.objectStore('images').delete(gameId), transaction.done]);
+  savedImages.delete(gameId);
 }
 
 export async function findByShareId(shareId: string): Promise<GameMeta | undefined> {
-  return (await listGames()).find((g) => g.share?.id === shareId);
+  return (await listGames()).find((game) => game.share?.id === shareId);
 }
 
 export function resetGamesDb() {

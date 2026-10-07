@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { computeTotals, type Face } from '../src/scripts/state';
-import { fitStageToPhoto, gameMetaText, progressView, renderTotals, syncFaces, totalsEls } from '../src/scripts/view';
+import { es } from '../src/i18n/es';
+import { computeTotals, money, type Face } from '../src/scripts/state';
+import { fitStageToPhoto, gameMetaText, progressView, renderTotals, syncFaces, progressElements } from '../src/scripts/view';
 
 const face = (id: string, paid: boolean, emoji = '🐸'): Face => ({ id, x: 0.1, y: 0.2, w: 0.1, h: 0.15, emoji, paid });
 
@@ -18,35 +19,35 @@ beforeEach(() => {
 const data = (faces: Face[], cost: number | null = 100) => ({ faces, cost, currency: 'S/', rounding: 0 });
 
 describe('renderTotals', () => {
-  it('pinta cuánto falta, la barra y el detalle', () => {
-    const els = totalsEls();
-    renderTotals(els, data([face('a', true), face('b', false)]));
-    expect(els.label.textContent).toBe('Te faltan');
-    expect(els.hero.textContent).toBe('S/\u00a050');
-    expect(els.paidOut.textContent).toBe('1/2');
-    expect(els.thermo.style.getPropertyValue('--pct')).toBe('0.5');
-    expect(els.thermo.style.getPropertyValue('--n')).toBe('2');
-    expect(els.thermo.getAttribute('aria-valuetext')).toBe('1 de 2 pagaron (50 %)');
-    expect(els.shareOut.textContent).toBe('S/\u00a050');
-    expect(els.collectedOut.textContent).toBe('S/\u00a050');
-    expect(els.missingOut.textContent).toBe('');
+  it('renders what is missing, the bar and the details', () => {
+    const elements = progressElements();
+    renderTotals(elements, data([face('a', true), face('b', false)]));
+    expect(elements.label.textContent).toBe(es.progress.ownerMissing);
+    expect(elements.hero.textContent).toBe('S/\u00a050');
+    expect(elements.paidOut.textContent).toBe('1/2');
+    expect(elements.meter.style.getPropertyValue('--pct')).toBe('0.5');
+    expect(elements.meter.style.getPropertyValue('--n')).toBe('2');
+    expect(elements.meter.getAttribute('aria-valuetext')).toBe(es.progress.valueText(1, 2, 50));
+    expect(elements.shareOut.textContent).toBe('S/\u00a050');
+    expect(elements.collectedOut.textContent).toBe('S/\u00a050');
+    expect(elements.missingOut.textContent).toBe('');
   });
 
-  it('marca el partido pagado, agrega un mensaje y junta los segmentos si son muchos', () => {
-    const els = totalsEls();
-    renderTotals(els, data([face('a', true)]), 'Otro mensaje');
-    expect(els.progress.classList.contains('is-full')).toBe(true);
-    expect(els.missingOut.textContent).toBe('Otro mensaje');
-    const many = Array.from({ length: 41 }, (_, i) => face(String(i), false));
-    renderTotals(els, data(many));
-    expect(els.thermo.classList.contains('is-dense')).toBe(true);
+  it('marks a settled game, shows a message and merges segments when there are many', () => {
+    const elements = progressElements();
+    renderTotals(elements, data([face('a', true)]), 'Another message');
+    expect(elements.progress.classList.contains('is-full')).toBe(true);
+    expect(elements.missingOut.textContent).toBe('Another message');
+    const many = Array.from({ length: 41 }, (_, index) => face(String(index), false));
+    renderTotals(elements, data(many));
+    expect(elements.meter.classList.contains('is-dense')).toBe(true);
   });
 
-  it('en la vista pública no le habla al organizador', () => {
-    const els = totalsEls();
-    els.progress.dataset.perspective = 'public';
-    renderTotals(els, data([face('a', false)]));
-    expect(els.label.textContent).toBe('Faltan');
+  it('the public view does not address the organizer', () => {
+    const elements = progressElements();
+    elements.progress.dataset.perspective = 'public';
+    renderTotals(elements, data([face('a', false)]));
+    expect(elements.label.textContent).toBe(es.progress.publicMissing);
   });
 });
 
@@ -54,55 +55,55 @@ describe('progressView', () => {
   const view = (faces: Face[], cost: number | null = 100) =>
     progressView(computeTotals({ faces, cost, rounding: 0 }), { cost, currency: 'S/' }, true);
 
-  it('cubre cada caso', () => {
-    expect(view([])).toEqual({ label: 'Pagaron', hero: '—', full: false });
-    expect(view([face('a', true)])).toEqual({ label: '¡Cancha pagada!', hero: 'S/\u00a0100', full: true });
+  it('covers every case', () => {
+    expect(view([])).toEqual({ label: es.progress.noPlayers, hero: '—', full: false });
+    expect(view([face('a', true)])).toEqual({ label: es.progress.settled, hero: money(100, 'S/'), full: true });
     expect(view([face('a', true)], null)).toMatchObject({ hero: '1/1', full: true });
-    expect(view([face('a', false), face('b', false)], null)).toEqual({ label: 'Faltan pagar', hero: '2 de 2', full: false });
+    expect(view([face('a', false), face('b', false)], null)).toEqual({ label: es.progress.pendingLabel, hero: es.progress.pendingHero(2, 2), full: false });
   });
 });
 
 describe('gameMetaText', () => {
-  it('resume costo, jugadores y cuota', () => {
-    expect(gameMetaText(data([face('a', false), face('b', false)]))).toBe('Cancha S/ 100 · 2 jugadores');
-    expect(gameMetaText(data([face('a', false)], null))).toBe('1 jugador');
-    expect(gameMetaText(data([], null))).toBe('Ponle nombre y costo.');
+  it('summarizes cost and players', () => {
+    expect(gameMetaText(data([face('a', false), face('b', false)]))).toBe([es.game.metaCost(money(100, 'S/')), es.game.metaPlayers(2)].join(' · '));
+    expect(gameMetaText(data([face('a', false)], null))).toBe(es.game.metaPlayers(1));
+    expect(gameMetaText(data([], null))).toBe(es.game.metaEmpty);
   });
 });
 
 describe('syncFaces', () => {
-  it('crea, actualiza y elimina marcadores sin recrearlos', () => {
+  it('creates, updates and removes markers without recreating them', () => {
     const container = document.getElementById('faces')!;
-    const map = new Map<string, HTMLElement>();
-    const label = (f: Face, i: number) => `${i}:${f.paid}`;
+    const markers = new Map<string, HTMLElement>();
+    const label = (face: Face, index: number) => `${index}:${face.paid}`;
 
-    syncFaces(container, map, [face('a', false), face('b', true)], { interactive: true, label });
-    const a = map.get('a')!;
-    expect(a.tagName).toBe('BUTTON');
-    expect(a.style.left).toBe('10%');
-    expect(a.getAttribute('aria-pressed')).toBe('false');
-    expect(map.get('b')!.classList.contains('is-settled')).toBe(true);
+    syncFaces(container, markers, [face('a', false), face('b', true)], { interactive: true, label });
+    const firstMarker = markers.get('a')!;
+    expect(firstMarker.tagName).toBe('BUTTON');
+    expect(firstMarker.style.left).toBe('10%');
+    expect(firstMarker.getAttribute('aria-pressed')).toBe('false');
+    expect(markers.get('b')!.classList.contains('is-settled')).toBe(true);
 
-    syncFaces(container, map, [face('a', true, '🦊')], { interactive: true, label });
-    expect(map.get('a')).toBe(a);
-    expect(a.classList.contains('is-paid')).toBe(true);
-    expect(a.querySelector('.face-emoji')!.textContent).toBe('🦊');
-    expect(map.has('b')).toBe(false);
+    syncFaces(container, markers, [face('a', true, '🦊')], { interactive: true, label });
+    expect(markers.get('a')).toBe(firstMarker);
+    expect(firstMarker.classList.contains('is-paid')).toBe(true);
+    expect(firstMarker.querySelector('.face-emoji')!.textContent).toBe('🦊');
+    expect(markers.has('b')).toBe(false);
     expect(container.children).toHaveLength(1);
   });
 
-  it('en solo lectura usa elementos no interactivos', () => {
-    const map = new Map<string, HTMLElement>();
-    syncFaces(document.getElementById('faces')!, map, [face('a', false)], { interactive: false, label: () => 'x' });
-    const el = map.get('a')!;
-    expect(el.tagName).toBe('SPAN');
-    expect(el.getAttribute('role')).toBe('img');
-    expect(el.hasAttribute('aria-pressed')).toBe(false);
+  it('uses non-interactive elements in read-only mode', () => {
+    const markers = new Map<string, HTMLElement>();
+    syncFaces(document.getElementById('faces')!, markers, [face('a', false)], { interactive: false, label: () => 'x' });
+    const marker = markers.get('a')!;
+    expect(marker.tagName).toBe('SPAN');
+    expect(marker.getAttribute('role')).toBe('img');
+    expect(marker.hasAttribute('aria-pressed')).toBe(false);
   });
 });
 
 describe('fitStageToPhoto', () => {
-  it('pasa la proporción de la foto al escenario', () => {
+  it('passes the photo aspect ratio to the stage', () => {
     const photo = document.createElement('img');
     const area = document.createElement('div');
     fitStageToPhoto(photo, area);
@@ -111,7 +112,7 @@ describe('fitStageToPhoto', () => {
     expect(area.style.getPropertyValue('--ar')).toBe('1.7778');
   });
 
-  it('ignora fotos sin tamaño', () => {
+  it('ignores photos without a size', () => {
     const photo = document.createElement('img');
     const area = document.createElement('div');
     fitStageToPhoto(photo, area);

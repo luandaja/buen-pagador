@@ -24,26 +24,26 @@ interface Store {
   remove(id: string): Promise<void>;
 }
 
-function env(name: string): string | undefined {
+function readEnv(name: string): string | undefined {
   const runtime = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env;
   return runtime?.[name] ?? (import.meta.env[name] as string | undefined);
 }
 
 function parse(raw: Record<string, unknown> | null, fields: Field[]): Partial<ShareRecord> | null {
-  if (!raw || fields.every((f) => raw[f] == null)) return null;
-  const out: Partial<ShareRecord> = {};
-  for (const f of fields) {
-    const value = raw[f];
+  if (!raw || fields.every((field) => raw[field] == null)) return null;
+  const record: Partial<ShareRecord> = {};
+  for (const field of fields) {
+    const value = raw[field];
     if (value == null) continue;
-    if (f === 'v' || f === 'pv') out[f] = Number(value);
-    else out[f] = String(value);
+    if (field === 'v' || field === 'pv') record[field] = Number(value);
+    else record[field] = String(value);
   }
-  return out;
+  return record;
 }
 
 function toRecord(raw: unknown, fields: Field[]): Record<string, unknown> | null {
   if (!Array.isArray(raw)) return raw as Record<string, unknown> | null;
-  return Object.fromEntries(fields.map((f, i) => [f, raw[i]]));
+  return Object.fromEntries(fields.map((field, index) => [field, raw[index]]));
 }
 
 class RedisStore implements Store {
@@ -56,22 +56,22 @@ class RedisStore implements Store {
 
   async create(id: string, record: ShareRecord) {
     const key = PREFIX + id;
-    const tx = this.redis.multi();
-    const { pay, pv, ...rest } = record;
-    tx.hset(key, { ...rest, v: String(rest.v), pv: String(pv ?? 0), ...(pay ? { pay } : {}) });
-    tx.expire(key, TTL_SECONDS);
-    await tx.exec();
+    const transaction = this.redis.multi();
+    const { pay, pv, ...requiredFields } = record;
+    transaction.hset(key, { ...requiredFields, v: String(requiredFields.v), pv: String(pv ?? 0), ...(pay ? { pay } : {}) });
+    transaction.expire(key, TTL_SECONDS);
+    await transaction.exec();
   }
 
   async updateState(id: string, state: string, pay?: string) {
     const key = PREFIX + id;
-    const tx = this.redis.multi();
-    tx.hset(key, pay ? { state, pay } : { state });
-    tx.hincrby(key, 'v', 1);
-    if (pay) tx.hincrby(key, 'pv', 1);
-    tx.expire(key, TTL_SECONDS);
-    const [, v] = await tx.exec<[number, number, number]>();
-    return Number(v);
+    const transaction = this.redis.multi();
+    transaction.hset(key, pay ? { state, pay } : { state });
+    transaction.hincrby(key, 'v', 1);
+    if (pay) transaction.hincrby(key, 'pv', 1);
+    transaction.expire(key, TTL_SECONDS);
+    const [, version] = await transaction.exec<[number, number, number]>();
+    return Number(version);
   }
 
   async remove(id: string) {
@@ -85,11 +85,11 @@ class MemoryStore implements Store {
   protected data: Map<string, Entry>;
 
   constructor() {
-    const g = globalThis as unknown as { __bpStore?: Map<string, Entry> };
-    this.data = g.__bpStore ??= new Map();
+    const globalScope = globalThis as unknown as { __bpStore?: Map<string, Entry> };
+    this.data = globalScope.__bpStore ??= new Map();
   }
 
-  private live(id: string) {
+  private liveEntry(id: string) {
     const entry = this.data.get(id);
     if (entry && entry.expires < Date.now()) {
       this.data.delete(id);
@@ -99,7 +99,7 @@ class MemoryStore implements Store {
   }
 
   async get(id: string, fields: Field[]) {
-    const entry = this.live(id);
+    const entry = this.liveEntry(id);
     return entry ? parse(entry.record as unknown as Record<string, unknown>, fields) : null;
   }
 
@@ -108,7 +108,7 @@ class MemoryStore implements Store {
   }
 
   async updateState(id: string, state: string, pay?: string) {
-    const entry = this.live(id);
+    const entry = this.liveEntry(id);
     if (!entry) return 0;
     entry.record.state = state;
     entry.record.v += 1;
@@ -123,17 +123,17 @@ class MemoryStore implements Store {
 }
 
 export function credentials(): { url: string; token: string } | null {
-  const url = env('KV_REST_API_URL') || env('UPSTASH_REDIS_REST_URL');
-  const token = env('KV_REST_API_TOKEN') || env('UPSTASH_REDIS_REST_TOKEN');
+  const url = readEnv('KV_REST_API_URL') || readEnv('UPSTASH_REDIS_REST_URL');
+  const token = readEnv('KV_REST_API_TOKEN') || readEnv('UPSTASH_REDIS_REST_TOKEN');
   return url && token ? { url, token } : null;
 }
 
-function createStore(dev: boolean, mode: string): Store {
-  const creds = credentials();
-  if (creds) return new RedisStore(new Redis({ ...creds, automaticDeserialization: false }));
-  if (!dev) throw new Error('Falta configurar Upstash Redis (KV_REST_API_URL y KV_REST_API_TOKEN).');
+function createStore(isDev: boolean, mode: string): Store {
+  const upstash = credentials();
+  if (upstash) return new RedisStore(new Redis({ ...upstash, automaticDeserialization: false }));
+  if (!isDev) throw new Error('Upstash Redis is not configured (KV_REST_API_URL and KV_REST_API_TOKEN).');
   if (mode === 'test') return new MemoryStore();
-  console.warn('[buen-pagador] Sin Upstash configurado: guardando los links en .astro/dev-shares.json.');
+  console.warn('[buen-pagador] Upstash is not configured: storing links in .astro/dev-shares.json.');
   return new FileStore('.astro/dev-shares.json');
 }
 
@@ -168,9 +168,9 @@ class FileStore extends MemoryStore {
 
   override async updateState(id: string, state: string, pay?: string) {
     this.load();
-    const v = await super.updateState(id, state, pay);
+    const version = await super.updateState(id, state, pay);
     this.save();
-    return v;
+    return version;
   }
 
   override async remove(id: string) {

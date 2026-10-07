@@ -13,43 +13,43 @@ import {
   savePrefs,
   splitState,
   takeLegacy,
-  uid,
+  createId,
   type Face,
 } from '../src/scripts/state';
 
-const face = (paid: boolean, emoji = '🐸'): Face => ({ id: uid(), x: 0, y: 0, w: 0.1, h: 0.1, emoji, paid });
+const face = (paid: boolean, emoji = '🐸'): Face => ({ id: createId(), x: 0, y: 0, w: 0.1, h: 0.1, emoji, paid });
 
 describe('computeTotals', () => {
-  it('sin costo ni jugadores no hay cuota', () => {
+  it('no share without cost or players', () => {
     expect(computeTotals({ faces: [], cost: null, rounding: 0 })).toEqual({
       people: 0,
       paid: 0,
       share: null,
       collected: null,
       missing: null,
-      pct: 0,
+      paidRatio: 0,
     });
   });
 
-  it('reparte el costo y suma lo recaudado', () => {
-    const t = computeTotals({ faces: [face(true), face(false), face(false), face(true)], cost: 100, rounding: 0 });
-    expect(t).toMatchObject({ people: 4, paid: 2, share: 25, collected: 50, missing: 50, pct: 0.5 });
+  it('splits the cost and adds up what was collected', () => {
+    const totals = computeTotals({ faces: [face(true), face(false), face(false), face(true)], cost: 100, rounding: 0 });
+    expect(totals).toMatchObject({ people: 4, paid: 2, share: 25, collected: 50, missing: 50, paidRatio: 0.5 });
   });
 
-  it('redondea la cuota hacia arriba', () => {
+  it('rounds the share up', () => {
     const faces = [face(false), face(false), face(false)];
     expect(computeTotals({ faces, cost: 100, rounding: 0.5 }).share).toBe(33.5);
     expect(computeTotals({ faces, cost: 100, rounding: 1 }).share).toBe(34);
     expect(computeTotals({ faces, cost: 90, rounding: 1 }).share).toBe(30);
   });
 
-  it('con costo cero no calcula montos', () => {
+  it('zero cost yields no amounts', () => {
     expect(computeTotals({ faces: [face(true)], cost: 0, rounding: 0 }).share).toBeNull();
   });
 });
 
 describe('money', () => {
-  it('formatea con moneda y espacio que no se corta', () => {
+  it('formats with currency and a non-breaking space', () => {
     expect(money(12, 'S/')).toBe('S/ 12');
     expect(money(4.825, 'S/')).toBe('S/ 4.83');
     expect(money(7, '')).toBe('7');
@@ -58,53 +58,53 @@ describe('money', () => {
 });
 
 describe('emojis', () => {
-  it('no repite mientras alcanzan y evita los indicados', () => {
+  it('does not repeat while enough remain and avoids the given ones', () => {
     const picked = pickEmojis(5, ['🐸']);
     expect(new Set(picked).size).toBe(5);
     expect(picked).not.toContain('🐸');
   });
 
-  it('respeta los bloqueados y vuelve a empezar cuando se acaban', () => {
+  it('respects blocked emojis and starts over when exhausted', () => {
     const blocked = DEBTOR_EMOJIS.slice(0, 18);
     const picked = pickEmojis(5, [], blocked);
-    expect(picked.every((e) => !blocked.includes(e))).toBe(true);
+    expect(picked.every((emoji) => !blocked.includes(emoji))).toBe(true);
   });
 
-  it('si se evita todo, usa igual los permitidos', () => {
+  it('still uses allowed emojis when all are avoided', () => {
     const allowed = availableEmojis([]);
     expect(pickEmojis(2, allowed)).toHaveLength(2);
   });
 
-  it('si todo está bloqueado, usa la lista completa', () => {
+  it('uses the full list when everything is blocked', () => {
     expect(availableEmojis([...DEBTOR_EMOJIS])).toEqual(DEBTOR_EMOJIS);
   });
 });
 
-describe('partidos y preferencias', () => {
+describe('games and preferences', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     localStorage.clear();
   });
 
-  it('newGame crea un partido vacío con id y fechas, aceptando datos base', () => {
-    const game = newGame({ title: 'Jueves', cost: 90 });
-    expect(game).toMatchObject({ title: 'Jueves', cost: 90, currency: 'S/', faces: [], image: null, share: null });
+  it('newGame creates an empty game with id and dates, accepting base data', () => {
+    const game = newGame({ title: 'Thursday', cost: 90 });
+    expect(game).toMatchObject({ title: 'Thursday', cost: 90, currency: 'S/', faces: [], image: null, share: null });
     expect(game.id).toMatch(/^\w+$/);
     expect(game.createdAt).toBe(game.updatedAt);
   });
 
-  it('defaultState junta un partido nuevo con las preferencias por defecto', () => {
+  it('defaultState combines a new game with default preferences', () => {
     expect(defaultState()).toMatchObject({ includePhoto: true, blocked: [] });
     expect(defaultState()).not.toHaveProperty('currentGameId');
   });
 
-  it('guarda y lee las preferencias', () => {
+  it('saves and loads preferences', () => {
     expect(loadPrefs()).toEqual(defaultPrefs());
     savePrefs({ includePhoto: false, blocked: ['🐔'], currentGameId: 'abc' });
     expect(loadPrefs()).toEqual({ includePhoto: false, blocked: ['🐔'], currentGameId: 'abc' });
   });
 
-  it('ignora preferencias corruptas y almacenamiento bloqueado', () => {
+  it('ignores corrupt preferences and blocked storage', () => {
     localStorage.setItem('buen-pagador:prefs', '{roto');
     expect(loadPrefs()).toEqual(defaultPrefs());
     const spy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
@@ -114,50 +114,50 @@ describe('partidos y preferencias', () => {
     spy.mockRestore();
   });
 
-  it('separa el partido de las preferencias', () => {
-    const state = { ...defaultState(), title: 'Jueves', blocked: ['🐔'] };
+  it('splits the game from the preferences', () => {
+    const state = { ...defaultState(), title: 'Thursday', blocked: ['🐔'] };
     const { game, prefs } = splitState(state);
     expect(game).not.toHaveProperty('blocked');
-    expect(game.title).toBe('Jueves');
+    expect(game.title).toBe('Thursday');
     expect(prefs).toEqual({ includePhoto: true, blocked: ['🐔'], currentGameId: state.id });
   });
 
-  it('cambia los emojis que ya no están permitidos', () => {
+  it('replaces emojis that are no longer allowed', () => {
     const faces = [face(false, '🐷'), face(false, '🐸'), face(false, '🐔')];
     const out = refreshEmojis(faces, ['🐔']);
     expect(out[1].emoji).toBe('🐸');
     expect(DEBTOR_EMOJIS).toContain(out[0].emoji);
-    expect(out.map((f) => f.emoji)).not.toContain('🐔');
+    expect(out.map((face) => face.emoji)).not.toContain('🐔');
   });
 });
 
-describe('migración de la versión anterior', () => {
+describe('migration from the previous version', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     localStorage.clear();
   });
 
-  it('no hay nada que migrar', () => {
+  it('nothing to migrate', () => {
     expect(takeLegacy()).toBeNull();
   });
 
-  it('convierte el partido guardado y lo borra de localStorage', () => {
+  it('converts the saved game and removes it from localStorage', () => {
     localStorage.setItem(
       'buen-pagador:v1',
-      JSON.stringify({ image: 'data:x', title: 'Viejo', cost: 50, faces: [face(true)], blocked: ['🐔'], includePhoto: false }),
+      JSON.stringify({ image: 'data:x', title: 'Old', cost: 50, faces: [face(true)], blocked: ['🐔'], includePhoto: false }),
     );
     const legacy = takeLegacy()!;
     expect(legacy.prefs).toEqual({ includePhoto: false, blocked: ['🐔'] });
-    expect(legacy.game).toMatchObject({ image: 'data:x', title: 'Viejo', cost: 50, currency: 'S/' });
+    expect(legacy.game).toMatchObject({ image: 'data:x', title: 'Old', cost: 50, currency: 'S/' });
     expect(localStorage.getItem('buen-pagador:v1')).toBeNull();
   });
 
-  it('sin foto solo migra las preferencias', () => {
-    localStorage.setItem('buen-pagador:v1', JSON.stringify({ title: 'Sin foto' }));
+  it('without a photo only preferences migrate', () => {
+    localStorage.setItem('buen-pagador:v1', JSON.stringify({ title: 'No photo' }));
     expect(takeLegacy()).toEqual({ game: null, prefs: { includePhoto: true, blocked: [] } });
   });
 
-  it('si no se puede borrar, igual migra', () => {
+  it('still migrates when removal fails', () => {
     localStorage.setItem('buen-pagador:v1', JSON.stringify({ image: 'data:x' }));
     const spy = vi.spyOn(localStorage, 'removeItem').mockImplementation(() => {
       throw new Error('blocked');

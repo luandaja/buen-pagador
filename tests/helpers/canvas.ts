@@ -35,8 +35,8 @@ export function installFakeCanvas(opts: { failBlob?: boolean } = {}) {
   proto.toDataURL = function (this: HTMLCanvasElement, type = 'image/png') {
     return `data:${type};base64,ZmFrZQ`;
   };
-  proto.toBlob = function (this: HTMLCanvasElement, cb: (b: Blob | null) => void, type = 'image/png') {
-    cb(opts.failBlob ? null : new Blob(['fake-image'], { type }));
+  proto.toBlob = function (this: HTMLCanvasElement, callback: (blob: Blob | null) => void, type = 'image/png') {
+    callback(opts.failBlob ? null : new Blob(['fake-image'], { type }));
   };
   return contexts;
 }

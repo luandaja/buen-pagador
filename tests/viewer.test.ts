@@ -1,11 +1,12 @@
 // @vitest-environment node
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { es } from '../src/i18n/es';
 import { resetStore } from '../src/lib/store';
-import Ver from '../src/pages/ver.astro';
+import PublicPage from '../src/pages/view.astro';
 import { createShare, deleteShare, pushShare, type ShareLink } from '../src/scripts/share';
-import { defaultState, type State } from '../src/scripts/state';
+import { defaultState, money, type State } from '../src/scripts/state';
 import { useApiFetch } from './helpers/api';
-import { $, click, eventually, mount, renderPage, unmount } from './helpers/dom';
+import { byId, click, eventually, mount, renderPage, unmount } from './helpers/dom';
 
 const mocks = vi.hoisted(() => ({ renderCard: vi.fn() }));
 
@@ -17,12 +18,12 @@ vi.mock('../src/scripts/image', () => ({
 }));
 
 const ORIGIN = 'http://localhost:4321';
-let html = '';
+let pageHtml = '';
 
-const game: State = {
+const sharedGame: State = {
   ...defaultState(),
   image: 'data:image/jpeg;base64,AAAA',
-  title: 'Jueves',
+  title: 'Thursday',
   cost: 60,
   faces: [
     { id: 'a', x: 0.1, y: 0.1, w: 0.1, h: 0.1, emoji: '🐸', paid: true },
@@ -31,7 +32,7 @@ const game: State = {
 };
 
 beforeAll(async () => {
-  html = await renderPage(Ver);
+  pageHtml = await renderPage(PublicPage);
 });
 
 beforeEach(() => {
@@ -43,146 +44,145 @@ afterEach(async () => {
   await unmount();
 });
 
-async function openWith(extra: Partial<State>) {
-  return open(undefined, extra);
-}
-
-async function open(hash?: (link: ShareLink) => string, extra: Partial<State> = {}) {
-  mount(html, `${ORIGIN}/ver`);
+async function openPublicView(hashFor?: (link: ShareLink) => string, overrides: Partial<State> = {}) {
+  mount(pageHtml, `${ORIGIN}/view`);
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
   useApiFetch();
   HTMLAnchorElement.prototype.click = vi.fn();
-  const link = await createShare({ ...game, ...extra });
-  location.hash = hash ? hash(link) : `#${link.id}.${link.key}`;
+  const link = await createShare({ ...sharedGame, ...overrides });
+  location.hash = hashFor ? hashFor(link) : `#${link.id}.${link.key}`;
   vi.resetModules();
   await import('../src/scripts/viewer');
   return link;
 }
 
-const text = (id: string) => $(id).textContent;
-const faces = () => [...document.querySelectorAll<HTMLElement>('.face')];
+const openWithPayment = (overrides: Partial<State>) => openPublicView(undefined, overrides);
+const textOf = (id: string) => byId(id).textContent;
+const faceMarkers = () => [...document.querySelectorAll<HTMLElement>('.face')];
+const panelVisible = () => eventually(() => expect(byId('panel').hidden).toBe(false));
 
-describe('vista pública', () => {
-  it('muestra la foto, quién pagó y el avance, sin poder editar', async () => {
-    await open();
-    await eventually(() => expect($('panel').hidden).toBe(false));
-    expect(text('viewTitle')).toBe('Jueves');
-    expect(document.title).toBe('Jueves · El Buen Pagador');
-    expect(text('paidOut')).toBe('1/2');
-    expect(text('shareOut')).toBe('S/ 30');
-    expect(faces().map((f) => f.tagName)).toEqual(['SPAN', 'SPAN']);
-    expect(text('updated')).toMatch(/Revisado a las/);
+describe('public view', () => {
+  it('shows the photo, who paid and the progress without editing', async () => {
+    await openPublicView();
+    await panelVisible();
+    expect(textOf('viewTitle')).toBe('Thursday');
+    expect(document.title).toBe(es.meta.pageTitle('Thursday'));
+    expect(textOf('paidOut')).toBe('1/2');
+    expect(textOf('shareOut')).toBe(money(30, 'S/'));
+    expect(faceMarkers().map((marker) => marker.tagName)).toEqual(['SPAN', 'SPAN']);
+    expect(textOf('updated')).toMatch(/\d/);
 
-    click(faces()[1]);
-    expect(text('paidOut')).toBe('1/2');
+    click(faceMarkers()[1]);
+    expect(textOf('paidOut')).toBe('1/2');
   });
 
-  it('se actualiza al volver a la pestaña', async () => {
-    const link = await open();
-    await eventually(() => expect(text('paidOut')).toBe('1/2'));
-    await pushShare(link, { ...game, title: '', faces: game.faces.map((f) => ({ ...f, paid: true })) });
+  it('refreshes when the tab becomes visible again', async () => {
+    const link = await openPublicView();
+    await eventually(() => expect(textOf('paidOut')).toBe('1/2'));
+    const everyonePaid = sharedGame.faces.map((face) => ({ ...face, paid: true }));
+    await pushShare(link, { ...sharedGame, title: '', faces: everyonePaid });
     document.dispatchEvent(new Event('visibilitychange'));
-    await eventually(() => expect(text('paidOut')).toBe('2/2'));
-    expect(text('viewTitle')).toBe('La cancha');
+    await eventually(() => expect(textOf('paidOut')).toBe('2/2'));
+    expect(textOf('viewTitle')).toBe(es.viewer.defaultTitle);
   });
 
-  it('avisa cuando el link se borra', async () => {
-    const link = await open();
-    await eventually(() => expect($('panel').hidden).toBe(false));
+  it('reports a deleted link', async () => {
+    const link = await openPublicView();
+    await panelVisible();
     await deleteShare(link);
     document.dispatchEvent(new Event('visibilitychange'));
-    await eventually(() => expect(text('viewerStateTitle')).toBe('Este link ya no existe'));
-    expect($('panel').hidden).toBe(true);
+    await eventually(() => expect(textOf('viewerStateTitle')).toBe(es.viewer.goneTitle));
+    expect(byId('panel').hidden).toBe(true);
   });
 
-  it('sin red mantiene lo último que mostró', async () => {
-    await open();
-    await eventually(() => expect($('panel').hidden).toBe(false));
+  it('keeps the last data when offline', async () => {
+    await openPublicView();
+    await panelVisible();
     globalThis.fetch = vi.fn(async () => {
       throw new TypeError('offline');
     }) as typeof fetch;
     document.dispatchEvent(new Event('visibilitychange'));
-    await new Promise((r) => setTimeout(r, 20));
-    expect($('panel').hidden).toBe(false);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(byId('panel').hidden).toBe(false);
   });
 
-  it('link incompleto o con otra clave', async () => {
-    await open(() => '');
-    expect(text('viewerStateTitle')).toBe('Link incompleto');
+  it('reports an incomplete link or a wrong key', async () => {
+    await openPublicView(() => '');
+    expect(textOf('viewerStateTitle')).toBe(es.viewer.brokenTitle);
 
     await unmount();
-    await open((link) => `#${link.id}.${'A'.repeat(43)}`);
-    await eventually(() => expect(text('viewerStateTitle')).toBe('Link incompleto'));
+    await openPublicView((link) => `#${link.id}.${'A'.repeat(43)}`);
+    await eventually(() => expect(textOf('viewerStateTitle')).toBe(es.viewer.brokenTitle));
   });
 
-  it('cambiar el hash abre otro link', async () => {
-    const first = await open();
-    await eventually(() => expect(text('viewTitle')).toBe('Jueves'));
-    const second = await createShare({ ...game, title: 'Viernes' });
-    expect(second.id).not.toBe(first.id);
-    location.hash = `#${second.id}.${second.key}`;
+  it('opens another link when the hash changes', async () => {
+    const firstLink = await openPublicView();
+    await eventually(() => expect(textOf('viewTitle')).toBe('Thursday'));
+    const secondLink = await createShare({ ...sharedGame, title: 'Friday' });
+    expect(secondLink.id).not.toBe(firstLink.id);
+    location.hash = `#${secondLink.id}.${secondLink.key}`;
     window.dispatchEvent(new Event('hashchange'));
-    await eventually(() => expect(text('viewTitle')).toBe('Viernes'));
+    await eventually(() => expect(textOf('viewTitle')).toBe('Friday'));
   });
 
-  it('descarga la imagen y avisa si falla', async () => {
-    await open();
-    await eventually(() => expect($('panel').hidden).toBe(false));
-    click($('download'));
+  it('downloads the image and reports failures', async () => {
+    await openPublicView();
+    await panelVisible();
+    click(byId('download'));
     await eventually(() => expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled());
-    expect(mocks.renderCard).toHaveBeenCalledWith(expect.objectContaining({ title: 'Jueves', includePhoto: true }));
+    expect(mocks.renderCard).toHaveBeenCalledWith(expect.objectContaining({ title: 'Thursday', includePhoto: true }));
 
     mocks.renderCard.mockRejectedValueOnce(new Error('canvas'));
-    click($('download'));
-    await eventually(() => expect(text('exportMsg')).toMatch(/No se pudo generar/));
+    click(byId('download'));
+    await eventually(() => expect(textOf('exportMsg')).toBe(es.image.failed));
   });
 });
 
-describe('cómo pagar', () => {
-  it('muestra la nota y el QR, y los copia o guarda', async () => {
-    const writeText = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('no'));
-    await openWith({ payNote: 'Yape 987 654 321', payQr: 'data:image/jpeg;base64,QR' });
+describe('how to pay', () => {
+  it('shows the note and QR, and copies or saves them', async () => {
+    const writeText = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('denied'));
+    await openWithPayment({ payNote: 'Wallet 987 654 321', payQr: 'data:image/jpeg;base64,QR' });
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
-    await eventually(() => expect($('payBox').hidden).toBe(false));
-    expect(text('payNoteOut')).toBe('Yape 987 654 321');
-    expect($('payQrBox').hidden).toBe(false);
-    expect($<HTMLAnchorElement>('payQrSave').href).toMatch(/^data:image\/jpeg/);
+    await eventually(() => expect(byId('payBox').hidden).toBe(false));
+    expect(textOf('payNoteOut')).toBe('Wallet 987 654 321');
+    expect(byId('payQrBox').hidden).toBe(false);
+    expect(byId<HTMLAnchorElement>('payQrSave').href).toMatch(/^data:image\/jpeg/);
 
-    click($('copyPayNote'));
-    await eventually(() => expect(text('copyPayNote')).toBe('Copiado ✓'));
-    const select = vi.spyOn(window.getSelection()!, 'selectAllChildren');
-    click($('copyPayNote'));
-    await eventually(() => expect(select).toHaveBeenCalled());
+    click(byId('copyPayNote'));
+    await eventually(() => expect(textOf('copyPayNote')).toBe(es.share.copied));
+    const selectText = vi.spyOn(window.getSelection()!, 'selectAllChildren');
+    click(byId('copyPayNote'));
+    await eventually(() => expect(selectText).toHaveBeenCalled());
 
-    click($('download'));
-    await eventually(() => expect(mocks.renderCard).toHaveBeenCalledWith(expect.objectContaining({ payNote: 'Yape 987 654 321' })));
+    click(byId('download'));
+    await eventually(() => expect(mocks.renderCard).toHaveBeenCalledWith(expect.objectContaining({ payNote: 'Wallet 987 654 321' })));
   });
 
-  it('solo nota, sin QR; y se actualiza si cambian', async () => {
-    const link = await openWith({ payNote: 'Plin 123' });
-    await eventually(() => expect(text('payNoteOut')).toBe('Plin 123'));
-    expect($('payQrBox').hidden).toBe(true);
-    await pushShare(link, { ...game, payNote: 'Plin 456', payQr: null }, true);
+  it('shows only the note without a QR and updates when it changes', async () => {
+    const link = await openWithPayment({ payNote: 'Wallet 123' });
+    await eventually(() => expect(textOf('payNoteOut')).toBe('Wallet 123'));
+    expect(byId('payQrBox').hidden).toBe(true);
+    await pushShare(link, { ...sharedGame, payNote: 'Wallet 456', payQr: null }, true);
     document.dispatchEvent(new Event('visibilitychange'));
-    await eventually(() => expect(text('payNoteOut')).toBe('Plin 456'));
+    await eventually(() => expect(textOf('payNoteOut')).toBe('Wallet 456'));
   });
 
-  it('sin datos para pagar no muestra la sección', async () => {
-    await open();
-    await eventually(() => expect($('panel').hidden).toBe(false));
-    expect($('payBox').hidden).toBe(true);
+  it('hides the section without payment details', async () => {
+    await openPublicView();
+    await panelVisible();
+    expect(byId('payBox').hidden).toBe(true);
   });
 });
 
 describe('errorView', () => {
-  it('distingue errores definitivos de fallos pasajeros', async () => {
-    await open(() => '');
+  it('tells permanent errors from transient failures', async () => {
+    await openPublicView(() => '');
     const { errorView } = await import('../src/scripts/viewer');
     const { ShareError } = await import('../src/scripts/share');
-    expect(errorView(new ShareError('x', 404), true)).toMatchObject({ stop: true, title: 'Este link ya no existe' });
-    expect(errorView(new ShareError('x', 400), false)).toMatchObject({ stop: true, title: 'Link incompleto' });
-    expect(errorView(new Error('red'), true)).toBeNull();
-    expect(errorView(new Error('red'), false)).toMatchObject({ stop: false, title: 'Sin conexión' });
+    expect(errorView(new ShareError('x', 404), true)).toMatchObject({ stop: true, title: es.viewer.goneTitle });
+    expect(errorView(new ShareError('x', 400), false)).toMatchObject({ stop: true, title: es.viewer.brokenTitle });
+    expect(errorView(new Error('network'), true)).toBeNull();
+    expect(errorView(new Error('network'), false)).toMatchObject({ stop: false, title: es.viewer.offlineTitle });
   });
 });

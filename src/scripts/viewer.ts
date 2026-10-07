@@ -1,34 +1,35 @@
+import { es, locale } from '../i18n/es';
 import { renderCard } from './export';
 import { canvasToBlob } from './image';
 import { loadShare, parsePublicHash, ShareError, type Loaded, type PayInfo, type SharedState } from './share';
-import { fitStageToPhoto, renderTotals, syncFaces, totalsEls } from './view';
+import { byId, fitStageToPhoto, progressElements, renderTotals, syncFaces } from './view';
 
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-
-const els = {
-  state: $<HTMLDivElement>('viewerState'),
-  stateTitle: $<HTMLElement>('viewerStateTitle'),
-  stateText: $<HTMLSpanElement>('viewerStateText'),
-  stageWrap: $<HTMLDivElement>('stageWrap'),
-  stageArea: $<HTMLDivElement>('stageArea'),
-  photo: $<HTMLImageElement>('photo'),
-  faces: $<HTMLDivElement>('faces'),
-  panel: $<HTMLElement>('panel'),
-  title: $<HTMLHeadingElement>('viewTitle'),
-  updated: $<HTMLParagraphElement>('updated'),
-  download: $<HTMLButtonElement>('download'),
-  payBox: $<HTMLElement>('payBox'),
-  payNote: $<HTMLParagraphElement>('payNoteOut'),
-  copyPayNote: $<HTMLButtonElement>('copyPayNote'),
-  payQrBox: $<HTMLElement>('payQrBox'),
-  payQr: $<HTMLImageElement>('payQrOut'),
-  payQrSave: $<HTMLAnchorElement>('payQrSave'),
-  exportMsg: $<HTMLParagraphElement>('exportMsg'),
+const elements = {
+  state: byId<HTMLDivElement>('viewerState'),
+  stateTitle: byId<HTMLElement>('viewerStateTitle'),
+  stateText: byId<HTMLSpanElement>('viewerStateText'),
+  stageWrap: byId<HTMLDivElement>('stageWrap'),
+  stageArea: byId<HTMLDivElement>('stageArea'),
+  photo: byId<HTMLImageElement>('photo'),
+  faces: byId<HTMLDivElement>('faces'),
+  panel: byId<HTMLElement>('panel'),
+  title: byId<HTMLHeadingElement>('viewTitle'),
+  updated: byId<HTMLParagraphElement>('updated'),
+  download: byId<HTMLButtonElement>('download'),
+  payBox: byId<HTMLElement>('payBox'),
+  payNote: byId<HTMLParagraphElement>('payNoteOut'),
+  copyPayNote: byId<HTMLButtonElement>('copyPayNote'),
+  payQrBox: byId<HTMLElement>('payQrBox'),
+  payQr: byId<HTMLImageElement>('payQrOut'),
+  payQrSave: byId<HTMLAnchorElement>('payQrSave'),
+  exportMsg: byId<HTMLParagraphElement>('exportMsg'),
 };
-const totals = totalsEls();
-const faceEls = new Map<string, HTMLElement>();
+const progressOutputs = progressElements();
+const faceMarkers = new Map<string, HTMLElement>();
 
-const POLL_MS = 30_000;
+const POLL_INTERVAL_MS = 30_000;
+const COPIED_FEEDBACK_MS = 1500;
+const OBJECT_URL_LIFETIME_MS = 5000;
 
 let link: { id: string; key: string } | null = null;
 let shared: SharedState | null = null;
@@ -38,65 +39,60 @@ let payVersion = -1;
 let pollTimer = 0;
 
 function showMessage(title: string, text: string) {
-  els.state.hidden = false;
-  els.stageWrap.hidden = true;
-  els.panel.hidden = true;
-  els.stateTitle.textContent = title;
-  els.stateText.textContent = text;
+  elements.state.hidden = false;
+  elements.stageWrap.hidden = true;
+  elements.panel.hidden = true;
+  elements.stateTitle.textContent = title;
+  elements.stateText.textContent = text;
 }
 
 function renderPay() {
-  els.payBox.hidden = !pay;
+  elements.payBox.hidden = !pay;
   if (!pay) return;
-  els.payNote.textContent = pay.note;
-  els.payNote.hidden = !pay.note;
-  els.copyPayNote.hidden = !pay.note;
-  els.payQrBox.hidden = !pay.qr;
+  elements.payNote.textContent = pay.note;
+  elements.payNote.hidden = !pay.note;
+  elements.copyPayNote.hidden = !pay.note;
+  elements.payQrBox.hidden = !pay.qr;
   if (pay.qr) {
-    els.payQr.src = pay.qr;
-    els.payQrSave.href = pay.qr;
+    elements.payQr.src = pay.qr;
+    elements.payQrSave.href = pay.qr;
   }
 }
 
 function render() {
   if (!shared || !image) return;
-  els.state.hidden = true;
-  els.stageWrap.hidden = false;
-  els.panel.hidden = false;
-  if (els.photo.getAttribute('src') !== image) els.photo.src = image;
+  elements.state.hidden = true;
+  elements.stageWrap.hidden = false;
+  elements.panel.hidden = false;
+  if (elements.photo.getAttribute('src') !== image) elements.photo.src = image;
 
-  const title = shared.title.trim() || 'La cancha';
-  els.title.textContent = title;
-  document.title = `${title} · El Buen Pagador`;
+  const title = shared.title.trim() || es.viewer.defaultTitle;
+  elements.title.textContent = title;
+  document.title = es.meta.pageTitle(title);
 
-  syncFaces(els.faces, faceEls, shared.faces, {
+  syncFaces(elements.faces, faceMarkers, shared.faces, {
     interactive: false,
-    label: (f, i) => `Persona ${i + 1}: ${f.paid ? 'pagó' : 'debe'}`,
+    label: (face, index) => es.faces.readOnly(index + 1, face.paid),
   });
-  renderTotals(totals, shared);
+  renderTotals(progressOutputs, shared);
   renderPay();
 
-  const time = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit' }).format(new Date());
-  els.updated.textContent = `Revisado a las ${time}`;
+  const time = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(new Date());
+  elements.updated.textContent = es.viewer.checkedAt(time);
 }
 
-export function errorView(err: unknown, hasData: boolean): { title: string; text: string; stop: boolean } | null {
-  const status = err instanceof ShareError ? err.status : 0;
-  if (status === 404)
-    return {
-      title: 'Este link ya no existe',
-      text: 'Puede que haya expirado o que quien lo creó haya dejado de compartirlo.',
-      stop: true,
-    };
-  if (status === 400) return { title: 'Link incompleto', text: 'Pide que te lo vuelvan a mandar, copiándolo completo.', stop: true };
+export function errorView(error: unknown, hasData: boolean): { title: string; text: string; stop: boolean } | null {
+  const status = error instanceof ShareError ? error.status : 0;
+  if (status === 404) return { title: es.viewer.goneTitle, text: es.viewer.goneText, stop: true };
+  if (status === 400) return { title: es.viewer.brokenTitle, text: es.viewer.brokenText, stop: true };
   if (hasData) return null;
-  return { title: 'Sin conexión', text: 'No pudimos abrir el link. Revisa tu internet y recarga la página.', stop: false };
+  return { title: es.viewer.offlineTitle, text: es.viewer.offlineText, stop: false };
 }
 
 async function withPayIfChanged(target: { id: string; key: string }, loaded: Loaded, included: boolean): Promise<Loaded> {
   if (loaded.pv === payVersion) return loaded;
-  const fresh = included ? loaded : await loadShare(target, false, true);
-  pay = fresh.pay ?? null;
+  const withPay = included ? loaded : await loadShare(target, false, true);
+  pay = withPay.pay ?? null;
   payVersion = loaded.pv;
   return loaded;
 }
@@ -108,9 +104,9 @@ async function refresh(withImage = false) {
     image = loaded.image ?? image;
     shared = loaded.state;
     render();
-  } catch (err) {
-    console.error(err);
-    const view = errorView(err, !!shared);
+  } catch (error) {
+    console.error(error);
+    const view = errorView(error, !!shared);
     if (view?.stop) stopPolling();
     if (view) showMessage(view.title, view.text);
   }
@@ -125,51 +121,51 @@ function startPolling() {
   stopPolling();
   pollTimer = window.setInterval(() => {
     if (document.visibilityState === 'visible') refresh();
-  }, POLL_MS);
+  }, POLL_INTERVAL_MS);
 }
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && pollTimer) refresh();
 });
 
-fitStageToPhoto(els.photo, els.stageArea);
+fitStageToPhoto(elements.photo, elements.stageArea);
 
-els.copyPayNote.addEventListener('click', async () => {
+elements.copyPayNote.addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(pay?.note ?? '');
-    els.copyPayNote.textContent = 'Copiado ✓';
-    setTimeout(() => (els.copyPayNote.textContent = 'Copiar datos'), 1500);
+    elements.copyPayNote.textContent = es.share.copied;
+    setTimeout(() => (elements.copyPayNote.textContent = es.pay.copy), COPIED_FEEDBACK_MS);
   } catch {
-    getSelection()?.selectAllChildren(els.payNote);
+    getSelection()?.selectAllChildren(elements.payNote);
   }
 });
 
-els.download.addEventListener('click', async () => {
+elements.download.addEventListener('click', async () => {
   if (!shared || !image) return;
-  els.download.disabled = true;
-  els.exportMsg.textContent = 'Generando imagen…';
+  elements.download.disabled = true;
+  elements.exportMsg.textContent = es.image.generating;
   try {
     const canvas = await renderCard({ ...shared, image, includePhoto: true, payNote: pay?.note, payQr: pay?.qr });
     const blob = await canvasToBlob(canvas);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'buen-pagador.png';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    els.exportMsg.textContent = '';
-  } catch (err) {
-    console.error(err);
-    els.exportMsg.textContent = 'No se pudo generar la imagen. Intenta de nuevo.';
+    const objectUrl = URL.createObjectURL(blob);
+    const downloadLink = document.createElement('a');
+    downloadLink.href = objectUrl;
+    downloadLink.download = es.viewer.imageName;
+    downloadLink.click();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), OBJECT_URL_LIFETIME_MS);
+    elements.exportMsg.textContent = '';
+  } catch (error) {
+    console.error(error);
+    elements.exportMsg.textContent = es.image.failed;
   } finally {
-    els.download.disabled = false;
+    elements.download.disabled = false;
   }
 });
 
 async function start() {
   link = parsePublicHash(location.hash);
   if (!link) {
-    showMessage('Link incompleto', 'Pide que te lo vuelvan a mandar, copiándolo completo.');
+    showMessage(es.viewer.brokenTitle, es.viewer.brokenText);
     return;
   }
   await refresh(true);

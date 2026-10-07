@@ -1,5 +1,7 @@
 import { decrypt, decryptJson, encrypt, encryptJson, importKey, newKey } from './crypto';
+import { es } from '../i18n/es';
 import { bytesToDataUrl, shareImageBytes } from './image';
+import { PUBLIC_PATH } from './routes';
 import type { Face, State } from './state';
 
 export interface ShareLink {
@@ -34,25 +36,31 @@ export class ShareError extends Error {
   }
 }
 
+const EDIT_PREFIX = 'edit';
+const LEGACY_EDIT_PREFIX = 'editar';
+const MASTER_HASH = new RegExp(`^#(?:${EDIT_PREFIX}|${LEGACY_EDIT_PREFIX})=([A-Za-z0-9]{10})\\.([\\w-]{43})\\.([\\w-]{32})$`);
+const PUBLIC_HASH = /^#([A-Za-z0-9]{10})\.([\w-]{43})$/;
+
 export function publicUrl(link: Pick<ShareLink, 'id' | 'key'>): string {
-  return `${location.origin}/ver#${link.id}.${link.key}`;
+  return `${location.origin}${PUBLIC_PATH}#${link.id}.${link.key}`;
 }
 
 export function masterUrl(link: ShareLink): string {
-  return `${location.origin}/#editar=${link.id}.${link.key}.${link.token}`;
+  return `${location.origin}/#${EDIT_PREFIX}=${link.id}.${link.key}.${link.token}`;
 }
 
 export function parsePublicHash(hash: string): { id: string; key: string } | null {
-  const m = hash.match(/^#([A-Za-z0-9]{10})\.([\w-]{43})$/);
-  return m ? { id: m[1], key: m[2] } : null;
+  const match = hash.match(PUBLIC_HASH);
+  return match ? { id: match[1], key: match[2] } : null;
 }
 
 export function parseMasterHash(hash: string): ShareLink | null {
-  const m = hash.match(/^#editar=([A-Za-z0-9]{10})\.([\w-]{43})\.([\w-]{32})$/);
-  return m ? { id: m[1], key: m[2], token: m[3] } : null;
+  const match = hash.match(MASTER_HASH);
+  return match ? { id: match[1], key: match[2], token: match[3] } : null;
 }
 
-const round = (n: number) => Math.round(n * 10000) / 10000;
+const COORDINATE_PRECISION = 10000;
+const roundCoordinate = (value: number) => Math.round(value * COORDINATE_PRECISION) / COORDINATE_PRECISION;
 
 export function toShared(state: State): SharedState {
   return {
@@ -60,47 +68,56 @@ export function toShared(state: State): SharedState {
     cost: state.cost,
     currency: state.currency,
     rounding: state.rounding,
-    faces: state.faces.map((f) => ({ ...f, x: round(f.x), y: round(f.y), w: round(f.w), h: round(f.h) })),
+    faces: state.faces.map((face) => ({
+      ...face,
+      x: roundCoordinate(face.x),
+      y: roundCoordinate(face.y),
+      w: roundCoordinate(face.w),
+      h: roundCoordinate(face.h),
+    })),
   };
 }
 
-const errorText = (data: { error?: string }) => data.error ?? 'No se pudo conectar.';
+const errorText = (body: { error?: string }) => es.errors[body.error ?? 'network'] ?? es.errors.network;
 
 async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body) headers.set('content-type', 'application/json');
   if (token) headers.set('authorization', `Bearer ${token}`);
-  const res = await fetch(path, { ...init, headers });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ShareError(errorText(data), res.status);
-  return data as T;
+  const response = await fetch(path, { ...init, headers });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new ShareError(errorText(body), response.status);
+  return body as T;
 }
 
 export async function createShare(state: State): Promise<ShareLink> {
-  if (!state.image) throw new ShareError('Primero sube una foto.', 400);
+  if (!state.image) throw new ShareError(es.errors.no_photo, 400);
   const { key, raw } = await newKey();
   const pay = payOf(state);
-  const [img, payload, payData] = await Promise.all([
+  const [encryptedImage, encryptedState, encryptedPay] = await Promise.all([
     shareImageBytes(state.image).then((bytes) => encrypt(key, bytes)),
     encryptJson(key, toShared(state)),
     hasPay(pay) ? encryptJson(key, pay) : undefined,
   ]);
-  const res = await request<{ id: string; token: string }>('/api/share', {
+  const created = await request<{ id: string; token: string }>('/api/share', {
     method: 'POST',
-    body: JSON.stringify({ img, state: payload, pay: payData }),
+    body: JSON.stringify({ img: encryptedImage, state: encryptedState, pay: encryptedPay }),
   });
-  return { id: res.id, key: raw, token: res.token };
+  return { id: created.id, key: raw, token: created.token };
 }
 
 export async function pushShare(link: ShareLink, state: State, withPay = false): Promise<number> {
   const key = await importKey(link.key);
-  const [payload, pay] = await Promise.all([encryptJson(key, toShared(state)), withPay ? encryptJson(key, payOf(state)) : undefined]);
-  const res = await request<{ v: number }>(
+  const [encryptedState, encryptedPay] = await Promise.all([
+    encryptJson(key, toShared(state)),
+    withPay ? encryptJson(key, payOf(state)) : undefined,
+  ]);
+  const updated = await request<{ v: number }>(
     `/api/share/${link.id}`,
-    { method: 'PUT', body: JSON.stringify({ state: payload, pay }) },
+    { method: 'PUT', body: JSON.stringify({ state: encryptedState, pay: encryptedPay }) },
     link.token,
   );
-  return res.v;
+  return updated.v;
 }
 
 export async function deleteShare(link: ShareLink): Promise<void> {
@@ -118,21 +135,21 @@ export interface Loaded {
 
 type RawShare = { state: string; v: number; pv?: number; img?: string; pay?: string; canEdit?: boolean };
 
-async function decryptShare(key: CryptoKey, res: RawShare): Promise<Loaded> {
-  const state = await decryptJson<SharedState>(key, res.state);
-  const image = res.img ? await bytesToDataUrl(await decrypt(key, res.img)) : undefined;
-  const pay = res.pay ? await decryptJson<PayInfo>(key, res.pay) : undefined;
-  return { state, v: res.v, pv: res.pv ?? 0, image, pay, canEdit: res.canEdit };
+async function decryptShare(key: CryptoKey, encrypted: RawShare): Promise<Loaded> {
+  const state = await decryptJson<SharedState>(key, encrypted.state);
+  const image = encrypted.img ? await bytesToDataUrl(await decrypt(key, encrypted.img)) : undefined;
+  const pay = encrypted.pay ? await decryptJson<PayInfo>(key, encrypted.pay) : undefined;
+  return { state, v: encrypted.v, pv: encrypted.pv ?? 0, image, pay, canEdit: encrypted.canEdit };
 }
 
 export type LinkRef = { id: string; key: string; token?: string };
 
 export async function loadShare(link: LinkRef, withImage: boolean, withPay = false): Promise<Loaded> {
   const query = withImage ? '?img=1' : withPay ? '?pay=1' : '';
-  const res = await request<RawShare>(`/api/share/${link.id}${query}`, {}, link.token);
+  const encrypted = await request<RawShare>(`/api/share/${link.id}${query}`, {}, link.token);
   try {
-    return await decryptShare(await importKey(link.key), res);
+    return await decryptShare(await importKey(link.key), encrypted);
   } catch {
-    throw new ShareError('El link está incompleto o dañado.', 400);
+    throw new ShareError(es.errors.broken, 400);
   }
 }

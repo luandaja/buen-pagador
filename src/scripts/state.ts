@@ -40,7 +40,7 @@ export interface Totals {
   share: number | null;
   collected: number | null;
   missing: number | null;
-  pct: number;
+  paidRatio: number;
 }
 
 export const DEBTOR_EMOJIS = [
@@ -56,7 +56,7 @@ type GameBase = Partial<Pick<Game, 'title' | 'cost' | 'currency' | 'rounding' | 
 export function newGame(base: GameBase = {}): Game {
   const now = Date.now();
   return {
-    id: uid(),
+    id: createId(),
     createdAt: now,
     updatedAt: now,
     title: '',
@@ -76,24 +76,27 @@ export function newGame(base: GameBase = {}): Game {
 export const defaultPrefs = (): Prefs => ({ includePhoto: true, blocked: [], currentGameId: null });
 
 export function defaultState(): State {
-  const { currentGameId: _, ...prefs } = defaultPrefs();
-  return { ...newGame(), ...prefs };
+  const { includePhoto, blocked } = defaultPrefs();
+  return { ...newGame(), includePhoto, blocked };
+}
+
+function attempt<T>(action: () => T, fallback: T): T {
+  try {
+    return action();
+  } catch {
+    return fallback;
+  }
 }
 
 function readJson<T>(key: string): Partial<T> | null {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+  return attempt(() => {
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : null;
+  }, null);
 }
 
 function writeJson(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-  }
+  attempt(() => localStorage.setItem(key, JSON.stringify(value)), undefined);
 }
 
 export const loadPrefs = (): Prefs => ({ ...defaultPrefs(), ...readJson<Prefs>(PREFS_KEY) });
@@ -101,29 +104,25 @@ export const loadPrefs = (): Prefs => ({ ...defaultPrefs(), ...readJson<Prefs>(P
 export const savePrefs = (prefs: Prefs) => writeJson(PREFS_KEY, prefs);
 
 export function takeLegacy(): { game: Game | null; prefs: Partial<Prefs> } | null {
-  const old = readJson<State>(LEGACY_KEY);
-  if (!old) return null;
-  try {
-    localStorage.removeItem(LEGACY_KEY);
-  } catch {
-  }
-  const prefs = { includePhoto: old.includePhoto ?? true, blocked: old.blocked ?? [] };
-  const game = old.image ? { ...newGame(), ...pickGame(old) } : null;
+  const legacyState = readJson<State>(LEGACY_KEY);
+  if (!legacyState) return null;
+  attempt(() => localStorage.removeItem(LEGACY_KEY), undefined);
+  const prefs = { includePhoto: legacyState.includePhoto ?? true, blocked: legacyState.blocked ?? [] };
+  const game = legacyState.image ? { ...newGame(), ...legacyGameFields(legacyState) } : null;
   return { game, prefs };
 }
 
-function pickGame(old: Partial<State>): Partial<Game> {
-  const { title, cost, currency, rounding, faces, share, image } = old;
-  return Object.fromEntries(
-    Object.entries({ title, cost, currency, rounding, faces, share, image }).filter(([, v]) => v !== undefined),
-  );
+function legacyGameFields(legacyState: Partial<State>): Partial<Game> {
+  const { title, cost, currency, rounding, faces, share, image } = legacyState;
+  const fields = { title, cost, currency, rounding, faces, share, image };
+  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined));
 }
 
 export function refreshEmojis(faces: Face[], blocked: string[]): Face[] {
   const allowed = availableEmojis(blocked);
-  const stale = faces.filter((f) => !allowed.includes(f.emoji));
-  const fresh = pickEmojis(stale.length, faces.map((f) => f.emoji), blocked);
-  return faces.map((f) => (allowed.includes(f.emoji) ? f : { ...f, emoji: fresh.shift()! }));
+  const staleFaces = faces.filter((face) => !allowed.includes(face.emoji));
+  const replacements = pickEmojis(staleFaces.length, faces.map((face) => face.emoji), blocked);
+  return faces.map((face) => (allowed.includes(face.emoji) ? face : { ...face, emoji: replacements.shift()! }));
 }
 
 export function splitState(state: State): { game: Game; prefs: Prefs } {
@@ -132,49 +131,50 @@ export function splitState(state: State): { game: Game; prefs: Prefs } {
 }
 
 export function availableEmojis(blocked: string[] = []): string[] {
-  const list = DEBTOR_EMOJIS.filter((e) => !blocked.includes(e));
-  return list.length ? list : [...DEBTOR_EMOJIS];
+  const allowed = DEBTOR_EMOJIS.filter((emoji) => !blocked.includes(emoji));
+  return allowed.length ? allowed : [...DEBTOR_EMOJIS];
 }
 
 export function pickEmojis(count: number, avoid: string[] = [], blocked: string[] = []): string[] {
   const allowed = availableEmojis(blocked);
-  const out: string[] = [];
+  const picked: string[] = [];
   let pool: string[] = [];
-  for (let i = 0; i < count; i++) {
-    if (pool.length === 0) {
-      pool = allowed.filter((e) => !avoid.includes(e));
-      if (pool.length === 0) pool = [...allowed];
-      shuffle(pool);
-    }
-    out.push(pool.pop()!);
+  while (picked.length < count) {
+    if (pool.length === 0) pool = shuffled(freshPool(allowed, avoid));
+    picked.push(pool.pop()!);
   }
-  return out;
+  return picked;
 }
 
-function shuffle<T>(arr: T[]) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+function freshPool(allowed: string[], avoid: string[]): string[] {
+  const unused = allowed.filter((emoji) => !avoid.includes(emoji));
+  return unused.length ? unused : [...allowed];
+}
+
+function shuffled<T>(items: T[]): T[] {
+  const result = [...items];
+  for (let index = result.length - 1; index > 0; index--) {
+    const swapWith = Math.floor(Math.random() * (index + 1));
+    [result[index], result[swapWith]] = [result[swapWith], result[index]];
   }
+  return result;
 }
 
 export function computeTotals(state: Pick<State, 'faces' | 'cost' | 'rounding'>): Totals {
   const people = state.faces.length;
-  const paid = state.faces.filter((f) => f.paid).length;
-  const pct = people ? paid / people : 0;
+  const paid = state.faces.filter((face) => face.paid).length;
+  const paidRatio = people ? paid / people : 0;
   if (!state.cost || state.cost <= 0 || people === 0) {
-    return { people, paid, share: null, collected: null, missing: null, pct };
+    return { people, paid, share: null, collected: null, missing: null, paidRatio };
   }
-  const raw = state.cost / people;
-  const share = state.rounding > 0 ? Math.ceil(raw / state.rounding - 1e-9) * state.rounding : raw;
-  return {
-    people,
-    paid,
-    share,
-    collected: share * paid,
-    missing: share * (people - paid),
-    pct,
-  };
+  const share = roundUp(state.cost / people, state.rounding);
+  return { people, paid, share, collected: share * paid, missing: share * (people - paid), paidRatio };
+}
+
+const ROUNDING_TOLERANCE = 1e-9;
+
+function roundUp(amount: number, step: number): number {
+  return step > 0 ? Math.ceil(amount / step - ROUNDING_TOLERANCE) * step : amount;
 }
 
 export function money(value: number | null, currency: string): string {
@@ -184,6 +184,6 @@ export function money(value: number | null, currency: string): string {
   return currency ? `${currency}\u00a0${text}` : text;
 }
 
-export function uid(): string {
+export function createId(): string {
   return Math.random().toString(36).slice(2, 10);
 }

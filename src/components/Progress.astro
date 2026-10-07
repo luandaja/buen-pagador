@@ -1,15 +1,18 @@
 ---
+import { es } from '../i18n/es';
+
 interface Props {
   perspective?: 'owner' | 'public';
 }
 const { perspective = 'owner' } = Astro.props;
 const owner = perspective === 'owner';
+const t = es.progress;
 ---
 
 <section class="progress" id="progress" data-perspective={perspective} aria-labelledby="progressLabel">
   <div class="progress-head">
-    <p class="progress-label" id="progressLabel">{owner ? 'Te faltan' : 'Faltan'}</p>
-    <p class="progress-count"><span id="paidOut">0/0</span> pagaron</p>
+    <p class="progress-label" id="progressLabel">{owner ? t.ownerMissing : t.publicMissing}</p>
+    <p class="progress-count"><span id="paidOut">0/0</span> {t.paidCount}</p>
   </div>
   <p class="progress-hero" id="heroOut">—</p>
   <div
@@ -19,7 +22,7 @@ const owner = perspective === 'owner';
     aria-valuemin="0"
     aria-valuemax="100"
     aria-valuenow="0"
-    aria-label="Avance de pagos"
+    aria-label={t.meter}
     style="--pct:0;--n:1"
   >
     <div class="meter-track"><div class="meter-fill"></div></div>
@@ -31,8 +34,8 @@ const owner = perspective === 'owner';
     </span>
   </div>
   <p class="progress-sub">
-    <span>Cuota <b id="shareOut" class="is-accent">—</b></span>
-    <span>{owner ? 'Te pagaron' : 'Recaudado'} <b id="collectedOut">—</b></span>
+    <span>{t.share} <b id="shareOut" class="is-accent">—</b></span>
+    <span>{owner ? t.ownerCollected : t.publicCollected} <b id="collectedOut">—</b></span>
   </p>
   <p class="progress-note" id="missingOut"></p>
 </section>

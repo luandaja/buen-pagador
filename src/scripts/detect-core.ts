@@ -7,10 +7,10 @@ export interface DetectedBox {
 }
 
 export interface Region {
-  sx: number;
-  sy: number;
-  sw: number;
-  sh: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
   minConfidence: number;
 }
 
@@ -22,48 +22,59 @@ export interface RawDetection {
 export type RegionDetector = (region: Region, scale: number) => Promise<RawDetection[]>;
 
 export const MAX_SIDE = 1024;
+const MIN_SIDE_FOR_QUADRANTS = 700;
+const QUADRANT_OVERLAP = 0.2;
+const FULL_IMAGE_CONFIDENCE = 0.4;
+const QUADRANT_CONFIDENCE = 0.55;
+const DUPLICATE_IOU = 0.3;
+const DUPLICATE_CONTAINMENT = 0.6;
+const MIN_FACE_PIXELS = 14;
 
-export function planRegions(W: number, H: number): Region[] {
-  const regions: Region[] = [{ sx: 0, sy: 0, sw: W, sh: H, minConfidence: 0.4 }];
-  if (Math.max(W, H) < 700) return regions;
-  const overlap = 0.2;
-  const tw = Math.round((W * (1 + overlap)) / 2);
-  const th = Math.round((H * (1 + overlap)) / 2);
-  for (const sx of [0, W - tw]) {
-    for (const sy of [0, H - th]) regions.push({ sx, sy, sw: tw, sh: th, minConfidence: 0.55 });
+export function planRegions(imageWidth: number, imageHeight: number): Region[] {
+  const regions: Region[] = [{ x: 0, y: 0, width: imageWidth, height: imageHeight, minConfidence: FULL_IMAGE_CONFIDENCE }];
+  if (Math.max(imageWidth, imageHeight) < MIN_SIDE_FOR_QUADRANTS) return regions;
+  const quadrantWidth = Math.round((imageWidth * (1 + QUADRANT_OVERLAP)) / 2);
+  const quadrantHeight = Math.round((imageHeight * (1 + QUADRANT_OVERLAP)) / 2);
+  for (const x of [0, imageWidth - quadrantWidth]) {
+    for (const y of [0, imageHeight - quadrantHeight]) {
+      regions.push({ x, y, width: quadrantWidth, height: quadrantHeight, minConfidence: QUADRANT_CONFIDENCE });
+    }
   }
   return regions;
 }
 
-export const regionScale = (r: Region) => Math.min(1, MAX_SIDE / Math.max(r.sw, r.sh));
+export const regionScale = (region: Region) => Math.min(1, MAX_SIDE / Math.max(region.width, region.height));
 
-export function toBoxes(found: RawDetection[], r: Region, scale: number, W: number, H: number): DetectedBox[] {
-  return found.map(({ box: b, score }) => ({
-    x: (r.sx + b.x / scale) / W,
-    y: (r.sy + b.y / scale) / H,
-    w: b.width / scale / W,
-    h: b.height / scale / H,
+export function toBoxes(found: RawDetection[], region: Region, scale: number, imageWidth: number, imageHeight: number): DetectedBox[] {
+  return found.map(({ box, score }) => ({
+    x: (region.x + box.x / scale) / imageWidth,
+    y: (region.y + box.y / scale) / imageHeight,
+    w: box.width / scale / imageWidth,
+    h: box.height / scale / imageHeight,
     score,
   }));
 }
 
-function overlap(a: DetectedBox, b: DetectedBox, aspect: number) {
-  const iw = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
-  const ih = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
-  const inter = iw * ih * aspect;
-  const areaA = a.w * a.h * aspect;
-  const areaB = b.w * b.h * aspect;
-  return { iou: inter / (areaA + areaB - inter), containment: inter / Math.min(areaA, areaB) };
+function overlap(first: DetectedBox, second: DetectedBox, aspectRatio: number) {
+  const overlapWidth = Math.max(0, Math.min(first.x + first.w, second.x + second.w) - Math.max(first.x, second.x));
+  const overlapHeight = Math.max(0, Math.min(first.y + first.h, second.y + second.h) - Math.max(first.y, second.y));
+  const intersection = overlapWidth * overlapHeight * aspectRatio;
+  const firstArea = first.w * first.h * aspectRatio;
+  const secondArea = second.w * second.h * aspectRatio;
+  return {
+    iou: intersection / (firstArea + secondArea - intersection),
+    containment: intersection / Math.min(firstArea, secondArea),
+  };
 }
 
-export function merge(boxes: DetectedBox[], aspect: number): DetectedBox[] {
+export function merge(boxes: DetectedBox[], aspectRatio: number): DetectedBox[] {
   const kept: DetectedBox[] = [];
-  for (const box of [...boxes].sort((a, b) => b.score - a.score)) {
-    const dup = kept.some((k) => {
-      const o = overlap(k, box, aspect);
-      return o.iou > 0.3 || o.containment > 0.6;
+  for (const box of [...boxes].sort((first, second) => second.score - first.score)) {
+    const isDuplicate = kept.some((keptBox) => {
+      const { iou, containment } = overlap(keptBox, box, aspectRatio);
+      return iou > DUPLICATE_IOU || containment > DUPLICATE_CONTAINMENT;
     });
-    if (!dup) kept.push(box);
+    if (!isDuplicate) kept.push(box);
   }
   return kept;
 }
@@ -71,14 +82,14 @@ export function merge(boxes: DetectedBox[], aspect: number): DetectedBox[] {
 type Pause = () => Promise<void>;
 const noPause: Pause = async () => {};
 
-export async function runDetection(W: number, H: number, detect: RegionDetector, pause = noPause): Promise<DetectedBox[]> {
-  const all: DetectedBox[] = [];
-  for (const region of planRegions(W, H)) {
+export async function runDetection(imageWidth: number, imageHeight: number, detect: RegionDetector, pause = noPause): Promise<DetectedBox[]> {
+  const allBoxes: DetectedBox[] = [];
+  for (const region of planRegions(imageWidth, imageHeight)) {
     const scale = regionScale(region);
-    all.push(...toBoxes(await detect(region, scale), region, scale, W, H));
+    allBoxes.push(...toBoxes(await detect(region, scale), region, scale, imageWidth, imageHeight));
     await pause();
   }
-  return merge(all, W / H)
-    .filter((b) => b.w * W >= 14)
-    .sort((a, b) => a.x - b.x);
+  return merge(allBoxes, imageWidth / imageHeight)
+    .filter((box) => box.w * imageWidth >= MIN_FACE_PIXELS)
+    .sort((first, second) => first.x - second.x);
 }

@@ -14,7 +14,7 @@ afterEach(() => {
 });
 
 describe('MemoryStore', () => {
-  it('crea, lee campos, actualiza y borra', async () => {
+  it('creates, reads fields, updates and removes', async () => {
     const store = new MemoryStore();
     await store.create('abc', record);
     expect(await store.get('abc', ['state', 'v'])).toEqual({ state: 'st', v: 1 });
@@ -25,7 +25,7 @@ describe('MemoryStore', () => {
     expect(await store.updateState('abc', 'x')).toBe(0);
   });
 
-  it('guarda los datos para pagar y sube su versión solo cuando vienen', async () => {
+  it('stores payment details and bumps their version only when sent', async () => {
     const store = new MemoryStore();
     await store.create('pay', { ...record, pay: 'p1', pv: 1 });
     await store.updateState('pay', 's2');
@@ -34,7 +34,7 @@ describe('MemoryStore', () => {
     expect(await store.get('pay', ['pay', 'pv'])).toEqual({ pay: 'p2', pv: 2 });
   });
 
-  it('expira a los 30 días', async () => {
+  it('expires after 30 days', async () => {
     vi.useFakeTimers();
     const store = new MemoryStore();
     await store.create('exp', record);
@@ -43,72 +43,72 @@ describe('MemoryStore', () => {
   });
 });
 
-describe('FileStore (desarrollo)', () => {
-  it('guarda en un archivo para que otra instancia lo lea', async () => {
+describe('FileStore (development)', () => {
+  it('writes to a file another instance can read', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'bp-'));
     const file = join(dir, 'sub', 'shares.json');
-    const a = new FileStore(file);
-    await a.create('abc', record);
+    const firstStore = new FileStore(file);
+    await firstStore.create('abc', record);
     expect(JSON.parse(readFileSync(file, 'utf8'))[0][0]).toBe('abc');
 
-    const b = new FileStore(file);
-    expect(await b.get('abc', ['state'])).toEqual({ state: 'st' });
-    expect(await b.updateState('abc', 'st2')).toBe(2);
-    expect(await a.get('abc', ['state', 'v'])).toEqual({ state: 'st2', v: 2 });
-    await a.remove('abc');
-    expect(await b.get('abc', ['state'])).toBeNull();
+    const secondStore = new FileStore(file);
+    expect(await secondStore.get('abc', ['state'])).toEqual({ state: 'st' });
+    expect(await secondStore.updateState('abc', 'st2')).toBe(2);
+    expect(await firstStore.get('abc', ['state', 'v'])).toEqual({ state: 'st2', v: 2 });
+    await firstStore.remove('abc');
+    expect(await secondStore.get('abc', ['state'])).toBeNull();
     rmSync(dir, { recursive: true });
   });
 
-  it('un archivo inexistente o roto es un almacén vacío', async () => {
-    expect(await new FileStore(join(tmpdir(), 'no-existe-bp', 'x.json')).get('abc', ['state'])).toBeNull();
+  it('a missing or broken file is an empty store', async () => {
+    expect(await new FileStore(join(tmpdir(), 'bp-missing', 'x.json')).get('abc', ['state'])).toBeNull();
   });
 });
 
 describe('RedisStore', () => {
   function fakeRedis(hmget: unknown) {
-    const tx = { hset: vi.fn(), expire: vi.fn(), hincrby: vi.fn(), exec: vi.fn(async () => [1, 7, 1]) };
-    const redis = { hmget: vi.fn(async () => hmget), multi: vi.fn(() => tx), del: vi.fn() };
-    return { redis, tx, store: new RedisStore(redis as never) };
+    const transaction = { hset: vi.fn(), expire: vi.fn(), hincrby: vi.fn(), exec: vi.fn(async () => [1, 7, 1]) };
+    const redis = { hmget: vi.fn(async () => hmget), multi: vi.fn(() => transaction), del: vi.fn() };
+    return { redis, transaction, store: new RedisStore(redis as never) };
   }
 
-  it('lee campos y convierte la versión a número', async () => {
+  it('reads fields and parses the version as a number', async () => {
     const { store, redis } = fakeRedis({ state: 's', v: '3' });
     expect(await store.get('id', ['state', 'v'])).toEqual({ state: 's', v: 3 });
     expect(redis.hmget).toHaveBeenCalledWith('bp:share:id', 'state', 'v');
   });
 
-  it('entiende la respuesta real de Upstash: un arreglo en el orden pedido', async () => {
+  it('handles the real Upstash reply: an array in request order', async () => {
     const { store } = fakeRedis(['s', '3', null]);
     expect(await store.get('id', ['state', 'v', 'img'])).toEqual({ state: 's', v: 3 });
     expect(await fakeRedis([null, null]).store.get('id', ['state', 'v'])).toBeNull();
   });
 
-  it('devuelve null si no existe', async () => {
+  it('returns null when missing', async () => {
     expect(await fakeRedis(null).store.get('id', ['state'])).toBeNull();
     expect(await fakeRedis({ state: null }).store.get('id', ['state'])).toBeNull();
   });
 
-  it('crea con expiración y actualiza subiendo la versión', async () => {
-    const { store, tx, redis } = fakeRedis(null);
+  it('creates with expiry and bumps the version on update', async () => {
+    const { store, transaction, redis } = fakeRedis(null);
     await store.create('id', record);
-    expect(tx.hset).toHaveBeenCalledWith('bp:share:id', { ...record, v: '1', pv: '0' });
-    expect(tx.expire).toHaveBeenCalledWith('bp:share:id', TTL_SECONDS);
-    expect(await store.updateState('id', 'nuevo')).toBe(7);
-    expect(tx.hincrby).toHaveBeenCalledWith('bp:share:id', 'v', 1);
-    expect(tx.hincrby).not.toHaveBeenCalledWith('bp:share:id', 'pv', 1);
+    expect(transaction.hset).toHaveBeenCalledWith('bp:share:id', { ...record, v: '1', pv: '0' });
+    expect(transaction.expire).toHaveBeenCalledWith('bp:share:id', TTL_SECONDS);
+    expect(await store.updateState('id', 'next-state')).toBe(7);
+    expect(transaction.hincrby).toHaveBeenCalledWith('bp:share:id', 'v', 1);
+    expect(transaction.hincrby).not.toHaveBeenCalledWith('bp:share:id', 'pv', 1);
     await store.create('id2', { ...record, pay: 'p', pv: 1 });
-    expect(tx.hset).toHaveBeenLastCalledWith('bp:share:id2', { ...record, v: '1', pv: '1', pay: 'p' });
-    await store.updateState('id2', 'nuevo', 'p2');
-    expect(tx.hset).toHaveBeenLastCalledWith('bp:share:id2', { state: 'nuevo', pay: 'p2' });
-    expect(tx.hincrby).toHaveBeenLastCalledWith('bp:share:id2', 'pv', 1);
+    expect(transaction.hset).toHaveBeenLastCalledWith('bp:share:id2', { ...record, v: '1', pv: '1', pay: 'p' });
+    await store.updateState('id2', 'next-state', 'p2');
+    expect(transaction.hset).toHaveBeenLastCalledWith('bp:share:id2', { state: 'next-state', pay: 'p2' });
+    expect(transaction.hincrby).toHaveBeenLastCalledWith('bp:share:id2', 'pv', 1);
     await store.remove('id');
     expect(redis.del).toHaveBeenCalledWith('bp:share:id');
   });
 });
 
 describe('getStore', () => {
-  it('lee las credenciales de Vercel o de Upstash', () => {
+  it('reads Vercel or Upstash credentials', () => {
     vi.stubEnv('KV_REST_API_URL', '');
     vi.stubEnv('KV_REST_API_TOKEN', '');
     vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://u');
@@ -116,20 +116,20 @@ describe('getStore', () => {
     expect(credentials()).toEqual({ url: 'https://u', token: 't' });
   });
 
-  it('usa Redis si hay credenciales', () => {
+  it('uses Redis when credentials exist', () => {
     vi.stubEnv('KV_REST_API_URL', 'https://kv');
     vi.stubEnv('KV_REST_API_TOKEN', 'tok');
     expect(getStore()).toBeInstanceOf(RedisStore);
     expect(getStore()).toBe(getStore());
   });
 
-  it('en desarrollo sin credenciales usa memoria', () => {
+  it('uses memory in tests without credentials', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect(credentials()).toBeNull();
     expect(getStore()).toBeInstanceOf(MemoryStore);
   });
 
-  it('en producción sin credenciales falla con un mensaje claro', () => {
+  it('fails clearly in production without credentials', () => {
     vi.stubEnv('DEV', false);
     expect(() => getStore()).toThrow(/Upstash/);
   });

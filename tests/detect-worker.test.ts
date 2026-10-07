@@ -47,8 +47,8 @@ beforeEach(() => {
   api.loadFromUri.mockClear();
 });
 
-describe('worker de detección', () => {
-  it('prepara un entorno sin DOM y carga el modelo con URL absoluta', async () => {
+describe('detection worker', () => {
+  it('sets up a DOM-free environment and loads the model by absolute URL', async () => {
     const { handler, post } = await loadWorker();
     expect(api.setEnv).toHaveBeenCalledWith(expect.objectContaining({ Canvas: FakeOffscreenCanvas }));
     const env = api.setEnv.mock.calls[0][0];
@@ -60,7 +60,7 @@ describe('worker de detección', () => {
     expect(post).not.toHaveBeenCalled();
   });
 
-  it('detecta en la foto y devuelve cajas normalizadas', async () => {
+  it('detects on the photo and returns normalized boxes', async () => {
     api.detectAllFaces.mockResolvedValue([{ box: { x: 60, y: 40, width: 30, height: 30 }, score: 0.9 }]);
     const { handler, post } = await loadWorker();
     const bmp = bitmap();
@@ -69,10 +69,10 @@ describe('worker de detección', () => {
     expect(bmp.close).toHaveBeenCalled();
   });
 
-  it('avisa si falla', async () => {
-    api.detectAllFaces.mockRejectedValue(new Error('sin WebGL'));
+  it('reports failures', async () => {
+    api.detectAllFaces.mockRejectedValue(new Error('no WebGL'));
     const { handler, post } = await loadWorker();
     await handler({ data: { id: 3, bitmap: bitmap() } });
-    expect(post).toHaveBeenCalledWith({ id: 3, error: 'Error: sin WebGL' });
+    expect(post).toHaveBeenCalledWith({ id: 3, error: 'Error: no WebGL' });
   });
 });

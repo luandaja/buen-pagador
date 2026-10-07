@@ -19,15 +19,15 @@ export async function unmount() {
   if (GlobalRegistrator.isRegistered) await GlobalRegistrator.unregister();
 }
 
-export const eventually = (fn: () => void, timeout = 4000) => vi.waitFor(fn, { timeout, interval: 20 });
+export const eventually = (assertion: () => void, timeout = 4000) => vi.waitFor(assertion, { timeout, interval: 20 });
 
-export const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+export const byId = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
-export function click(el: Element, init: MouseEventInit = {}) {
-  el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ...init }));
+export function click(element: Element, init: MouseEventInit = {}) {
+  element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ...init }));
 }
 
-export function input(el: HTMLInputElement | HTMLSelectElement, value: string, type = 'input') {
-  el.value = value;
-  el.dispatchEvent(new Event(type, { bubbles: true }));
+export function input(element: HTMLInputElement | HTMLSelectElement, value: string, type = 'input') {
+  element.value = value;
+  element.dispatchEvent(new Event(type, { bubbles: true }));
 }

@@ -2,15 +2,16 @@
 import { IDBFactory } from 'fake-indexeddb';
 import 'fake-indexeddb/auto';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { es } from '../src/i18n/es';
 import { resetStore } from '../src/lib/store';
-import Index from '../src/pages/index.astro';
-import { createShare, loadShare } from '../src/scripts/share';
-import { DEBTOR_EMOJIS, defaultPrefs, defaultState, newGame, type Game, type State } from '../src/scripts/state';
+import EditorPage from '../src/pages/index.astro';
+import { createShare, loadShare, pushShare, type ShareLink } from '../src/scripts/share';
+import { DEBTOR_EMOJIS, defaultPrefs, defaultState, money, newGame, type Game, type State } from '../src/scripts/state';
 import { useApiFetch } from './helpers/api';
-import { $, click, eventually, input, mount, renderPage, unmount } from './helpers/dom';
+import { byId, click, eventually, input, mount, renderPage, unmount } from './helpers/dom';
 
 const mocks = vi.hoisted(() => ({
-  boxes: [] as { x: number; y: number; w: number; h: number; score: number }[],
+  detectedBoxes: [] as { x: number; y: number; w: number; h: number; score: number }[],
   detectFaces: vi.fn(),
   renderCard: vi.fn(),
   fileToDataUrl: vi.fn(),
@@ -29,215 +30,239 @@ vi.mock('../src/scripts/image', () => ({
 }));
 
 const ORIGIN = 'http://localhost:4321';
-let html = '';
-type Games = typeof import('../src/scripts/games');
-let games: Games;
+const PHOTO = 'data:image/jpeg;base64,AAAA';
+const THUMB = 'data:image/jpeg;base64,THUMB';
+const QR = 'data:image/jpeg;base64,QR';
+
+let pageHtml = '';
+let gameStore: typeof import('../src/scripts/games');
 
 beforeAll(async () => {
-  html = await renderPage(Index);
+  pageHtml = await renderPage(EditorPage);
 });
 
 beforeEach(() => {
   resetStore();
-  mocks.boxes = [
+  mocks.detectedBoxes = [
     { x: 0.1, y: 0.1, w: 0.1, h: 0.1, score: 0.9 },
     { x: 0.4, y: 0.1, w: 0.1, h: 0.1, score: 0.9 },
     { x: 0.7, y: 0.1, w: 0.1, h: 0.1, score: 0.9 },
   ];
-  mocks.detectFaces.mockReset().mockImplementation(async () => mocks.boxes);
+  mocks.detectFaces.mockReset().mockImplementation(async () => mocks.detectedBoxes);
   mocks.renderCard.mockReset().mockImplementation(async () => ({}));
-  mocks.fileToDataUrl.mockReset().mockImplementation(async () => 'data:image/jpeg;base64,AAAA');
-  mocks.qrFromFile.mockReset().mockImplementation(async () => 'data:image/jpeg;base64,QR');
+  mocks.fileToDataUrl.mockReset().mockImplementation(async () => PHOTO);
+  mocks.qrFromFile.mockReset().mockImplementation(async () => QR);
 });
 
 afterEach(async () => {
   await unmount();
 });
 
-interface StartOptions {
-  legacy?: Partial<State>;
-  saved?: Game[];
-  current?: string;
+interface EditorSetup {
+  legacyState?: Partial<State>;
+  savedGames?: Game[];
+  openGameId?: string;
   hash?: string;
 }
 
-async function start({ legacy, saved = [], current, hash = '' }: StartOptions = {}) {
-  mount(html, `${ORIGIN}/${hash}`);
+async function startEditor({ legacyState, savedGames = [], openGameId, hash = '' }: EditorSetup = {}) {
+  mount(pageHtml, `${ORIGIN}/${hash}`);
   globalThis.indexedDB = new IDBFactory();
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
   useApiFetch();
-  const photo = $<HTMLImageElement>('photo');
-  Object.defineProperties(photo, {
+  Object.defineProperties(byId<HTMLImageElement>('photo'), {
     naturalWidth: { value: 800 },
     naturalHeight: { value: 600 },
     decode: { value: async () => {} },
   });
-  vi.spyOn($('faces'), 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 800, height: 600 } as DOMRect);
+  vi.spyOn(byId('faces'), 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 800, height: 600 } as DOMRect);
   HTMLAnchorElement.prototype.click = vi.fn();
   vi.resetModules();
-  games = await import('../src/scripts/games');
-  for (const game of saved) await games.saveGame(game);
-  if (current) localStorage.setItem('buen-pagador:prefs', JSON.stringify({ ...defaultPrefs(), currentGameId: current }));
-  if (legacy) localStorage.setItem('buen-pagador:v1', JSON.stringify({ ...defaultState(), ...legacy }));
+  gameStore = await import('../src/scripts/games');
+  for (const game of savedGames) await gameStore.saveGame(game);
+  if (openGameId) localStorage.setItem('buen-pagador:prefs', JSON.stringify({ ...defaultPrefs(), currentGameId: openGameId }));
+  if (legacyState) localStorage.setItem('buen-pagador:v1', JSON.stringify({ ...defaultState(), ...legacyState }));
   await import('../src/scripts/app');
 }
 
-async function upload(type = 'image/jpeg') {
-  const file = new File(['x'], 'foto.jpg', { type });
-  const fileInput = $<HTMLInputElement>('file');
-  Object.defineProperty(fileInput, 'files', { configurable: true, value: [file] });
+function selectFile(inputId: string, type: string) {
+  const fileInput = byId<HTMLInputElement>(inputId);
+  Object.defineProperty(fileInput, 'files', { configurable: true, value: [new File(['x'], 'upload', { type })] });
   fileInput.dispatchEvent(new Event('change'));
 }
 
-function stubConfirm(answer = true) {
-  const fn = vi.fn(() => answer);
-  globalThis.confirm = fn;
-  return fn;
+const uploadPhoto = (type = 'image/jpeg') => selectFile('file', type);
+const uploadQr = (type = 'image/png') => selectFile('payQrFile', type);
+
+function answerConfirm(answer: boolean) {
+  const confirmDialog = vi.fn(() => answer);
+  globalThis.confirm = confirmDialog;
+  return confirmDialog;
 }
 
-const masterHash = (link: { id: string; key: string; token: string }) => `#editar=${link.id}.${link.key}.${link.token}`;
+function failNetwork() {
+  globalThis.fetch = vi.fn(async () => {
+    throw new TypeError('offline');
+  }) as typeof fetch;
+}
 
-const faces = () => [...document.querySelectorAll<HTMLButtonElement>('.face')];
-const text = (id: string) => $(id).textContent;
-const prefs = () => JSON.parse(localStorage.getItem('buen-pagador:prefs') ?? '{}');
-const current = async () => games.loadGame(prefs().currentGameId);
-const rows = () => [...document.querySelectorAll<HTMLElement>('.game-row')];
-const rowNamed = (title: string) => rows().find((r) => r.querySelector('strong')?.textContent === title)!;
+const masterHash = (link: ShareLink, prefix = 'edit') => `#${prefix}=${link.id}.${link.key}.${link.token}`;
+const faceButtons = () => [...document.querySelectorAll<HTMLButtonElement>('.face')];
+const textOf = (id: string) => byId(id).textContent;
+const storedPrefs = () => JSON.parse(localStorage.getItem('buen-pagador:prefs') ?? '{}');
+const openGameRecord = async () => gameStore.loadGame(storedPrefs().currentGameId);
+const historyRows = () => [...document.querySelectorAll<HTMLElement>('.game-row')];
+const historyRow = (title: string) => historyRows().find((row) => row.querySelector('strong')?.textContent === title)!;
+const isDialogOpen = () => byId<HTMLDialogElement>('history').open;
 
-function game(extra: Partial<Game> = {}): Game {
+function buildGame(overrides: Partial<Game> = {}): Game {
   return {
     ...newGame(),
-    image: 'data:image/jpeg;base64,AAAA',
+    image: PHOTO,
     cost: 90,
-    faces: ['a', 'b', 'c'].map((id, i) => ({ id, x: 0.1 * i, y: 0.1, w: 0.1, h: 0.1, emoji: DEBTOR_EMOJIS[i], paid: false })),
-    ...extra,
+    faces: ['a', 'b', 'c'].map((id, index) => ({ id, x: 0.1 * index, y: 0.1, w: 0.1, h: 0.1, emoji: DEBTOR_EMOJIS[index], paid: false })),
+    ...overrides,
   };
 }
 
-async function startWith(extra: Partial<Game> = {}, others: Game[] = []) {
-  const g = game(extra);
-  await start({ saved: [g, ...others], current: g.id });
-  return g;
+const settledGame = (overrides: Partial<Game> = {}) =>
+  buildGame({ faces: buildGame().faces.map((face) => ({ ...face, paid: true })), ...overrides });
+
+async function startWithGame(overrides: Partial<Game> = {}) {
+  const game = buildGame(overrides);
+  await startEditor({ savedGames: [game], openGameId: game.id });
+  return game;
 }
 
-async function openHistory() {
-  click($('openHistory'));
-  await eventually(() => expect(rows().length).toBeGreaterThan(0));
+async function openHistoryDrawer() {
+  click(byId('openHistory'));
+  await eventually(() => expect(historyRows().length).toBeGreaterThan(0));
 }
 
-describe('foto y caras', () => {
-  it('empieza vacío con pasos, detecta caras y calcula la cuota', async () => {
-    await start();
-    expect($('dropzone').hidden).toBe(false);
-    expect($('steps').hidden).toBe(false);
-    expect($('progressWrap').hidden).toBe(true);
-    expect($('linkShare').hidden).toBe(true);
+async function createRemoteLink(overrides: Partial<Game> = {}) {
+  mount(pageHtml, ORIGIN);
+  useApiFetch();
+  const link = await createShare({ ...defaultState(), ...buildGame(overrides) });
+  await unmount();
+  return link;
+}
+
+describe('photo and faces', () => {
+  it('starts empty with steps, detects faces and computes the share', async () => {
+    await startEditor();
+    expect(byId('dropzone').hidden).toBe(false);
+    expect(byId('steps').hidden).toBe(false);
+    expect(byId('progressWrap').hidden).toBe(true);
+    expect(byId('linkShare').hidden).toBe(true);
     expect(document.querySelector<HTMLElement>('.panel-actions')!.hidden).toBe(true);
-    expect($('gameForm').hidden).toBe(false);
+    expect(byId('gameForm').hidden).toBe(false);
 
-    input($<HTMLInputElement>('cost'), '120');
+    input(byId<HTMLInputElement>('cost'), '120');
     expect(document.querySelectorAll('#steps li')[1].classList.contains('is-done')).toBe(true);
 
-    await upload();
-    await eventually(() => expect(faces()).toHaveLength(3));
-    expect($('stageWrap').hidden).toBe(false);
-    expect($('steps').hidden).toBe(true);
-    expect(text('shareOut')).toBe('S/ 40');
-    expect(text('heroOut')).toBe('S/ 120');
-    expect(text('gameMeta')).toBe('Cancha S/ 120 · 3 jugadores');
-    expect(text('dockSum')).toBe('Te faltan S/ 120 · 0/3');
+    uploadPhoto();
+    await eventually(() => expect(faceButtons()).toHaveLength(3));
+    expect(byId('stageWrap').hidden).toBe(false);
+    expect(byId('steps').hidden).toBe(true);
+    expect(textOf('shareOut')).toBe(money(40, 'S/'));
+    expect(textOf('heroOut')).toBe(money(120, 'S/'));
+    expect(textOf('gameMeta')).toBe([es.game.metaCost(money(120, 'S/')), es.game.metaPlayers(3)].join(' · '));
+    expect(textOf('dockSum')).toBe(`${es.progress.ownerMissing} ${money(120, 'S/')} · 0/3`);
 
-    input($<HTMLInputElement>('cost'), 'abc');
-    expect(text('shareOut')).toBe('—');
-    expect(text('missingOut')).toMatch(/costo/);
+    input(byId<HTMLInputElement>('cost'), 'abc');
+    expect(textOf('shareOut')).toBe('—');
+    expect(textOf('missingOut')).toBe(es.status.setCost);
   });
 
-  it('marca pagos, anuncia el avance, agrega y quita caras', async () => {
-    await startWith();
-    click(faces()[0]);
-    expect(text('paidOut')).toBe('1/3');
-    expect(text('announce')).toBe('Persona 1 pagó. 1 de 3 pagaron.');
-    click(faces()[0]);
-    expect(text('announce')).toBe('Persona 1 vuelve a deber. 0 de 3 pagaron.');
+  it('marks payments, announces progress, adds and removes faces', async () => {
+    await startWithGame();
+    click(faceButtons()[0]);
+    expect(textOf('paidOut')).toBe('1/3');
+    expect(textOf('announce')).toBe(es.faces.announce(1, true, 1, 3));
+    click(faceButtons()[0]);
+    expect(textOf('announce')).toBe(es.faces.announce(1, false, 0, 3));
 
-    click($('faces'));
-    expect(faces()).toHaveLength(3);
+    click(byId('faces'));
+    expect(faceButtons()).toHaveLength(3);
 
-    click(document.querySelector('[data-mode="edit"]')!);
-    expect(document.querySelector('[data-mode="edit"]')!.getAttribute('aria-pressed')).toBe('true');
-    click($('faces'), { clientX: 400, clientY: 300 });
-    expect(faces()).toHaveLength(4);
-    click(faces()[3]);
-    expect(faces()).toHaveLength(3);
+    const editModeButton = document.querySelector('[data-mode="edit"]')!;
+    click(editModeButton);
+    expect(editModeButton.getAttribute('aria-pressed')).toBe('true');
+    click(byId('faces'), { clientX: 400, clientY: 300 });
+    expect(faceButtons()).toHaveLength(4);
+    click(faceButtons()[3]);
+    expect(faceButtons()).toHaveLength(3);
   });
 
-  it('avisa si no es una imagen, si no hay caras o si la detección falla', async () => {
-    await start();
-    await upload('text/plain');
-    expect(text('exportMsg')).toBe('Ese archivo no es una imagen.');
+  it('reports non-images, photos without faces and failed detection', async () => {
+    await startEditor();
+    uploadPhoto('text/plain');
+    expect(textOf('exportMsg')).toBe(es.upload.notImage);
 
-    mocks.boxes = [];
-    await upload();
-    await eventually(() => expect(text('hint')).toMatch(/No encontramos caras/));
-    expect($('stage').classList.contains('is-edit')).toBe(true);
+    mocks.detectedBoxes = [];
+    uploadPhoto();
+    await eventually(() => expect(textOf('hint')).toBe(es.upload.noFaces));
+    expect(byId('stage').classList.contains('is-edit')).toBe(true);
 
-    mocks.detectFaces.mockRejectedValueOnce(new Error('sin modelo'));
-    await upload();
-    await eventually(() => expect(text('hint')).toMatch(/No pudimos detectar/));
+    mocks.detectFaces.mockRejectedValueOnce(new Error('model unavailable'));
+    uploadPhoto();
+    await eventually(() => expect(textOf('hint')).toBe(es.upload.detectFailed));
   });
 
-  it('acepta fotos arrastradas', async () => {
-    await start();
-    const zone = $('dropzone');
-    zone.dispatchEvent(new Event('dragover', { cancelable: true }));
-    expect(zone.classList.contains('is-over')).toBe(true);
-    zone.dispatchEvent(new Event('dragleave'));
-    expect(zone.classList.contains('is-over')).toBe(false);
-    const drop = new Event('drop', { cancelable: true }) as Event & { dataTransfer: unknown };
-    drop.dataTransfer = { files: [new File(['x'], 'f.jpg', { type: 'image/jpeg' })] };
-    zone.dispatchEvent(drop);
-    await eventually(() => expect(faces()).toHaveLength(3));
+  it('accepts dropped photos', async () => {
+    await startEditor();
+    const dropzone = byId('dropzone');
+    dropzone.dispatchEvent(new Event('dragover', { cancelable: true }));
+    expect(dropzone.classList.contains('is-over')).toBe(true);
+    dropzone.dispatchEvent(new Event('dragleave'));
+    expect(dropzone.classList.contains('is-over')).toBe(false);
+    const dropEvent = new Event('drop', { cancelable: true }) as Event & { dataTransfer: unknown };
+    dropEvent.dataTransfer = { files: [new File(['x'], 'photo.jpg', { type: 'image/jpeg' })] };
+    dropzone.dispatchEvent(dropEvent);
+    await eventually(() => expect(faceButtons()).toHaveLength(3));
   });
 
-  it('"Cambiar foto" pregunta si ya hay pagos marcados', async () => {
-    await startWith({ faces: game().faces.map((f, i) => ({ ...f, paid: i === 0 })) });
-    const open = vi.spyOn($<HTMLInputElement>('file'), 'click');
-    stubConfirm(false);
-    click($('newPhoto'));
-    expect(open).not.toHaveBeenCalled();
-    stubConfirm(true);
-    click($('newPhoto'));
-    expect(open).toHaveBeenCalled();
+  it('asks before changing the photo when payments are marked', async () => {
+    await startWithGame({ faces: buildGame().faces.map((face, index) => ({ ...face, paid: index === 0 })) });
+    const openFilePicker = vi.spyOn(byId<HTMLInputElement>('file'), 'click');
+    answerConfirm(false);
+    click(byId('newPhoto'));
+    expect(openFilePicker).not.toHaveBeenCalled();
+    answerConfirm(true);
+    click(byId('newPhoto'));
+    expect(openFilePicker).toHaveBeenCalled();
   });
 });
 
 describe('emojis', () => {
-  it('clic derecho bloquea el emoji, se puede restaurar', async () => {
-    await startWith();
-    const before = faces()[0].querySelector('.face-emoji')!.textContent;
-    faces()[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
-    expect(text('hint')).toBe(`Listo, ${before} no vuelve a salir.`);
-    expect(text('blockedList')).toBe(before);
-    faces()[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
-    expect(text('blockedList')).toBe(before);
-    click($('unblock'));
-    expect($('blockedBar').hidden).toBe(true);
+  const rightClick = (target: Element) => target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+
+  it('right click blocks an emoji and it can be restored', async () => {
+    await startWithGame();
+    const blockedEmoji = faceButtons()[0].querySelector('.face-emoji')!.textContent!;
+    rightClick(faceButtons()[0]);
+    expect(textOf('hint')).toBe(es.hints.blockedEmoji(blockedEmoji));
+    expect(textOf('blockedList')).toBe(blockedEmoji);
+    rightClick(faceButtons()[0]);
+    expect(textOf('blockedList')).toBe(blockedEmoji);
+    click(byId('unblock'));
+    expect(byId('blockedBar').hidden).toBe(true);
   });
 
-  it('avisa cuando quedan muy pocos emojis', async () => {
-    await start({ legacy: { ...game(), blocked: DEBTOR_EMOJIS.slice(3, 20) } });
-    faces()[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
-    expect(text('hint')).toMatch(/muy pocos emojis/);
+  it('warns when too few emojis remain', async () => {
+    await startEditor({ legacyState: { ...buildGame(), blocked: DEBTOR_EMOJIS.slice(3, 20) } });
+    rightClick(faceButtons()[0]);
+    expect(textOf('hint')).toBe(es.hints.tooFewEmojis);
   });
 
-  it('mantener presionado bloquea y no marca como pagado', async () => {
-    await startWith();
-    const target = faces()[1];
+  it('long press blocks without marking the face as paid', async () => {
+    await startWithGame();
+    const target = faceButtons()[1];
     target.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }));
-    await eventually(() => expect(text('hint')).toMatch(/no vuelve a salir/), 2000);
+    await eventually(() => expect(textOf('blockedList')).not.toBe(''), 2000);
     click(target);
-    expect(text('paidOut')).toBe('0/3');
+    expect(textOf('paidOut')).toBe('0/3');
 
     for (const [type, pointerType] of [
       ['pointerdown', 'touch'],
@@ -250,430 +275,400 @@ describe('emojis', () => {
     }
   });
 
-  it('ver caras y sortear otros emojis', async () => {
-    await startWith();
-    click($('peek'));
-    expect($('stage').classList.contains('is-peek')).toBe(true);
-    expect(text('peek')).toMatch(/Tapar/);
-    click($('peek'));
-    expect($('stage').classList.contains('is-peek')).toBe(false);
-    click($('reroll'));
-    expect(faces()).toHaveLength(3);
+  it('reveals faces and rerolls emojis', async () => {
+    await startWithGame();
+    click(byId('peek'));
+    expect(byId('stage').classList.contains('is-peek')).toBe(true);
+    expect(textOf('peek')).toContain(es.toolbar.unpeek);
+    click(byId('peek'));
+    expect(byId('stage').classList.contains('is-peek')).toBe(false);
+    click(byId('reroll'));
+    expect(faceButtons()).toHaveLength(3);
   });
 });
 
-describe('ficha del partido y guardado', () => {
-  it('se pliega, se edita y guarda todo en el historial', async () => {
-    await startWith({ title: 'Antes' });
-    expect($('gameForm').hidden).toBe(true);
-    click($('editGame'));
-    expect($('gameForm').hidden).toBe(false);
+describe('game card and persistence', () => {
+  it('collapses, edits and saves everything to the history', async () => {
+    await startWithGame({ title: 'Before' });
+    expect(byId('gameForm').hidden).toBe(true);
+    click(byId('editGame'));
+    expect(byId('gameForm').hidden).toBe(false);
     expect(document.activeElement?.id).toBe('title');
 
-    input($<HTMLInputElement>('title'), 'Jueves');
-    input($<HTMLInputElement>('currency'), ' $ ');
-    input($<HTMLSelectElement>('rounding'), '1', 'change');
-    const check = $<HTMLInputElement>('includePhoto');
-    check.checked = false;
-    check.dispatchEvent(new Event('change'));
-    click($('doneGame'));
-    expect($('gameForm').hidden).toBe(true);
-    expect(text('gameTitle')).toBe('Jueves');
+    input(byId<HTMLInputElement>('title'), 'Thursday');
+    input(byId<HTMLInputElement>('currency'), ' $ ');
+    input(byId<HTMLSelectElement>('rounding'), '1', 'change');
+    const includePhoto = byId<HTMLInputElement>('includePhoto');
+    includePhoto.checked = false;
+    includePhoto.dispatchEvent(new Event('change'));
+    click(byId('doneGame'));
+    expect(byId('gameForm').hidden).toBe(true);
+    expect(textOf('gameTitle')).toBe('Thursday');
 
     window.dispatchEvent(new Event('pagehide'));
-    await eventually(async () => expect(await current()).toMatchObject({ title: 'Jueves', currency: '$', rounding: 1 }));
-    expect(prefs()).toMatchObject({ includePhoto: false });
+    await eventually(async () => expect(await openGameRecord()).toMatchObject({ title: 'Thursday', currency: '$', rounding: 1 }));
+    expect(storedPrefs()).toMatchObject({ includePhoto: false });
 
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
     document.dispatchEvent(new Event('visibilitychange'));
   });
 
-  it('migra el partido de la versión anterior y le genera miniatura', async () => {
-    await start({ legacy: { ...game({ title: 'Viejo' }), thumb: null } });
-    expect(text('gameTitle')).toBe('Viejo');
+  it('migrates the previous version and creates a thumbnail', async () => {
+    await startEditor({ legacyState: { ...buildGame({ title: 'Old' }), thumb: null } });
+    expect(textOf('gameTitle')).toBe('Old');
     expect(localStorage.getItem('buen-pagador:v1')).toBeNull();
-    await eventually(async () => expect((await current())?.thumb).toBe('data:image/jpeg;base64,THUMB'));
-    expect(text('historyCount')).toBe('1');
+    await eventually(async () => expect((await openGameRecord())?.thumb).toBe(THUMB));
+    expect(textOf('historyCount')).toBe('1');
   });
 });
 
-describe('datos para pagar', () => {
-  function sendQr(type = 'image/png') {
-    const fileInput = $<HTMLInputElement>('payQrFile');
-    Object.defineProperty(fileInput, 'files', { configurable: true, value: [new File(['x'], 'qr.png', { type })] });
-    fileInput.dispatchEvent(new Event('change'));
-  }
+describe('payment details', () => {
+  it('are edited on the card, summarized and shared with the link', async () => {
+    await startWithGame();
+    click(byId('editGame'));
+    input(byId<HTMLTextAreaElement>('payNote') as unknown as HTMLInputElement, 'Wallet 987 654 321');
+    uploadQr();
+    await eventually(() => expect(byId('payQrPreview').hidden).toBe(false));
+    expect(textOf('payQrLabel')).toBe(es.pay.changeQr);
+    expect(byId('payChip').hidden).toBe(true);
+    click(byId('doneGame'));
+    expect(byId('payChip').hidden).toBe(false);
+    expect(textOf('payChipNote')).toBe('Wallet 987 654 321');
 
-  it('se cargan en la ficha, se resumen y viajan con el link', async () => {
-    await startWith();
-    click($('editGame'));
-    input($<HTMLTextAreaElement>('payNote') as unknown as HTMLInputElement, 'Yape 987 654 321');
-    sendQr();
-    await eventually(() => expect($('payQrPreview').hidden).toBe(false));
-    expect(text('payQrLabel')).toBe('Cambiar QR');
-    expect($('payChip').hidden).toBe(true);
-    click($('doneGame'));
-    expect($('payChip').hidden).toBe(false);
-    expect(text('payChipNote')).toBe('Yape 987 654 321');
+    click(byId('linkAction'));
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.live));
+    await eventually(async () => expect((await openGameRecord())?.share).toBeTruthy());
+    const link = (await openGameRecord())!.share!;
+    expect((await loadShare(link, false, true)).pay).toEqual({ note: 'Wallet 987 654 321', qr: QR });
 
-    click($('linkAction'));
-    await eventually(() => expect(text('syncStatus')).toBe('En vivo'));
-    const link = (await eventually(async () => expect((await current())?.share).toBeTruthy()), (await current())!.share!);
-    expect((await loadShare(link, false, true)).pay).toEqual({ note: 'Yape 987 654 321', qr: 'data:image/jpeg;base64,QR' });
-
-    click($('editGame'));
-    click($('payQrRemove'));
-    expect($('payQrPreview').hidden).toBe(true);
+    click(byId('editGame'));
+    click(byId('payQrRemove'));
+    expect(byId('payQrPreview').hidden).toBe(true);
     await eventually(async () => expect((await loadShare(link, false, true)).pay?.qr).toBeNull());
   });
 
-  it('ignora archivos que no son imagen y avisa si el QR no se puede leer', async () => {
-    await startWith();
-    sendQr('text/plain');
+  it('ignores non-image files and reports unreadable QR images', async () => {
+    await startWithGame();
+    uploadQr('text/plain');
     expect(mocks.qrFromFile).not.toHaveBeenCalled();
-    mocks.qrFromFile.mockRejectedValueOnce(new Error('rota'));
-    sendQr();
-    await eventually(() => expect(text('announce')).toMatch(/QR/));
+    mocks.qrFromFile.mockRejectedValueOnce(new Error('corrupt'));
+    uploadQr();
+    await eventually(() => expect(textOf('announce')).toBe(es.pay.qrError));
   });
 
-  it('se repiten en el próximo partido y llegan con el link maestro', async () => {
-    const paid = game({ title: 'Lunes', payNote: 'Plin 123', faces: game().faces.map((f) => ({ ...f, paid: true })) });
-    await start({ saved: [paid], current: paid.id });
-    click($('linkAction'));
-    await eventually(() => expect($('stageWrap').hidden).toBe(true));
-    expect($<HTMLTextAreaElement>('payNote').value).toBe('Plin 123');
+  it('carry over to the next game', async () => {
+    const game = settledGame({ title: 'Monday', payNote: 'Wallet 123' });
+    await startEditor({ savedGames: [game], openGameId: game.id });
+    click(byId('linkAction'));
+    await eventually(() => expect(byId('stageWrap').hidden).toBe(true));
+    expect(byId<HTMLTextAreaElement>('payNote').value).toBe('Wallet 123');
   });
 });
 
-describe('exportar imagen', () => {
-  it('sin foto no se puede guardar', async () => {
-    await start();
-    expect($<HTMLButtonElement>('download').disabled).toBe(true);
+describe('image export', () => {
+  it('cannot save without a photo', async () => {
+    await startEditor();
+    expect(byId<HTMLButtonElement>('download').disabled).toBe(true);
   });
 
-  it('guarda la imagen con el nombre del partido', async () => {
-    await startWith({ title: 'Jueves 9 pm' });
-    click($('download'));
-    await eventually(() => expect(text('exportMsg')).toBe('Imagen guardada: buen-pagador-jueves-9-pm.png'));
+  it('saves the image named after the game', async () => {
+    await startWithGame({ title: 'Thursday 9 pm' });
+    click(byId('download'));
+    await eventually(() => expect(textOf('exportMsg')).toBe(es.image.saved(es.image.fileName('thursday-9-pm'))));
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
   });
 
-  it('avisa si no se pudo generar', async () => {
-    await startWith();
+  it('reports rendering failures', async () => {
+    await startWithGame();
     mocks.renderCard.mockRejectedValueOnce(new Error('canvas'));
-    click($('download'));
-    await eventually(() => expect(text('exportMsg')).toMatch(/No se pudo generar/));
+    click(byId('download'));
+    await eventually(() => expect(textOf('exportMsg')).toBe(es.image.failed));
   });
 
-  it('comparte la imagen', async () => {
-    await startWith();
-    const abort = Object.assign(new Error('x'), { name: 'AbortError' });
-    const share = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(abort).mockRejectedValueOnce(new Error('falló'));
-    Object.assign(navigator, { share });
-    click($('share'));
-    await eventually(() => expect(share).toHaveBeenCalledTimes(1));
-    click($('share'));
-    await eventually(() => expect(share).toHaveBeenCalledTimes(2));
-    expect(text('exportMsg')).toBe('');
-    click($('share'));
-    await eventually(() => expect(text('exportMsg')).toMatch(/No se pudo compartir/));
+  it('shares the image', async () => {
+    await startWithGame();
+    const abortError = Object.assign(new Error('cancelled'), { name: 'AbortError' });
+    const nativeShare = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(abortError).mockRejectedValueOnce(new Error('failed'));
+    Object.assign(navigator, { share: nativeShare });
+    click(byId('share'));
+    await eventually(() => expect(nativeShare).toHaveBeenCalledTimes(1));
+    click(byId('share'));
+    await eventually(() => expect(nativeShare).toHaveBeenCalledTimes(2));
+    expect(textOf('exportMsg')).toBe('');
+    click(byId('share'));
+    await eventually(() => expect(textOf('exportMsg')).toBe(es.image.shareFailed));
   });
 });
 
-describe('link para el grupo', () => {
-  async function withLink() {
-    await startWith();
-    click($('linkAction'));
-    await eventually(() => expect(text('syncStatus')).toBe('En vivo'));
+describe('group link', () => {
+  async function startWithLink() {
+    await startWithGame();
+    click(byId('linkAction'));
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.live));
   }
 
-  it('crea el link, sincroniza pagos y lo desactiva', async () => {
-    await withLink();
-    const url = text('publicUrl')!;
-    expect(url).toMatch(/\/ver#[A-Za-z0-9]{10}\.[\w-]{43}$/);
-    expect(text('linkAction')).toBe('Copiar link');
-    expect($('masterBox').hidden).toBe(false);
+  it('creates the link, syncs payments and deactivates it', async () => {
+    await startWithLink();
+    const url = textOf('publicUrl')!;
+    expect(url).toMatch(/\/view#[A-Za-z0-9]{10}\.[\w-]{43}$/);
+    expect(textOf('linkAction')).toBe(es.share.copy);
+    expect(byId('masterBox').hidden).toBe(false);
 
-    click(faces()[0]);
-    expect(text('syncStatus')).toBe('Guardando…');
-    await eventually(() => expect(text('syncStatus')).toBe('En vivo'));
+    click(faceButtons()[0]);
+    expect(textOf('syncStatus')).toBe(es.share.saving);
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.live));
     const [id, key] = new URL(url).hash.slice(1).split('.');
     expect((await loadShare({ id, key }, false)).state.faces[0].paid).toBe(true);
 
-    stubConfirm(false);
-    click($('stopLink'));
-    expect($('linkReady').hidden).toBe(false);
-    stubConfirm(true);
-    click($('stopLink'));
-    await eventually(() => expect(text('syncStatus')).toBe('Link desactivado.'));
+    answerConfirm(false);
+    click(byId('stopLink'));
+    expect(byId('linkReady').hidden).toBe(false);
+    answerConfirm(true);
+    click(byId('stopLink'));
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.stopped));
     await expect(loadShare({ id, key }, false)).rejects.toMatchObject({ status: 404 });
   });
 
-  it('copia el link del grupo y el de edición', async () => {
-    await withLink();
-    const writeText = vi.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('no'));
+  it('copies the group link and the edit link', async () => {
+    await startWithLink();
+    const writeText = vi.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('denied'));
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
 
-    click($('linkAction'));
-    await eventually(() => expect(text('linkAction')).toBe('Copiado ✓'));
-    expect(writeText).toHaveBeenLastCalledWith(text('publicUrl'));
+    click(byId('linkAction'));
+    await eventually(() => expect(textOf('linkAction')).toBe(es.share.copied));
+    expect(writeText).toHaveBeenLastCalledWith(textOf('publicUrl'));
 
-    click($('copyMaster'));
-    await eventually(() => expect(text('copyMaster')).toBe('Copiado ✓'));
-    expect(writeText.mock.lastCall![0]).toMatch(/#editar=/);
+    click(byId('copyMaster'));
+    await eventually(() => expect(textOf('copyMaster')).toBe(es.share.copied));
+    expect(writeText.mock.lastCall![0]).toMatch(/#edit=/);
 
-    const select = vi.spyOn(window.getSelection()!, 'selectAllChildren');
-    await new Promise((r) => setTimeout(r, 1600));
-    click($('linkAction'));
-    await eventually(() => expect(select).toHaveBeenCalled());
+    const selectText = vi.spyOn(window.getSelection()!, 'selectAllChildren');
+    await new Promise((resolve) => setTimeout(resolve, 1600));
+    click(byId('linkAction'));
+    await eventually(() => expect(selectText).toHaveBeenCalled());
   });
 
-  it('en el celular envía el link con el menú de compartir', async () => {
-    mount(html, ORIGIN);
-    const matchMedia = window.matchMedia.bind(window);
+  it('sends the link through the share sheet on phones', async () => {
+    mount(pageHtml, ORIGIN);
+    const originalMatchMedia = window.matchMedia.bind(window);
     await unmount();
-    await startWith();
-    window.matchMedia = ((q: string) => ({ ...matchMedia(q), matches: q.includes('hover: none') })) as typeof window.matchMedia;
-    const share = vi.fn(async () => {});
-    Object.assign(navigator, { share });
+    await startWithGame();
+    window.matchMedia = ((query: string) => ({ ...originalMatchMedia(query), matches: query.includes('hover: none') })) as typeof window.matchMedia;
+    const nativeShare = vi.fn(async () => {});
+    Object.assign(navigator, { share: nativeShare });
     vi.resetModules();
-    document.documentElement.innerHTML = html.replace(/^<!DOCTYPE html>/i, '');
+    document.documentElement.innerHTML = pageHtml.replace(/^<!DOCTYPE html>/i, '');
     await import('../src/scripts/app');
-    click($('linkAction'));
-    await eventually(() => expect(text('linkAction')).toBe('Enviar link'));
-    click($('linkAction'));
-    await eventually(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({ url: expect.stringMatching(/\/ver#/) })));
+    click(byId('linkAction'));
+    await eventually(() => expect(textOf('linkAction')).toBe(es.share.send));
+    click(byId('linkAction'));
+    await eventually(() => expect(nativeShare).toHaveBeenCalledWith(expect.objectContaining({ url: expect.stringMatching(/\/view#/) })));
   });
 
-  it('si el link expiró, lo suelta; si no hay red, reintenta', async () => {
-    await withLink();
+  it('drops an expired link and retries when offline', async () => {
+    await startWithLink();
     const realFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn(async () => {
-      throw new TypeError('offline');
-    }) as typeof fetch;
-    click(faces()[0]);
-    await eventually(() => expect(text('syncStatus')).toBe('Sin conexión. Reintentando…'));
-    expect(text('announce')).toBe('Sin conexión. Reintentando…');
+    failNetwork();
+    click(faceButtons()[0]);
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.offlineRetry));
+    expect(textOf('announce')).toBe(es.share.offlineRetry);
 
     globalThis.fetch = realFetch;
-    const link = (await current())!.share!;
+    const link = (await openGameRecord())!.share!;
     await realFetch(`/api/share/${link.id}`, { method: 'DELETE', headers: { authorization: `Bearer ${link.token}` } });
-    click(faces()[1]);
-    await eventually(() => expect(text('syncStatus')).toBe('El link expiró. Crea uno nuevo.'));
-    expect($('linkReady').hidden).toBe(true);
+    click(faceButtons()[1]);
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.expired));
+    expect(byId('linkReady').hidden).toBe(true);
   });
 
-  it('avisa si no se pudo crear o desactivar', async () => {
-    await startWith();
+  it('reports failures to create or deactivate', async () => {
+    await startWithGame();
     const realFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn(async () => new Response('{"error":"Datos inválidos."}', { status: 400 })) as typeof fetch;
-    click($('linkAction'));
-    await eventually(() => expect(text('syncStatus')).toBe('Datos inválidos.'));
-    globalThis.fetch = vi.fn(async () => {
-      throw new TypeError('offline');
-    }) as typeof fetch;
-    click($('linkAction'));
-    await eventually(() => expect(text('syncStatus')).toMatch(/No se pudo crear/));
+    globalThis.fetch = vi.fn(async () => new Response('{"error":"invalid"}', { status: 400 })) as typeof fetch;
+    click(byId('linkAction'));
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.errors.invalid));
+    failNetwork();
+    click(byId('linkAction'));
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.createFailed));
 
     globalThis.fetch = realFetch;
-    click($('linkAction'));
-    await eventually(() => expect(text('syncStatus')).toBe('En vivo'));
+    click(byId('linkAction'));
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.live));
     globalThis.fetch = vi.fn(async () => new Response('{}', { status: 500 })) as typeof fetch;
-    stubConfirm(true);
-    click($('stopLink'));
-    await eventually(() => expect(text('syncStatus')).toMatch(/No se pudo desactivar/));
+    answerConfirm(true);
+    click(byId('stopLink'));
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.stopFailed));
   });
 
-  it('una foto nueva deja el link anterior y pide uno nuevo', async () => {
-    await withLink();
-    await upload();
-    await eventually(() => expect(text('syncStatus')).toBe('La foto nueva necesita un link nuevo.'));
-    expect($('linkReady').hidden).toBe(true);
+  it('a new photo leaves the old link and asks for a new one', async () => {
+    await startWithLink();
+    uploadPhoto();
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.newPhotoNeedsLink));
+    expect(byId('linkReady').hidden).toBe(true);
   });
 
-  it('al abrir, trae los pagos del servidor; sin red avisa', async () => {
-    const link = await (async () => {
-      mount(html, ORIGIN);
-      useApiFetch();
-      const created = await createShare({ ...defaultState(), ...game({ title: 'Remoto' }) });
-      await unmount();
-      return created;
-    })();
-    const { pushShare } = await import('../src/scripts/share');
-    mount(html, ORIGIN);
+  it('pulls payments from the server on open', async () => {
+    const link = await createRemoteLink({ title: 'Remote' });
+    mount(pageHtml, ORIGIN);
     useApiFetch();
-    await pushShare(link, { ...defaultState(), ...game({ title: 'Cambiado en otro equipo' }) });
+    await pushShare(link, { ...defaultState(), ...buildGame({ title: 'Changed on another device' }) });
     await unmount();
 
-    await startWith({ title: 'Local', share: link });
-    await eventually(() => expect(text('gameTitle')).toBe('Cambiado en otro equipo'));
-
-    await unmount();
-    const offline = game({ share: { ...link } });
-    mount(html, ORIGIN);
-    await unmount();
-    await start({ saved: [offline], current: offline.id });
-    globalThis.fetch = vi.fn(async () => {
-      throw new TypeError('offline');
-    }) as typeof fetch;
-    window.dispatchEvent(new Event('hashchange'));
+    await startWithGame({ title: 'Local', share: link });
+    await eventually(() => expect(textOf('gameTitle')).toBe('Changed on another device'));
   });
 });
 
-describe('Mis partidos', () => {
-  it('lista los partidos agrupados y abre uno', async () => {
-    const debt = game({ title: 'Jueves', updatedAt: 2 });
-    const paid = game({ title: 'Lunes', updatedAt: 1, faces: game().faces.map((f) => ({ ...f, paid: true })) });
-    await start({ saved: [debt, paid], current: debt.id });
-    await eventually(() => expect(text('historyCount')).toBe('2'));
-    expect(text('historyCountLabel')).toBe(', 2 guardados');
+describe('my games', () => {
+  it('lists grouped games and opens one', async () => {
+    const owingGame = buildGame({ title: 'Thursday', updatedAt: 2 });
+    const paidGame = settledGame({ title: 'Monday', updatedAt: 1 });
+    await startEditor({ savedGames: [owingGame, paidGame], openGameId: owingGame.id });
+    await eventually(() => expect(textOf('historyCount')).toBe('2'));
+    expect(textOf('historyCountLabel')).toBe(es.history.countLabel(2));
 
-    await openHistory();
-    expect($<HTMLDialogElement>('history').open).toBe(true);
-    expect([...document.querySelectorAll('.drawer-section')].map((h) => h.textContent)).toEqual(['Con deudas', 'Pagados']);
-    expect(rowNamed('Jueves').classList.contains('is-current')).toBe(true);
-    expect(text('historySummary')).toBe('Te deben S/ 90 en 1 partido.');
+    await openHistoryDrawer();
+    expect(isDialogOpen()).toBe(true);
+    const sectionTitles = [...document.querySelectorAll('.drawer-section')].map((heading) => heading.textContent);
+    expect(sectionTitles).toEqual([es.history.debts, es.history.settled]);
+    expect(historyRow('Thursday').classList.contains('is-current')).toBe(true);
+    expect(textOf('historySummary')).toBe(es.history.owed(money(90, 'S/'), 1));
 
-    click(rowNamed('Lunes').querySelector('[data-action=open]')!);
-    await eventually(() => expect(text('gameTitle')).toBe('Lunes'));
-    expect($<HTMLDialogElement>('history').open).toBe(false);
-    expect(text('announce')).toBe('Abriste «Lunes».');
-    expect(text('linkAction')).toBe('Próximo partido');
-    expect($('progress').classList.contains('is-full')).toBe(true);
+    click(historyRow('Monday').querySelector('[data-action=open]')!);
+    await eventually(() => expect(textOf('gameTitle')).toBe('Monday'));
+    expect(isDialogOpen()).toBe(false);
+    expect(textOf('announce')).toBe(es.history.opened('Monday'));
+    expect(textOf('linkAction')).toBe(es.share.next);
+    expect(byId('progress').classList.contains('is-full')).toBe(true);
 
-    await openHistory();
-    click(rowNamed('Lunes').querySelector('[data-action=open]')!);
-    await eventually(() => expect($<HTMLDialogElement>('history').open).toBe(false));
+    await openHistoryDrawer();
+    click(historyRow('Monday').querySelector('[data-action=open]')!);
+    await eventually(() => expect(isDialogOpen()).toBe(false));
   });
 
-  it('nuevo partido, repetir y "Próximo partido"', async () => {
-    const paid = game({ title: 'Lunes', cost: 60, rounding: 1, faces: game().faces.map((f) => ({ ...f, paid: true })) });
-    await start({ saved: [paid], current: paid.id });
+  it('starts, repeats and continues to the next game', async () => {
+    const paidGame = settledGame({ title: 'Monday', cost: 60, rounding: 1 });
+    await startEditor({ savedGames: [paidGame], openGameId: paidGame.id });
 
-    click($('linkAction'));
-    await eventually(() => expect($('stageWrap').hidden).toBe(true));
-    expect(text('gameTitle')).toBe('Lunes');
-    expect($<HTMLInputElement>('cost').value).toBe('60');
-    expect($('gameForm').hidden).toBe(false);
+    click(byId('linkAction'));
+    await eventually(() => expect(byId('stageWrap').hidden).toBe(true));
+    expect(textOf('gameTitle')).toBe('Monday');
+    expect(byId<HTMLInputElement>('cost').value).toBe('60');
+    expect(byId('gameForm').hidden).toBe(false);
 
-    await openHistory();
-    click($('newGame'));
-    await eventually(() => expect(text('gameTitle')).toBe('Nuevo partido'));
-    expect($<HTMLInputElement>('cost').value).toBe('');
+    await openHistoryDrawer();
+    click(byId('newGame'));
+    await eventually(() => expect(textOf('gameTitle')).toBe(es.game.newGame));
+    expect(byId<HTMLInputElement>('cost').value).toBe('');
 
-    await openHistory();
-    const menu = rowNamed('Lunes').querySelector('details')!;
-    menu.open = true;
-    click(menu.querySelector('[data-action=repeat]')!);
-    await eventually(() => expect(text('gameTitle')).toBe('Lunes'));
-    expect(menu.open).toBe(false);
+    await openHistoryDrawer();
+    const rowMenu = historyRow('Monday').querySelector('details')!;
+    rowMenu.open = true;
+    click(rowMenu.querySelector('[data-action=repeat]')!);
+    await eventually(() => expect(textOf('gameTitle')).toBe('Monday'));
+    expect(rowMenu.open).toBe(false);
   });
 
-  it('borra partidos, el abierto incluido, y mueve el foco', async () => {
-    const a = game({ title: 'A', updatedAt: 3 });
-    const b = game({ title: 'B', updatedAt: 2 });
-    await start({ saved: [a, b], current: a.id });
-    await openHistory();
+  it('deletes games, including the open one, and moves focus', async () => {
+    const firstGame = buildGame({ title: 'A', updatedAt: 3 });
+    const secondGame = buildGame({ title: 'B', updatedAt: 2 });
+    await startEditor({ savedGames: [firstGame, secondGame], openGameId: firstGame.id });
+    await openHistoryDrawer();
 
-    stubConfirm(false);
-    click(rowNamed('B').querySelector('[data-action=delete]')!);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(rows()).toHaveLength(2);
+    answerConfirm(false);
+    click(historyRow('B').querySelector('[data-action=delete]')!);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(historyRows()).toHaveLength(2);
 
-    stubConfirm(true);
-    click(rowNamed('A').querySelector('[data-action=delete]')!);
-    await eventually(() => expect(rows()).toHaveLength(1));
-    expect(text('historyStatus')).toBe('Borraste «A».');
-    expect(text('gameTitle')).toBe('Nuevo partido');
-    expect(document.activeElement?.closest('[data-id]')?.getAttribute('data-id')).toBe(b.id);
-    expect(await games.loadGame(a.id)).toBeNull();
+    answerConfirm(true);
+    click(historyRow('A').querySelector('[data-action=delete]')!);
+    await eventually(() => expect(historyRows()).toHaveLength(1));
+    expect(textOf('historyStatus')).toBe(es.history.removed('A'));
+    expect(textOf('gameTitle')).toBe(es.game.newGame);
+    expect(document.activeElement?.closest('[data-id]')?.getAttribute('data-id')).toBe(secondGame.id);
+    expect(await gameStore.loadGame(firstGame.id)).toBeNull();
 
-    click(rowNamed('B').querySelector('[data-action=delete]')!);
-    await eventually(() => expect(rows()).toHaveLength(0));
-    expect($('historyEmpty').hidden).toBe(false);
+    click(historyRow('B').querySelector('[data-action=delete]')!);
+    await eventually(() => expect(historyRows()).toHaveLength(0));
+    expect(byId('historyEmpty').hidden).toBe(false);
     expect(document.activeElement?.id).toBe('newGame');
   });
 
-  it('se cierra con el botón, tocando el fondo y cierra los menús abiertos', async () => {
-    const a = game({ title: 'A' });
-    await start({ saved: [a], current: a.id });
-    await openHistory();
-    click($('openHistory'));
-    const menu = rowNamed('A').querySelector('details')!;
-    menu.open = true;
-    click($('historySummary'));
-    expect(menu.open).toBe(false);
-    click($('history'));
-    expect($<HTMLDialogElement>('history').open).toBe(false);
-    await openHistory();
-    click($('closeHistory'));
-    expect($<HTMLDialogElement>('history').open).toBe(false);
+  it('closes with the button or the backdrop and closes open menus', async () => {
+    const game = buildGame({ title: 'A' });
+    await startEditor({ savedGames: [game], openGameId: game.id });
+    await openHistoryDrawer();
+    click(byId('openHistory'));
+    const rowMenu = historyRow('A').querySelector('details')!;
+    rowMenu.open = true;
+    click(byId('historySummary'));
+    expect(rowMenu.open).toBe(false);
+    click(byId('history'));
+    expect(isDialogOpen()).toBe(false);
+    await openHistoryDrawer();
+    click(byId('closeHistory'));
+    expect(isDialogOpen()).toBe(false);
   });
 
-  it('mientras se detectan caras no se puede cambiar de partido', async () => {
-    let finish: (boxes: typeof mocks.boxes) => void = () => {};
-    mocks.detectFaces.mockImplementationOnce(() => new Promise((resolve) => (finish = resolve)));
-    await start();
-    await upload();
-    await eventually(() => expect($<HTMLButtonElement>('openHistory').disabled).toBe(true));
-    finish(mocks.boxes);
-    await eventually(() => expect($<HTMLButtonElement>('openHistory').disabled).toBe(false));
+  it('cannot switch games while faces are being detected', async () => {
+    let finishDetection: (boxes: typeof mocks.detectedBoxes) => void = () => {};
+    mocks.detectFaces.mockImplementationOnce(() => new Promise((resolve) => (finishDetection = resolve)));
+    await startEditor();
+    uploadPhoto();
+    await eventually(() => expect(byId<HTMLButtonElement>('openHistory').disabled).toBe(true));
+    finishDetection(mocks.detectedBoxes);
+    await eventually(() => expect(byId<HTMLButtonElement>('openHistory').disabled).toBe(false));
   });
 });
 
-describe('link maestro', () => {
-  async function remoteLink(title = 'Remoto') {
-    mount(html, ORIGIN);
-    useApiFetch();
-    resetStore();
-    const link = await createShare({ ...defaultState(), ...game({ title, cost: 60, payNote: 'Yape 555' }) });
-    await unmount();
-    return link;
-  }
-
-  it('en otro equipo lo agrega al historial y limpia la URL', async () => {
-    const link = await remoteLink();
-    await start({ hash: masterHash(link) });
-    await eventually(() => expect(text('syncStatus')).toBe('En vivo'));
-    expect($<HTMLInputElement>('title').value).toBe('Remoto');
-    expect(faces()).toHaveLength(3);
+describe('master link', () => {
+  it('adds the game to the history on another device and cleans the URL', async () => {
+    const link = await createRemoteLink({ title: 'Remote', cost: 60, payNote: 'Wallet 555' });
+    await startEditor({ hash: masterHash(link) });
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.live));
+    expect(byId<HTMLInputElement>('title').value).toBe('Remote');
+    expect(faceButtons()).toHaveLength(3);
     expect(location.hash).toBe('');
-    await eventually(async () => expect((await games.findByShareId(link.id))?.title).toBe('Remoto'));
-    expect((await current())?.thumb).toBe('data:image/jpeg;base64,THUMB');
-    expect($<HTMLTextAreaElement>('payNote').value).toBe('Yape 555');
+    await eventually(async () => expect((await gameStore.findByShareId(link.id))?.title).toBe('Remote'));
+    expect((await openGameRecord())?.thumb).toBe(THUMB);
+    expect(byId<HTMLTextAreaElement>('payNote').value).toBe('Wallet 555');
   });
 
-  it('si el equipo ya lo tenía, reusa ese partido; si ya está abierto, solo lo actualiza', async () => {
-    const link = await remoteLink();
-    const local = game({ title: 'Local', share: link, thumb: 'data:mine' });
-    const other = game({ title: 'Otro' });
-    await start({ saved: [local, other], current: other.id, hash: masterHash(link) });
-    await eventually(() => expect(text('gameTitle')).toBe('Remoto'));
-    expect(prefs().currentGameId).toBe(local.id);
-    expect((await games.listGames()).length).toBe(2);
+  it('still accepts links in the previous format', async () => {
+    const link = await createRemoteLink({ title: 'Remote' });
+    await startEditor({ hash: masterHash(link, 'editar') });
+    await eventually(() => expect(textOf('gameTitle')).toBe('Remote'));
+  });
+
+  it('reuses the local game for that link and only refreshes it when already open', async () => {
+    const link = await createRemoteLink({ title: 'Remote' });
+    const localGame = buildGame({ title: 'Local', share: link, thumb: 'data:mine' });
+    const otherGame = buildGame({ title: 'Other' });
+    await startEditor({ savedGames: [localGame, otherGame], openGameId: otherGame.id, hash: masterHash(link) });
+    await eventually(() => expect(textOf('gameTitle')).toBe('Remote'));
+    expect(storedPrefs().currentGameId).toBe(localGame.id);
+    expect(await gameStore.listGames()).toHaveLength(2);
 
     location.hash = masterHash(link);
     window.dispatchEvent(new Event('hashchange'));
     await eventually(() => expect(location.hash).toBe(''));
-    expect(text('syncStatus')).toBe('En vivo');
+    expect(textOf('syncStatus')).toBe(es.share.live);
   });
 
-  it('rechaza tokens inválidos, links inexistentes y avisa sin red', async () => {
-    const link = await remoteLink();
-    await start({ hash: masterHash({ ...link, token: 'x'.repeat(32) }) });
-    await eventually(() => expect(text('syncStatus')).toBe('Ese link maestro no es válido.'));
+  it('rejects invalid tokens and missing links, and reports network errors', async () => {
+    const link = await createRemoteLink();
+    await startEditor({ hash: masterHash({ ...link, token: 'x'.repeat(32) }) });
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.invalidMaster));
 
     await unmount();
-    await start({ hash: masterHash({ ...link, id: 'ZZZZZZZZZZ' }) });
-    await eventually(() => expect(text('syncStatus')).toBe('Este link no existe o ya expiró.'));
+    await startEditor({ hash: masterHash({ ...link, id: 'ZZZZZZZZZZ' }) });
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.errors.not_found));
 
     await unmount();
-    await start();
-    globalThis.fetch = vi.fn(async () => {
-      throw new TypeError('offline');
-    }) as typeof fetch;
+    await startEditor();
+    failNetwork();
     location.hash = masterHash({ ...link, id: 'YYYYYYYYYY' });
     window.dispatchEvent(new Event('hashchange'));
-    await eventually(() => expect(text('syncStatus')).toBe('No se pudo abrir el link.'));
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.openFailed));
   });
 });

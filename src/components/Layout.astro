@@ -1,4 +1,5 @@
 ---
+import { es } from '../i18n/es';
 import '../styles/global.css';
 
 interface Props {
@@ -6,7 +7,7 @@ interface Props {
   description?: string;
 }
 
-const { title = 'El Buen Pagador', description = 'Quién ya pagó la cancha y quién sigue debiendo.' } = Astro.props;
+const { title = es.meta.title, description = es.meta.description } = Astro.props;
 ---
 
 <!doctype html>
@@ -31,8 +32,8 @@ const { title = 'El Buen Pagador', description = 'Quién ya pagó la cancha y qu
 
     <header class="masthead">
       <div>
-        <p class="eyebrow">Cuentas claras, amistades largas</p>
-        <h1 class="wordmark">El Buen <span>Pagador</span></h1>
+        <p class="eyebrow">{es.brand.tagline}</p>
+        <h1 class="wordmark">{es.brand.first} <span>{es.brand.second}</span></h1>
       </div>
       <slot name="actions" />
     </header>

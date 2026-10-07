@@ -7,56 +7,56 @@ beforeEach(() => {
 });
 
 describe('loadImage', () => {
-  it('resuelve cuando carga y rechaza si falla', async () => {
+  it('resolves on load and rejects on error', async () => {
     await expect(loadImage('data:ok')).resolves.toBeInstanceOf(FakeImage);
-    await expect(loadImage('broken')).rejects.toThrow(/No pudimos abrir/);
+    await expect(loadImage('broken')).rejects.toThrow(/Could not load/);
   });
 });
 
 describe('resizeToCanvas', () => {
-  it('limita el lado mayor sin agrandar fotos chicas', () => {
+  it('caps the longest side without upscaling small photos', () => {
     installFakeCanvas();
-    const img = Object.assign(new FakeImage(), { naturalWidth: 3200, naturalHeight: 1600 });
-    const big = resizeToCanvas(img as unknown as HTMLImageElement, 1600);
+    const image = Object.assign(new FakeImage(), { naturalWidth: 3200, naturalHeight: 1600 });
+    const big = resizeToCanvas(image as unknown as HTMLImageElement, 1600);
     expect([big.width, big.height]).toEqual([1600, 800]);
     const small = resizeToCanvas(Object.assign(new FakeImage(), { naturalWidth: 300, naturalHeight: 200 }) as never, 1600);
     expect([small.width, small.height]).toEqual([300, 200]);
   });
 });
 
-describe('codificación', () => {
-  it('canvasToBlob rechaza si el navegador no genera la imagen', async () => {
+describe('encoding', () => {
+  it('canvasToBlob rejects when the browser cannot encode', async () => {
     installFakeCanvas({ failBlob: true });
-    await expect(canvasToBlob(document.createElement('canvas'))).rejects.toThrow(/No se pudo/);
+    await expect(canvasToBlob(document.createElement('canvas'))).rejects.toThrow(/Could not encode/);
   });
 
-  it('fileToDataUrl devuelve un JPEG y libera la URL temporal', async () => {
+  it('fileToDataUrl returns a JPEG and revokes the temporary URL', async () => {
     installFakeCanvas();
     const revoke = vi.spyOn(URL, 'revokeObjectURL');
-    const url = await fileToDataUrl(new File(['x'], 'foto.jpg', { type: 'image/jpeg' }));
+    const url = await fileToDataUrl(new File(['x'], 'photo.jpg', { type: 'image/jpeg' }));
     expect(url).toMatch(/^data:image\/jpeg/);
     expect(revoke).toHaveBeenCalled();
   });
 
-  it('shareImageBytes devuelve los bytes del JPEG', async () => {
+  it('shareImageBytes returns the JPEG bytes', async () => {
     installFakeCanvas();
     const bytes = await shareImageBytes('data:ok');
     expect(new TextDecoder().decode(bytes)).toBe('fake-image');
   });
 
-  it('qrFromFile achica el QR y libera la URL temporal', async () => {
+  it('qrFromFile shrinks the QR and revokes the temporary URL', async () => {
     installFakeCanvas();
     const revoke = vi.spyOn(URL, 'revokeObjectURL');
     expect(await qrFromFile(new File(['x'], 'qr.png', { type: 'image/png' }))).toMatch(/^data:image\/jpeg/);
     expect(revoke).toHaveBeenCalled();
   });
 
-  it('thumbFrom genera una miniatura JPEG', async () => {
+  it('thumbFrom makes a JPEG thumbnail', async () => {
     installFakeCanvas();
     expect(await thumbFrom('data:ok')).toMatch(/^data:image\/jpeg/);
   });
 
-  it('bytesToDataUrl codifica en base64', async () => {
-    expect(await bytesToDataUrl(new Uint8Array([104, 111, 108, 97]))).toBe('data:image/jpeg;base64,aG9sYQ==');
+  it('bytesToDataUrl encodes as base64', async () => {
+    expect(await bytesToDataUrl(new Uint8Array([104, 101, 121, 33]))).toBe('data:image/jpeg;base64,aGV5IQ==');
   });
 });
