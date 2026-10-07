@@ -1,0 +1,31 @@
+---
+interface Props {
+  initialMessage?: string;
+}
+const { initialMessage = '' } = Astro.props;
+---
+
+<div class="thermo-block">
+  <div class="thermo" id="thermo" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Avance de pagos">
+    <div class="thermo-ticks" aria-hidden="true">
+      <span style="--p:100%">100</span>
+      <span style="--p:75%">75</span>
+      <span style="--p:50%">50</span>
+      <span style="--p:25%">25</span>
+    </div>
+    <div class="thermo-tube">
+      <div class="thermo-fill" id="thermoFill"></div>
+    </div>
+    <div class="thermo-bulb" aria-hidden="true">
+      <svg viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="46" fill="var(--ball)" stroke="var(--ink)" stroke-width="5"></circle>
+        <path d="M4 50h92M50 4v92M18 18c18 16 18 48 0 64M82 18c-18 16-18 48 0 64" fill="none" stroke="var(--ink)" stroke-width="5"></path>
+      </svg>
+    </div>
+  </div>
+  <div class="thermo-copy">
+    <p class="pct" id="pctOut">0%</p>
+    <p class="collected"><span id="collectedOut">—</span> recaudado</p>
+    <p class="missing" id="missingOut">{initialMessage}</p>
+  </div>
+</div>

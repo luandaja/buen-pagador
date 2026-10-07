@@ -1,0 +1,51 @@
+---
+import Layout from '../components/Layout.astro';
+import Scoreboard from '../components/Scoreboard.astro';
+import Thermo from '../components/Thermo.astro';
+---
+
+<Layout title="El Buen Pagador · ¿Quién ya pagó?">
+  <main class="layout is-viewer">
+    <section class="stage-col">
+      <div class="viewer-state" id="viewerState" role="status">
+        <span class="dropzone-ball" aria-hidden="true">🏀</span>
+        <strong id="viewerStateTitle">Abriendo…</strong>
+        <span id="viewerStateText">Descifrando la foto del partido.</span>
+      </div>
+
+      <div class="stage-wrap" id="stageWrap" hidden>
+        <div class="stage-toolbar">
+          <p class="hint viewer-hint">Solo lectura · se actualiza solo</p>
+          <span class="read-only-badge">👀 Vista pública</span>
+        </div>
+        <div class="stage-area" id="stageArea">
+          <div class="stage is-readonly" id="stage">
+            <img id="photo" alt="Foto del equipo" />
+            <div class="faces" id="faces"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel" id="panel" hidden>
+      <h2 class="view-title" id="viewTitle"></h2>
+
+      <Scoreboard />
+
+      <Thermo />
+
+      <p class="updated" id="updated"></p>
+
+      <div class="export">
+        <div class="export-actions">
+          <button type="button" class="primary" id="download">Descargar imagen</button>
+        </div>
+        <p class="export-msg" id="exportMsg" role="status"></p>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    import '../scripts/viewer.ts';
+  </script>
+</Layout>

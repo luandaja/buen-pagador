@@ -1,0 +1,25 @@
+{
+  "name": "buen-pagador",
+  "description": "Marca quién ya pagó la cancha: detecta caras, pone emojis y exporta o comparte el avance.",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/vercel": "^11.0.11",
+    "@upstash/redis": "^1.39.0",
+    "@vladmandic/face-api": "^1.7.15",
+    "astro": "^7.3.5"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,0 +1,121 @@
+---
+import Layout from '../components/Layout.astro';
+import Scoreboard from '../components/Scoreboard.astro';
+import Thermo from '../components/Thermo.astro';
+---
+
+<Layout>
+    <main class="layout">
+      <section class="stage-col">
+        <!-- Estado vacío -->
+        <label class="dropzone" id="dropzone">
+          <input id="file" type="file" accept="image/*" hidden />
+          <span class="dropzone-ball" aria-hidden="true">🏀</span>
+          <strong>Sube la foto del equipo</strong>
+          <span>Arrástrala aquí o toca para elegirla. Detectamos las caras y les ponemos un emoji hasta que paguen.</span>
+          <span class="dropzone-note">La foto se queda en tu dispositivo.</span>
+        </label>
+
+        <!-- Foto con caras -->
+        <div class="stage-wrap" id="stageWrap" hidden>
+          <div class="stage-toolbar">
+            <div class="segmented" role="radiogroup" aria-label="Modo">
+              <button type="button" role="radio" aria-checked="true" data-mode="pay">Marcar pagos</button>
+              <button type="button" role="radio" aria-checked="false" data-mode="edit">Corregir caras</button>
+            </div>
+            <div class="toolbar-actions">
+              <button type="button" class="ghost" id="peek" aria-pressed="false" title="Quitar los emojis un momento para ver quién es quién">👀&nbsp;Ver caras</button>
+              <button type="button" class="ghost" id="reroll" title="Cambiar los emojis">🎲&nbsp;Otros emojis</button>
+              <button type="button" class="ghost" id="newPhoto">Cambiar foto</button>
+            </div>
+          </div>
+          <p class="hint" id="hint">Toca una cara cuando esa persona pague.</p>
+          <p class="blocked-bar" id="blockedBar" hidden>
+            <span>Bloqueados: <span id="blockedList" class="blocked-list"></span></span>
+            <button type="button" class="link" id="unblock">Restaurar</button>
+          </p>
+          <div class="stage-area" id="stageArea">
+            <div class="stage" id="stage">
+              <img id="photo" alt="Foto del equipo" />
+              <div class="faces" id="faces"></div>
+              <div class="scanning" id="scanning" hidden>
+                <span class="scan-bar"></span>
+                <p id="scanText">Buscando caras…</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <div class="field">
+          <label for="title">Partido</label>
+          <input id="title" type="text" placeholder="Jueves 9 pm · Cancha del parque" maxlength="60" />
+        </div>
+
+        <div class="field-row">
+          <div class="field grow">
+            <label for="cost">Costo de la cancha</label>
+            <div class="money-input">
+              <input id="currency" type="text" value="S/" maxlength="4" aria-label="Moneda" />
+              <input id="cost" type="number" inputmode="decimal" min="0" step="0.5" placeholder="120" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="rounding">Redondeo</label>
+            <select id="rounding">
+              <option value="0">Exacto</option>
+              <option value="0.5">A 0.50</option>
+              <option value="1">A 1</option>
+            </select>
+          </div>
+        </div>
+
+        <Scoreboard />
+
+        <Thermo initialMessage="Sube una foto para empezar." />
+
+        <div class="export">
+          <label class="check">
+            <input type="checkbox" id="includePhoto" checked />
+            <span>Incluir la foto con las caras</span>
+          </label>
+          <div class="export-actions">
+            <button type="button" class="primary" id="download">Descargar imagen</button>
+            <button type="button" class="secondary" id="share" hidden>Compartir imagen</button>
+          </div>
+          <p class="export-msg" id="exportMsg" role="status"></p>
+        </div>
+
+        <div class="link-share" id="linkShare">
+          <div class="link-head">
+            <strong>Link para el grupo</strong>
+            <span class="sync" id="syncStatus" role="status"></span>
+          </div>
+          <p class="link-help" id="linkHelp">
+            Los demás ven la foto y quién pagó, sin poder editar. Se actualiza solo cuando marcas pagos. La foto viaja cifrada.
+          </p>
+          <button type="button" class="secondary" id="createLink" disabled>Crear link</button>
+          <div class="link-ready" id="linkReady" hidden>
+            <div class="copy-row">
+              <input id="publicUrl" type="text" readonly aria-label="Link público de solo lectura" />
+              <button type="button" class="copy" data-copy="publicUrl">Copiar</button>
+            </div>
+            <details class="master">
+              <summary>Link maestro para editar</summary>
+              <p>Ábrelo en otro equipo para seguir marcando pagos. Quien lo tenga puede editar: no lo compartas.</p>
+              <div class="copy-row">
+                <input id="masterUrl" type="text" readonly aria-label="Link maestro de edición" />
+                <button type="button" class="copy" data-copy="masterUrl">Copiar</button>
+              </div>
+            </details>
+            <button type="button" class="link danger" id="stopLink">Dejar de compartir</button>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <script>
+      import '../scripts/app.ts';
+    </script>
+</Layout>
