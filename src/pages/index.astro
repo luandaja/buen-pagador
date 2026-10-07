@@ -75,27 +75,14 @@ import Thermo from '../components/Thermo.astro';
 
         <Thermo initialMessage="Sube una foto para empezar." />
 
-        <div class="export">
-          <label class="check">
-            <input type="checkbox" id="includePhoto" checked />
-            <span>Incluir la foto con las caras</span>
-          </label>
-          <div class="export-actions">
-            <button type="button" class="primary" id="download">Descargar imagen</button>
-            <button type="button" class="secondary" id="share" hidden>Compartir imagen</button>
-          </div>
-          <p class="export-msg" id="exportMsg" role="status"></p>
-        </div>
-
         <div class="link-share" id="linkShare">
           <div class="link-head">
             <strong>Link para el grupo</strong>
             <span class="sync" id="syncStatus" role="status"></span>
           </div>
-          <p class="link-help" id="linkHelp">
+          <p class="link-help">
             Los demás ven la foto y quién pagó, sin poder editar. Se actualiza solo cuando marcas pagos. La foto viaja cifrada.
           </p>
-          <button type="button" class="secondary" id="createLink" disabled>Crear link</button>
           <div class="link-ready" id="linkReady" hidden>
             <div class="copy-row">
               <input id="publicUrl" type="text" readonly aria-label="Link público de solo lectura" />
@@ -110,6 +97,23 @@ import Thermo from '../components/Thermo.astro';
               </div>
             </details>
             <button type="button" class="link danger" id="stopLink">Dejar de compartir</button>
+          </div>
+        </div>
+
+        <div class="export">
+          <label class="check">
+            <input type="checkbox" id="includePhoto" checked />
+            <span>Incluir la foto con las caras en la imagen</span>
+          </label>
+          <p class="export-msg" id="exportMsg" role="status"></p>
+        </div>
+
+        <!-- Acciones principales, siempre a la vista al pie del panel -->
+        <div class="panel-actions">
+          <button type="button" class="primary" id="linkAction" disabled>🔗 Crear link para el grupo</button>
+          <div class="export-actions">
+            <button type="button" class="secondary" id="download">Descargar imagen</button>
+            <button type="button" class="secondary" id="share" hidden>Compartir imagen</button>
           </div>
         </div>
       </aside>

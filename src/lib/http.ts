@@ -53,14 +53,22 @@ export async function sha256(text: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+export function bearerToken(request: Request): string {
+  const header = request.headers.get('authorization') ?? '';
+  return header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+}
+
+/** Comparación en tiempo constante (no revela cuántos caracteres coinciden). */
+export function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 /** Compara el token del header Authorization con el hash guardado. */
 export async function canEdit(request: Request, editHash: string | undefined): Promise<boolean> {
-  const header = request.headers.get('authorization') ?? '';
-  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
+  const token = bearerToken(request);
   if (!token || !editHash) return false;
-  const hash = await sha256(token);
-  if (hash.length !== editHash.length) return false;
-  let diff = 0;
-  for (let i = 0; i < hash.length; i++) diff |= hash.charCodeAt(i) ^ editHash.charCodeAt(i);
-  return diff === 0;
+  return safeEqual(await sha256(token), editHash);
 }

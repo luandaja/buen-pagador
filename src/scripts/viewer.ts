@@ -1,5 +1,6 @@
 // Vista pública de solo lectura: /ver#<id>.<clave>
-import { canvasToBlob, renderCard } from './export';
+import { renderCard } from './export';
+import { canvasToBlob } from './image';
 import { loadShare, parsePublicHash, ShareError, type SharedState } from './share';
 import { fitStageToPhoto, renderTotals, syncFaces, totalsEls } from './view';
 
@@ -27,7 +28,6 @@ const POLL_MS = 30_000;
 let link: { id: string; key: string } | null = null;
 let shared: SharedState | null = null;
 let image: string | null = null;
-let version = 0;
 let pollTimer = 0;
 
 function showMessage(title: string, text: string) {
@@ -59,27 +59,32 @@ function render() {
   els.updated.textContent = `Revisado a las ${time}`;
 }
 
+/** Qué mostrar si falla la carga. `stop`: el link no se va a arreglar solo. */
+export function errorView(err: unknown, hasData: boolean): { title: string; text: string; stop: boolean } | null {
+  const status = err instanceof ShareError ? err.status : 0;
+  if (status === 404)
+    return {
+      title: 'Este link ya no existe',
+      text: 'Puede que haya expirado o que quien lo creó haya dejado de compartirlo.',
+      stop: true,
+    };
+  if (status === 400) return { title: 'Link incompleto', text: 'Pide que te lo vuelvan a mandar, copiándolo completo.', stop: true };
+  if (hasData) return null; // Fallo pasajero: seguimos mostrando lo último.
+  return { title: 'Sin conexión', text: 'No pudimos abrir el link. Revisa tu internet y recarga la página.', stop: false };
+}
+
 async function refresh(withImage = false) {
   if (!link) return;
   try {
     const loaded = await loadShare(link, withImage);
-    if (loaded.image) image = loaded.image;
-    if (withImage || loaded.v !== version) {
-      shared = loaded.state;
-      version = loaded.v;
-    }
+    image = loaded.image ?? image;
+    shared = loaded.state;
     render();
   } catch (err) {
     console.error(err);
-    if (err instanceof ShareError && err.status === 404) {
-      stopPolling();
-      showMessage('Este link ya no existe', 'Puede que haya expirado o que quien lo creó haya dejado de compartirlo.');
-    } else if (err instanceof ShareError && err.status === 400) {
-      stopPolling();
-      showMessage('Link incompleto', 'Pide que te lo vuelvan a mandar, copiándolo completo.');
-    } else if (!shared) {
-      showMessage('Sin conexión', 'No pudimos abrir el link. Revisa tu internet y recarga la página.');
-    }
+    const view = errorView(err, !!shared);
+    if (view?.stop) stopPolling();
+    if (view) showMessage(view.title, view.text);
   }
 }
 
@@ -136,7 +141,6 @@ async function start() {
 window.addEventListener('hashchange', () => {
   shared = null;
   image = null;
-  version = 0;
   start();
 });
 
