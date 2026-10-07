@@ -1,13 +1,9 @@
-// Detección de caras en un Web Worker: así la página no se congela mientras
-// TensorFlow analiza la foto y se puede seguir escribiendo el precio, etc.
 import * as faceapi from '@vladmandic/face-api';
 import { runDetection, type Region } from './detect-core';
 
-// face-api espera un DOM; en el worker le damos uno hecho con OffscreenCanvas.
 const unsupported = () => {
-  throw new Error('No disponible en el worker');
+  throw new Error('Not available in a worker');
 };
-// Image y Video son clases vacías: así face-api trata cada entrada como canvas.
 class NoImage {}
 class NoVideo {}
 faceapi.env.setEnv({
@@ -23,37 +19,38 @@ faceapi.env.setEnv({
   readFile: unsupported,
 } as unknown as Parameters<typeof faceapi.env.setEnv>[0]);
 
-let ready: Promise<void> | null = null;
+const MAX_RESULTS = 80;
 
-function load() {
-  ready ??= (async () => {
+let modelReady: Promise<void> | null = null;
+
+function loadModel() {
+  modelReady ??= (async () => {
     await (faceapi.tf as unknown as { ready(): Promise<void> }).ready();
-    // URL absoluta: dentro del worker las rutas relativas apuntan a /_astro/.
     await faceapi.nets.ssdMobilenetv1.loadFromUri(new URL('/models', self.location.origin).href);
   })();
-  return ready;
+  return modelReady;
 }
 
 function detectorFor(bitmap: ImageBitmap) {
-  return async (r: Region, scale: number) => {
-    const canvas = new OffscreenCanvas(Math.round(r.sw * scale), Math.round(r.sh * scale));
-    canvas.getContext('2d')!.drawImage(bitmap, r.sx, r.sy, r.sw, r.sh, 0, 0, canvas.width, canvas.height);
-    const options = new faceapi.SsdMobilenetv1Options({ minConfidence: r.minConfidence, maxResults: 80 });
+  return async (region: Region, scale: number) => {
+    const canvas = new OffscreenCanvas(Math.round(region.width * scale), Math.round(region.height * scale));
+    canvas.getContext('2d')!.drawImage(bitmap, region.x, region.y, region.width, region.height, 0, 0, canvas.width, canvas.height);
+    const options = new faceapi.SsdMobilenetv1Options({ minConfidence: region.minConfidence, maxResults: MAX_RESULTS });
     return faceapi.detectAllFaces(canvas as unknown as HTMLCanvasElement, options);
   };
 }
 
-type Request = { id: number; bitmap?: ImageBitmap };
+type DetectionRequest = { id: number; bitmap?: ImageBitmap };
 
-self.onmessage = async ({ data }: MessageEvent<Request>) => {
+self.onmessage = async ({ data }: MessageEvent<DetectionRequest>) => {
   const { id, bitmap } = data;
   try {
-    await load();
+    await loadModel();
     if (!bitmap) return;
     const boxes = await runDetection(bitmap.width, bitmap.height, detectorFor(bitmap));
     self.postMessage({ id, boxes });
-  } catch (err) {
-    self.postMessage({ id, error: String(err) });
+  } catch (error) {
+    self.postMessage({ id, error: String(error) });
   } finally {
     bitmap?.close();
   }

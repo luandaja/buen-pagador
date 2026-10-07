@@ -1,16 +1,14 @@
-// Detección de rostros en el navegador con SSD MobileNet (face-api).
-// Corre en un Web Worker para no congelar la página; si el navegador no
-// puede, corre aquí mismo con pausas entre pasadas.
 import { runDetection, type DetectedBox, type Region } from './detect-core';
 
 export type { DetectedBox } from './detect-core';
 
-type FaceApi = typeof import('@vladmandic/face-api');
-type Reply = { id: number; boxes?: DetectedBox[]; error?: string };
+const MAX_RESULTS = 80;
 
-// ——— Web Worker ———
+type FaceApi = typeof import('@vladmandic/face-api');
+type WorkerReply = { id: number; boxes?: DetectedBox[]; error?: string };
+
 let worker: Worker | null | undefined;
-let lastId = 0;
+let lastRequestId = 0;
 
 function getWorker(): Worker | null {
   if (worker !== undefined) return worker;
@@ -22,23 +20,21 @@ function getWorker(): Worker | null {
   return worker;
 }
 
-/** Manda la foto al worker y espera las cajas. */
-function askWorker(w: Worker, bitmap: ImageBitmap): Promise<DetectedBox[]> {
-  const id = ++lastId;
+function askWorker(detectionWorker: Worker, bitmap: ImageBitmap): Promise<DetectedBox[]> {
+  const requestId = ++lastRequestId;
   return new Promise((resolve, reject) => {
-    const onMessage = ({ data }: MessageEvent<Reply>) => {
-      if (data.id !== id) return;
-      w.removeEventListener('message', onMessage);
+    const onMessage = ({ data }: MessageEvent<WorkerReply>) => {
+      if (data.id !== requestId) return;
+      detectionWorker.removeEventListener('message', onMessage);
       if (data.error) reject(new Error(data.error));
       else resolve(data.boxes ?? []);
     };
-    w.addEventListener('message', onMessage);
-    w.addEventListener('error', reject, { once: true });
-    w.postMessage({ id, bitmap }, [bitmap]);
+    detectionWorker.addEventListener('message', onMessage);
+    detectionWorker.addEventListener('error', reject, { once: true });
+    detectionWorker.postMessage({ id: requestId, bitmap }, [bitmap]);
   });
 }
 
-// ——— En la página (respaldo) ———
 let apiPromise: Promise<FaceApi> | null = null;
 
 function loadApi(): Promise<FaceApi> {
@@ -51,48 +47,44 @@ function loadApi(): Promise<FaceApi> {
   return apiPromise;
 }
 
-function cropCanvas(img: HTMLImageElement, r: Region, scale: number) {
+function cropCanvas(image: HTMLImageElement, region: Region, scale: number) {
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(r.sw * scale);
-  canvas.height = Math.round(r.sh * scale);
-  canvas.getContext('2d')!.drawImage(img, r.sx, r.sy, r.sw, r.sh, 0, 0, canvas.width, canvas.height);
+  canvas.width = Math.round(region.width * scale);
+  canvas.height = Math.round(region.height * scale);
+  canvas.getContext('2d')!.drawImage(image, region.x, region.y, region.width, region.height, 0, 0, canvas.width, canvas.height);
   return canvas;
 }
 
-/** Deja respirar a la interfaz entre pasadas. */
 const yieldToPage = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-async function detectInPage(img: HTMLImageElement): Promise<DetectedBox[]> {
+async function detectInPage(image: HTMLImageElement): Promise<DetectedBox[]> {
   const faceapi = await loadApi();
-  const detect = async (r: Region, scale: number) =>
-    faceapi.detectAllFaces(cropCanvas(img, r, scale), new faceapi.SsdMobilenetv1Options({ minConfidence: r.minConfidence, maxResults: 80 }));
-  return runDetection(img.naturalWidth, img.naturalHeight, detect, yieldToPage);
+  const detect = async (region: Region, scale: number) =>
+    faceapi.detectAllFaces(cropCanvas(image, region, scale), new faceapi.SsdMobilenetv1Options({ minConfidence: region.minConfidence, maxResults: MAX_RESULTS }));
+  return runDetection(image.naturalWidth, image.naturalHeight, detect, yieldToPage);
 }
 
-// ——— API ———
-export async function detectFaces(img: HTMLImageElement): Promise<DetectedBox[]> {
-  const w = typeof createImageBitmap === 'function' ? getWorker() : null;
-  if (w) {
+export async function detectFaces(image: HTMLImageElement): Promise<DetectedBox[]> {
+  const detectionWorker = typeof createImageBitmap === 'function' ? getWorker() : null;
+  if (detectionWorker) {
     try {
-      return await askWorker(w, await createImageBitmap(img));
-    } catch (err) {
-      console.warn('[buen-pagador] La detección en segundo plano falló; sigo en la página.', err);
+      return await askWorker(detectionWorker, await createImageBitmap(image));
+    } catch (error) {
+      console.warn('[buen-pagador] Background detection failed; falling back to the page.', error);
       worker = null;
     }
   }
-  return detectInPage(img);
+  return detectInPage(image);
 }
 
-/** Empieza a descargar el modelo sin bloquear (útil al cargar la página). */
 export function warmUp(): void {
-  const w = getWorker();
-  if (w) return w.postMessage({ id: 0 });
+  const detectionWorker = getWorker();
+  if (detectionWorker) return detectionWorker.postMessage({ id: 0 });
   loadApi().catch(() => {
     apiPromise = null;
   });
 }
 
-/** Solo para tests: olvida el worker y el modelo. */
 export function resetDetector() {
   worker = undefined;
   apiPromise = null;

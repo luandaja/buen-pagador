@@ -4,13 +4,12 @@ import { getStore } from '../../../lib/store';
 
 export const prerender = false;
 
-/** Crea un link compartido. Devuelve el id público y el token de edición. */
 export const POST: APIRoute = async ({ request }) => {
   const body = await readJson(request, MAX_IMG + MAX_STATE + MAX_PAY + 1_000);
-  if (!body) return fail(413, 'La foto es demasiado grande o el cuerpo no es válido.');
+  if (!body) return fail(413, 'too_large');
   const { img, state, pay } = body;
-  const valid = isPayload(img, MAX_IMG) && isPayload(state, MAX_STATE) && isOptionalPayload(pay, MAX_PAY);
-  if (!valid) return fail(400, 'Datos inválidos.');
+  const isValid = isPayload(img, MAX_IMG) && isPayload(state, MAX_STATE) && isOptionalPayload(pay, MAX_PAY);
+  if (!isValid) return fail(400, 'invalid');
 
   const id = randomId();
   const token = randomToken();

@@ -1,118 +1,117 @@
 ---
 import Layout from '../components/Layout.astro';
 import Progress from '../components/Progress.astro';
+import { es } from '../i18n/es';
+
+const { upload, toolbar, game, pay, steps, share, image, history } = es;
 ---
 
 <Layout>
   <button slot="actions" type="button" class="history-btn" id="openHistory" aria-haspopup="dialog">
-    <span>Mis partidos</span>
+    <span>{history.open}</span>
     <span class="history-count" id="historyCount" aria-hidden="true" hidden></span>
     <span class="sr-only" id="historyCountLabel"></span>
   </button>
 
   <main class="layout">
     <section class="stage-col">
-      <!-- Estado vacío -->
       <label class="dropzone" id="dropzone">
         <input id="file" type="file" accept="image/*" hidden />
         <span class="dropzone-ball" aria-hidden="true">🏀</span>
-        <strong>Sube la foto del equipo</strong>
-        <span>Arrástrala aquí o toca para elegirla. Detectamos las caras y les ponemos un emoji hasta que paguen.</span>
-        <span class="dropzone-note">La foto se queda en tu dispositivo.</span>
+        <strong>{upload.title}</strong>
+        <span>{upload.body}</span>
+        <span class="dropzone-note">{upload.note}</span>
       </label>
 
-      <!-- Foto con caras -->
       <div class="stage-wrap" id="stageWrap" hidden>
         <div class="stage-toolbar">
-          <div class="segmented" role="group" aria-label="Modo">
-            <button type="button" aria-pressed="true" data-mode="pay">Marcar pagos</button>
-            <button type="button" aria-pressed="false" data-mode="edit">Corregir caras</button>
+          <div class="segmented" role="group" aria-label={toolbar.mode}>
+            <button type="button" aria-pressed="true" data-mode="pay">{toolbar.pay}</button>
+            <button type="button" aria-pressed="false" data-mode="edit">{toolbar.edit}</button>
           </div>
           <div class="toolbar-actions">
-            <button type="button" class="ghost" id="peek" aria-pressed="false" title="Quitar los emojis un momento para ver quién es quién">
-              <span aria-hidden="true">👀</span>&nbsp;Ver caras
+            <button type="button" class="ghost" id="peek" aria-pressed="false" title={toolbar.peekTitle}>
+              <span aria-hidden="true">👀</span>&nbsp;{toolbar.peek}
             </button>
-            <button type="button" class="ghost" id="reroll" title="Cambiar los emojis">
-              <span aria-hidden="true">🎲</span>&nbsp;Otros emojis
+            <button type="button" class="ghost" id="reroll" title={toolbar.rerollTitle}>
+              <span aria-hidden="true">🎲</span>&nbsp;{toolbar.reroll}
             </button>
-            <button type="button" class="ghost" id="newPhoto">Cambiar foto</button>
+            <button type="button" class="ghost" id="newPhoto">{upload.changePhoto}</button>
           </div>
         </div>
-        <p class="hint" id="hint">Toca una cara cuando esa persona pague.</p>
+        <p class="hint" id="hint">{es.hints.initial}</p>
         <p class="blocked-bar" id="blockedBar" hidden>
-          <span>Bloqueados: <span id="blockedList" class="blocked-list"></span></span>
-          <button type="button" class="link" id="unblock">Restaurar</button>
+          <span>{toolbar.blocked} <span id="blockedList" class="blocked-list"></span></span>
+          <button type="button" class="link" id="unblock">{toolbar.unblock}</button>
         </p>
         <div class="stage-area" id="stageArea">
           <div class="stage" id="stage">
-            <img id="photo" alt="Foto del equipo" />
+            <img id="photo" alt={upload.photoAlt} />
             <div class="faces" id="faces"></div>
             <div class="scanning" id="scanning" hidden>
               <span class="scan-bar"></span>
-              <p id="scanText">Buscando caras…</p>
+              <p id="scanText">{upload.scanning}</p>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <aside class="panel" id="panel" aria-label="Partido">
+    <aside class="panel" id="panel" aria-label={game.panel}>
       <section class="game" id="game">
         <div class="game-head">
           <div class="game-id">
-            <h2 class="game-title" id="gameTitle" tabindex="-1">Nuevo partido</h2>
+            <h2 class="game-title" id="gameTitle" tabindex="-1">{game.newGame}</h2>
             <p class="game-meta" id="gameMeta"></p>
             <p class="pay-chip" id="payChip" hidden>
               <img id="payChipQr" alt="" hidden />
-              <span><span class="pay-chip-label">Para pagarte:</span> <span id="payChipNote"></span></span>
+              <span><span class="pay-chip-label">{pay.chip}</span> <span id="payChipNote"></span></span>
             </p>
           </div>
-          <button type="button" class="icon-btn" id="editGame" aria-expanded="true" aria-controls="gameForm" aria-label="Editar partido" title="Editar partido">
+          <button type="button" class="icon-btn" id="editGame" aria-expanded="true" aria-controls="gameForm" aria-label={game.edit} title={game.edit}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></path></svg>
           </button>
         </div>
         <div class="game-form" id="gameForm">
           <div class="field">
-            <label for="title">Nombre del partido</label>
-            <input id="title" type="text" placeholder="Jueves 9 pm · Cancha del parque" maxlength="60" autocomplete="off" />
+            <label for="title">{game.name}</label>
+            <input id="title" type="text" placeholder={game.namePlaceholder} maxlength="60" autocomplete="off" />
           </div>
           <div class="field-row">
             <div class="field grow">
-              <label for="cost">¿Cuánto costó la cancha?</label>
+              <label for="cost">{game.cost}</label>
               <div class="money-input">
-                <input id="currency" type="text" value="S/" maxlength="4" aria-label="Moneda" />
+                <input id="currency" type="text" value="S/" maxlength="4" aria-label={game.currency} />
                 <input id="cost" type="number" inputmode="decimal" min="0" step="0.5" placeholder="120" />
               </div>
             </div>
             <div class="field">
-              <label for="rounding">Redondear cuota</label>
+              <label for="rounding">{game.rounding}</label>
               <select id="rounding">
-                <option value="0">Sin redondear</option>
-                <option value="0.5">A 0.50</option>
-                <option value="1">A 1</option>
+                <option value="0">{game.noRounding}</option>
+                <option value="0.5">{game.roundHalf}</option>
+                <option value="1">{game.roundOne}</option>
               </select>
             </div>
           </div>
           <div class="field">
-            <label for="payNote">Datos para pagarte <span class="optional">(opcional)</span></label>
-            <textarea id="payNote" rows="2" maxlength="160" placeholder="Yape o Plin al 987 654 321 · Juan"></textarea>
+            <label for="payNote">{pay.label} <span class="optional">{pay.optional}</span></label>
+            <textarea id="payNote" rows="2" maxlength="160" placeholder={pay.placeholder}></textarea>
           </div>
           <div class="qr-field">
-            <img class="qr-preview" id="payQrPreview" alt="QR para pagar" hidden />
+            <img class="qr-preview" id="payQrPreview" alt={pay.qrAlt} hidden />
             <label class="secondary small file-btn">
               <input type="file" id="payQrFile" accept="image/*" class="sr-only" />
-              <span id="payQrLabel">Subir QR de Yape o Plin</span>
+              <span id="payQrLabel">{pay.uploadQr}</span>
             </label>
-            <button type="button" class="link danger" id="payQrRemove" hidden>Quitar QR</button>
+            <button type="button" class="link danger" id="payQrRemove" hidden>{pay.removeQr}</button>
           </div>
-          <button type="button" class="secondary small" id="doneGame">Listo</button>
+          <button type="button" class="secondary small" id="doneGame">{game.done}</button>
         </div>
       </section>
 
       <ol class="steps" id="steps">
-        <li><span><strong>Sube la foto</strong> del equipo.</span></li>
-        <li><span><strong>Pon el costo</strong> de la cancha.</span></li>
-        <li><span><strong>Comparte el link</strong> y marca a cada uno cuando pague.</span></li>
+        {[steps.photo, steps.cost, steps.share].map(([action, rest]) => <li><span><strong>{action}</strong> {rest}</span></li>)}
       </ol>
 
       <div class="progress-wrap" id="progressWrap" hidden>
@@ -121,25 +120,25 @@ import Progress from '../components/Progress.astro';
 
       <section class="share" id="linkShare" aria-labelledby="shareTitle">
         <div class="section-head">
-          <h3 id="shareTitle">Compartir con el grupo</h3>
+          <h3 id="shareTitle">{share.title}</h3>
           <span class="sync" id="syncStatus"></span>
         </div>
-        <p class="help">Ven la foto y quién pagó, y se actualiza solo. Nadie más puede editar.</p>
+        <p class="help">{share.help}</p>
         <p class="link-url" id="linkReady" hidden>
-          <span class="sr-only">Link del grupo:</span>
+          <span class="sr-only">{share.urlLabel}</span>
           <span id="publicUrl"></span>
         </p>
         <details class="more">
-          <summary>Más opciones</summary>
+          <summary>{share.more}</summary>
           <div class="more-body">
             <label class="check">
               <input type="checkbox" id="includePhoto" checked />
-              <span>La imagen que guardas incluye la foto</span>
+              <span>{share.includePhoto}</span>
             </label>
             <div class="master" id="masterBox" hidden>
-              <button type="button" class="secondary small" id="copyMaster">Copiar link para editar</button>
-              <p class="help">Ábrelo en otro celular para seguir marcando pagos. No lo mandes al grupo.</p>
-              <button type="button" class="link danger" id="stopLink">Desactivar link del grupo</button>
+              <button type="button" class="secondary small" id="copyMaster">{share.copyMaster}</button>
+              <p class="help">{share.masterHelp}</p>
+              <button type="button" class="link danger" id="stopLink">{share.stop}</button>
             </div>
           </div>
         </details>
@@ -148,12 +147,12 @@ import Progress from '../components/Progress.astro';
 
       <div class="panel-actions">
         <p class="dock-sum" id="dockSum" aria-hidden="true"></p>
-        <button type="button" class="primary" id="linkAction" disabled>Crear link</button>
-        <button type="button" class="secondary image-btn" id="download" aria-label="Guardar imagen" title="Guardar imagen">
+        <button type="button" class="primary" id="linkAction" disabled>{share.create}</button>
+        <button type="button" class="secondary image-btn" id="download" aria-label={image.save} title={image.save}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-          <span aria-hidden="true">Imagen</span>
+          <span aria-hidden="true">{image.button}</span>
         </button>
-        <button type="button" class="icon-btn lg" id="share" aria-label="Compartir imagen" title="Compartir imagen" hidden>
+        <button type="button" class="icon-btn lg" id="share" aria-label={image.shareTitle} title={image.shareTitle} hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L7.5 8.5M12 4l4.5 4.5M6 12v7h12v-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
         </button>
       </div>
@@ -163,17 +162,17 @@ import Progress from '../components/Progress.astro';
 
   <dialog class="drawer" id="history" aria-labelledby="historyTitle" closedby="any">
     <div class="drawer-body">
-    <div class="drawer-head">
-      <h2 id="historyTitle">Mis partidos</h2>
-      <button type="button" class="icon-btn" id="closeHistory" aria-label="Cerrar">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"></path></svg>
-      </button>
-    </div>
-    <p class="drawer-summary" id="historySummary"></p>
-    <button type="button" class="primary" id="newGame">Nuevo partido</button>
-    <div class="drawer-list" id="historyList"></div>
-    <p class="drawer-empty" id="historyEmpty">Todavía no hay partidos guardados. Cuando subas una foto, el partido aparece aquí.</p>
-    <p class="sr-only" id="historyStatus" role="status"></p>
+      <div class="drawer-head">
+        <h2 id="historyTitle">{history.open}</h2>
+        <button type="button" class="icon-btn" id="closeHistory" aria-label={history.close}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"></path></svg>
+        </button>
+      </div>
+      <p class="drawer-summary" id="historySummary"></p>
+      <button type="button" class="primary" id="newGame">{game.newGame}</button>
+      <div class="drawer-list" id="historyList"></div>
+      <p class="drawer-empty" id="historyEmpty">{history.empty}</p>
+      <p class="sr-only" id="historyStatus" role="status"></p>
     </div>
   </dialog>
 

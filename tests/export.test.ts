@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { bodyBoxes, containBox, fitText, renderCard, SIZE, statCells, statusLine } from '../src/scripts/export';
-import { computeTotals, defaultState, type Face, type State } from '../src/scripts/state';
+import { es } from '../src/i18n/es';
+import { computeTotals, defaultState, money, type Face, type State } from '../src/scripts/state';
 import { fakeContext, FakeImage, installFakeCanvas } from './helpers/canvas';
 
 const face = (id: string, paid: boolean): Face => ({ id, x: 0.1, y: 0.1, w: 0.1, h: 0.1, emoji: '🐸', paid });
@@ -8,57 +9,56 @@ const face = (id: string, paid: boolean): Face => ({ id, x: 0.1, y: 0.1, w: 0.1,
 const state: State = {
   ...defaultState(),
   image: 'data:image/jpeg;base64,AAAA',
-  title: 'Jueves 9 pm',
+  title: 'Thursday 9 pm',
   cost: 100,
   faces: [face('a', true), face('b', false)],
 };
 
 beforeEach(() => {
   vi.stubGlobal('Image', FakeImage);
-  // happy-dom no implementa la carga de fuentes.
   Object.defineProperty(document, 'fonts', {
     configurable: true,
     value: { ready: Promise.resolve(), load: vi.fn(async () => []) },
   });
 });
 
-const texts = (calls: unknown[][]) => calls.filter((c) => c[0] === 'fillText').map((c) => c[1]);
+const texts = (calls: unknown[][]) => calls.filter((call) => call[0] === 'fillText').map((call) => call[1]);
 
 describe('renderCard', () => {
-  it('dibuja una tarjeta cuadrada con foto, emojis y marcas de pagado', async () => {
+  it('draws a square card with photo, emojis and paid marks', async () => {
     const contexts = installFakeCanvas();
     const canvas = await renderCard(state);
     expect([canvas.width, canvas.height]).toEqual([SIZE, SIZE]);
     const calls = contexts.at(-1)!.calls;
-    expect(calls.some((c) => c[0] === 'drawImage')).toBe(true);
-    expect(texts(calls)).toEqual(expect.arrayContaining(['JUEVES 9 PM', '🐸', 'CUOTA', 'S/ 50']));
+    expect(calls.some((call) => call[0] === 'drawImage')).toBe(true);
+    expect(texts(calls)).toEqual(expect.arrayContaining(['THURSDAY 9 PM', '🐸', es.card.stats.share, money(50, 'S/')]));
   });
 
-  it('sin foto muestra el porcentaje enorme', async () => {
+  it('without a photo it shows a large percentage', async () => {
     const contexts = installFakeCanvas();
     await renderCard({ ...state, includePhoto: false, faces: [face('a', true)] });
     const calls = contexts.at(-1)!.calls;
-    expect(calls.some((c) => c[0] === 'drawImage')).toBe(false);
-    expect(texts(calls)).toEqual(expect.arrayContaining(['100%', 'S/ 100 de S/ 100', 'LA CANCHA'.replace('LA CANCHA', 'JUEVES 9 PM')]));
+    expect(calls.some((call) => call[0] === 'drawImage')).toBe(false);
+    expect(texts(calls)).toEqual(expect.arrayContaining(['100%', es.card.collectedOf(money(100, 'S/'), money(100, 'S/')), 'THURSDAY 9 PM']));
   });
 
-  it('sin título usa "La cancha"', async () => {
+  it('uses the default title when empty', async () => {
     const contexts = installFakeCanvas();
     await renderCard({ ...state, title: '  ', image: null });
-    expect(texts(contexts.at(-1)!.calls)).toContain('LA CANCHA');
+    expect(texts(contexts.at(-1)!.calls)).toContain(es.card.defaultTitle.toUpperCase());
   });
 });
 
-describe('datos para pagar en la tarjeta', () => {
-  it('dibuja la nota y el QR', async () => {
+describe('payment details on the card', () => {
+  it('draws the note and the QR', async () => {
     const contexts = installFakeCanvas();
-    await renderCard({ ...state, payNote: 'Yape 987 654 321', payQr: 'data:qr' });
+    await renderCard({ ...state, payNote: 'Wallet 987 654 321', payQr: 'data:qr' });
     const calls = contexts.at(-1)!.calls;
-    expect(texts(calls)).toEqual(expect.arrayContaining(['Para pagar: Yape 987 654 321', 'ESCANEA PARA PAGAR']));
-    expect(calls.filter((c) => c[0] === 'drawImage')).toHaveLength(2);
+    expect(texts(calls)).toEqual(expect.arrayContaining([es.card.payNote('Wallet 987 654 321'), es.card.scanToPay]));
+    expect(calls.filter((call) => call[0] === 'drawImage')).toHaveLength(2);
   });
 
-  it('la nota baja el cuerpo y el QR achica el termómetro', () => {
+  it('the note pushes the body down and the QR shrinks the thermometer', () => {
     const plain = bodyBoxes(false, false);
     const full = bodyBoxes(true, true);
     expect(plain.qr).toBeNull();
@@ -69,34 +69,34 @@ describe('datos para pagar en la tarjeta', () => {
   });
 });
 
-describe('piezas de la tarjeta', () => {
-  it('fitText achica la fuente hasta que entra, con un mínimo', () => {
+describe('card pieces', () => {
+  it('fitText shrinks the font until it fits, down to a minimum', () => {
     const ctx = fakeContext();
-    expect(fitText(ctx, 'corto', 1000, 96, 900, 'X')).toBe(96);
-    expect(fitText(ctx, 'un texto bastante largo', 200, 96, 900, 'X')).toBeLessThan(96);
+    expect(fitText(ctx, 'short', 1000, 96, 900, 'X')).toBe(96);
+    expect(fitText(ctx, 'a fairly long piece of text', 200, 96, 900, 'X')).toBeLessThan(96);
     expect(fitText(ctx, 'x'.repeat(500), 10, 96, 900, 'X')).toBe(24);
   });
 
-  it('containBox centra la foto dentro de la caja', () => {
+  it('containBox centers the photo inside the box', () => {
     expect(containBox(2, { x: 0, y: 0, w: 100, h: 100 })).toEqual({ x: 0, y: 25, w: 100, h: 50 });
     expect(containBox(0.5, { x: 0, y: 0, w: 100, h: 100 })).toEqual({ x: 25, y: 0, w: 50, h: 100 });
   });
 
-  it('statusLine resume el avance', () => {
-    const t = (faces: Face[]) => computeTotals({ faces, cost: 10, rounding: 0 });
-    expect(statusLine(t([]))).toEqual({ text: 'SIN JUGADORES TODAVÍA', done: false });
-    expect(statusLine(t([face('a', true)])).done).toBe(true);
-    expect(statusLine(t([face('a', true), face('b', false)])).text).toBe('50% PAGADO · FALTA 1 PERSONA');
-    expect(statusLine(t([face('a', false), face('b', false)])).text).toBe('0% PAGADO · FALTAN 2 PERSONAS');
+  it('statusLine summarizes progress', () => {
+    const totalsFor = (faces: Face[]) => computeTotals({ faces, cost: 10, rounding: 0 });
+    expect(statusLine(totalsFor([]))).toEqual({ text: es.card.noPlayers, done: false });
+    expect(statusLine(totalsFor([face('a', true)])).done).toBe(true);
+    expect(statusLine(totalsFor([face('a', true), face('b', false)])).text).toBe(es.card.pending(50, 1));
+    expect(statusLine(totalsFor([face('a', false), face('b', false)])).text).toBe(es.card.pending(0, 2));
   });
 
-  it('statCells arma el marcador', () => {
-    const t = computeTotals(state);
-    expect(statCells(state, t)).toEqual([
-      ['CANCHA', 'S/ 100'],
-      ['CUOTA', 'S/ 50'],
-      ['PAGARON', '1/2'],
-      ['FALTA', 'S/ 50'],
+  it('statCells builds the scoreboard', () => {
+    const totals = computeTotals(state);
+    expect(statCells(state, totals)).toEqual([
+      [es.card.stats.cost, money(100, 'S/')],
+      [es.card.stats.share, money(50, 'S/')],
+      [es.card.stats.paid, '1/2'],
+      [es.card.stats.missing, money(50, 'S/')],
     ]);
   });
 });

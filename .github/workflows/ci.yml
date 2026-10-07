@@ -20,8 +20,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
-      - run: pnpm test:coverage
-      - name: CRAP score (umbral 10)
+      - name: Tests must pass
+        run: pnpm test:coverage
+      - name: CRAP score must be below 10
         shell: bash
-        run: pnpm crap --format markdown --top 20 | tee -a "$GITHUB_STEP_SUMMARY"
+        run: pnpm crap --threshold 10 --format markdown --top 20 | tee -a "$GITHUB_STEP_SUMMARY"
       - run: pnpm build

@@ -1,4 +1,3 @@
-// Enruta fetch('/api/share…') a los handlers reales de Astro, en proceso.
 import type { APIContext } from 'astro';
 import * as item from '../../src/pages/api/share/[id]';
 import * as collection from '../../src/pages/api/share/index';
@@ -17,7 +16,6 @@ export async function callApi(input: string, init: RequestInit = {}): Promise<Re
   return handler({ request, url, params: { id: match[1] } } as unknown as APIContext);
 }
 
-/** Instala fetch global apuntando a la API en proceso. */
 export function useApiFetch() {
   globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => callApi(String(input), init)) as typeof fetch;
 }

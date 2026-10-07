@@ -1,60 +1,14 @@
 ---
-import Layout from '../components/Layout.astro';
-import Progress from '../components/Progress.astro';
+import { PUBLIC_PATH } from '../scripts/routes';
 ---
 
-<Layout title="El Buen Pagador · ¿Quién ya pagó?">
-  <main class="layout is-viewer">
-    <section class="stage-col">
-      <div class="viewer-state" id="viewerState" role="status">
-        <span class="dropzone-ball" aria-hidden="true">🏀</span>
-        <strong id="viewerStateTitle">Abriendo…</strong>
-        <span id="viewerStateText">Descifrando la foto del partido.</span>
-      </div>
-
-      <div class="stage-wrap" id="stageWrap" hidden>
-        <div class="stage-toolbar">
-          <p class="hint viewer-hint">Solo lectura · se actualiza solo</p>
-          <span class="read-only-badge"><span aria-hidden="true">👀</span> Vista pública</span>
-        </div>
-        <div class="stage-area" id="stageArea">
-          <div class="stage is-readonly" id="stage">
-            <img id="photo" alt="Foto del equipo" />
-            <div class="faces" id="faces"></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <aside class="panel" id="panel" aria-labelledby="viewTitle" hidden>
-      <section class="game">
-        <h2 class="game-title" id="viewTitle"></h2>
-        <p class="game-meta" id="updated"></p>
-      </section>
-
-      <Progress perspective="public" />
-
-      <section class="pay-box" id="payBox" aria-labelledby="payTitle" hidden>
-        <h3 id="payTitle">Cómo pagar</h3>
-        <p class="pay-note" id="payNoteOut"></p>
-        <button type="button" class="secondary small" id="copyPayNote">Copiar datos</button>
-        <figure class="pay-qr" id="payQrBox" hidden>
-          <img id="payQrOut" alt="Código QR para pagar" />
-          <figcaption>
-            <a class="link" id="payQrSave" download="qr-para-pagar.jpg">Guardar QR</a>
-            <span>Yape y Plin lo pueden leer desde la galería.</span>
-          </figcaption>
-        </figure>
-      </section>
-
-      <div class="panel-actions">
-        <button type="button" class="primary" id="download">Guardar imagen</button>
-      </div>
-      <p class="export-msg" id="exportMsg" role="status"></p>
-    </aside>
-  </main>
-
-  <script>
-    import '../scripts/viewer.ts';
-  </script>
-</Layout>
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="robots" content="noindex" />
+    <script is:inline define:vars={{ target: PUBLIC_PATH }}>
+      location.replace(target + location.hash);
+    </script>
+  </head>
+</html>

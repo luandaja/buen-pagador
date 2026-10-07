@@ -1,69 +1,71 @@
-// Render compartido entre el editor y la vista de solo lectura.
+import { es } from '../i18n/es';
 import { computeTotals, money, type Face, type Totals } from './state';
 
 type TotalsInput = { faces: Face[]; cost: number | null; currency: string; rounding: number };
 
-const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+export const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-export function totalsEls() {
+export function progressElements() {
   return {
-    progress: $<HTMLElement>('progress'),
-    label: $<HTMLParagraphElement>('progressLabel'),
-    hero: $<HTMLParagraphElement>('heroOut'),
-    paidOut: $<HTMLSpanElement>('paidOut'),
-    thermo: $<HTMLDivElement>('thermo'),
-    shareOut: $<HTMLElement>('shareOut'),
-    collectedOut: $<HTMLElement>('collectedOut'),
-    missingOut: $<HTMLParagraphElement>('missingOut'),
+    progress: byId<HTMLElement>('progress'),
+    label: byId<HTMLParagraphElement>('progressLabel'),
+    hero: byId<HTMLParagraphElement>('heroOut'),
+    paidOut: byId<HTMLSpanElement>('paidOut'),
+    meter: byId<HTMLDivElement>('thermo'),
+    shareOut: byId<HTMLElement>('shareOut'),
+    collectedOut: byId<HTMLElement>('collectedOut'),
+    missingOut: byId<HTMLParagraphElement>('missingOut'),
   };
 }
 
-export type TotalsEls = ReturnType<typeof totalsEls>;
+export type ProgressElements = ReturnType<typeof progressElements>;
 
-/** Resumen de la ficha del partido: "Cancha S/ 140 · 28 jugadores". */
 export function gameMetaText(game: Pick<TotalsInput, 'faces' | 'cost' | 'currency'>): string {
   const people = game.faces.length;
   const parts = [
-    game.cost ? `Cancha\u00a0${money(game.cost, game.currency)}` : '',
-    people ? `${people}\u00a0${people === 1 ? 'jugador' : 'jugadores'}` : '',
+    game.cost ? es.game.metaCost(money(game.cost, game.currency)) : '',
+    people ? es.game.metaPlayers(people) : '',
   ].filter(Boolean);
-  return parts.length ? parts.join(' · ') : 'Ponle nombre y costo.';
+  return parts.length ? parts.join(' · ') : es.game.metaEmpty;
 }
 
-/** Barras con más segmentos que esto se ven como una sola. */
 const MAX_SEGMENTS = 40;
 
-/**
- * Lo más importante del avance: cuánto falta cobrar.
- * `owner` le habla al organizador ("Te faltan"); si no, es neutro.
- */
-export function progressView(t: Totals, data: Pick<TotalsInput, 'cost' | 'currency'>, owner: boolean) {
-  const pending = t.people - t.paid;
-  if (t.people === 0) return { label: 'Pagaron', hero: '—', full: false };
-  if (pending === 0) return { label: '¡Cancha pagada!', hero: data.cost ? money(data.cost, data.currency) : `${t.people}/${t.people}`, full: true };
-  if (t.missing != null) return { label: owner ? 'Te faltan' : 'Faltan', hero: money(t.missing, data.currency), full: false };
-  return { label: 'Faltan pagar', hero: `${pending} de ${t.people}`, full: false };
+export function progressView(totals: Totals, game: Pick<TotalsInput, 'cost' | 'currency'>, isOwner: boolean) {
+  const pending = totals.people - totals.paid;
+  const copy = es.progress;
+  if (totals.people === 0) return { label: copy.noPlayers, hero: '—', full: false };
+  if (pending === 0) {
+    const hero = game.cost ? money(game.cost, game.currency) : `${totals.people}/${totals.people}`;
+    return { label: copy.settled, hero, full: true };
+  }
+  if (totals.missing != null) {
+    return { label: isOwner ? copy.ownerMissing : copy.publicMissing, hero: money(totals.missing, game.currency), full: false };
+  }
+  return { label: copy.pendingLabel, hero: copy.pendingHero(pending, totals.people), full: false };
 }
 
-/** Pinta el avance. `message` agrega una indicación debajo (p. ej. qué falta configurar). */
-export function renderTotals(els: TotalsEls, data: TotalsInput, message?: string): Totals {
-  const t = computeTotals(data);
-  const view = progressView(t, data, els.progress.dataset.perspective !== 'public');
-  const pct = Math.round(t.pct * 100);
+function renderMeter(meter: HTMLElement, totals: Totals) {
+  const percent = Math.round(totals.paidRatio * 100);
+  meter.style.setProperty('--pct', String(totals.paidRatio));
+  meter.style.setProperty('--n', String(Math.max(1, totals.people)));
+  meter.classList.toggle('is-dense', totals.people > MAX_SEGMENTS);
+  meter.setAttribute('aria-valuenow', String(percent));
+  meter.setAttribute('aria-valuetext', es.progress.valueText(totals.paid, totals.people, percent));
+}
 
-  els.label.textContent = view.label;
-  els.hero.textContent = view.hero;
-  els.progress.classList.toggle('is-full', view.full);
-  els.paidOut.textContent = `${t.paid}/${t.people}`;
-  els.thermo.style.setProperty('--pct', String(t.pct));
-  els.thermo.style.setProperty('--n', String(Math.max(1, t.people)));
-  els.thermo.classList.toggle('is-dense', t.people > MAX_SEGMENTS);
-  els.thermo.setAttribute('aria-valuenow', String(pct));
-  els.thermo.setAttribute('aria-valuetext', `${t.paid} de ${t.people} pagaron (${pct} %)`);
-  els.shareOut.textContent = money(t.share, data.currency);
-  els.collectedOut.textContent = money(t.collected, data.currency);
-  els.missingOut.textContent = message ?? '';
-  return t;
+export function renderTotals(elements: ProgressElements, game: TotalsInput, message?: string): Totals {
+  const totals = computeTotals(game);
+  const view = progressView(totals, game, elements.progress.dataset.perspective !== 'public');
+  elements.label.textContent = view.label;
+  elements.hero.textContent = view.hero;
+  elements.progress.classList.toggle('is-full', view.full);
+  elements.paidOut.textContent = `${totals.paid}/${totals.people}`;
+  renderMeter(elements.meter, totals);
+  elements.shareOut.textContent = money(totals.share, game.currency);
+  elements.collectedOut.textContent = money(totals.collected, game.currency);
+  elements.missingOut.textContent = message ?? '';
+  return totals;
 }
 
 const FACE_HTML =
@@ -71,55 +73,49 @@ const FACE_HTML =
 
 type FaceOptions = { interactive: boolean; label: (face: Face, index: number) => string };
 
-function createFaceEl(face: Face, interactive: boolean): HTMLElement {
-  const el = document.createElement(interactive ? 'button' : 'span');
-  if (interactive) el.setAttribute('type', 'button');
-  else el.setAttribute('role', 'img');
-  el.className = 'face';
-  el.dataset.id = face.id;
-  el.innerHTML = FACE_HTML;
-  // Si ya venía pagado (al cargar) no repetimos la animación.
-  if (face.paid) el.classList.add('is-settled');
-  return el;
+function createFaceMarker(face: Face, interactive: boolean): HTMLElement {
+  const marker = document.createElement(interactive ? 'button' : 'span');
+  if (interactive) marker.setAttribute('type', 'button');
+  else marker.setAttribute('role', 'img');
+  marker.className = 'face';
+  marker.dataset.id = face.id;
+  marker.innerHTML = FACE_HTML;
+  if (face.paid) marker.classList.add('is-settled');
+  return marker;
 }
 
-function updateFaceEl(el: HTMLElement, face: Face, index: number, opts: FaceOptions) {
-  el.style.left = `${face.x * 100}%`;
-  el.style.top = `${face.y * 100}%`;
-  el.style.width = `${face.w * 100}%`;
-  el.style.height = `${face.h * 100}%`;
-  el.querySelector('.face-emoji')!.textContent = face.emoji;
-  if (!face.paid) el.classList.remove('is-settled');
-  el.classList.toggle('is-paid', face.paid);
-  if (opts.interactive) el.setAttribute('aria-pressed', String(face.paid));
-  el.setAttribute('aria-label', opts.label(face, index));
+function updateFaceMarker(marker: HTMLElement, face: Face, index: number, options: FaceOptions) {
+  marker.style.left = `${face.x * 100}%`;
+  marker.style.top = `${face.y * 100}%`;
+  marker.style.width = `${face.w * 100}%`;
+  marker.style.height = `${face.h * 100}%`;
+  marker.querySelector('.face-emoji')!.textContent = face.emoji;
+  if (!face.paid) marker.classList.remove('is-settled');
+  marker.classList.toggle('is-paid', face.paid);
+  if (options.interactive) marker.setAttribute('aria-pressed', String(face.paid));
+  marker.setAttribute('aria-label', options.label(face, index));
 }
 
-/**
- * Sincroniza los marcadores de caras con el DOM sin recrearlos, para que la
- * animación de "pagó" solo corra cuando cambia el estado.
- */
-export function syncFaces(container: HTMLElement, map: Map<string, HTMLElement>, faces: Face[], opts: FaceOptions) {
-  const ids = new Set(faces.map((f) => f.id));
-  for (const [id, el] of map) {
-    if (ids.has(id)) continue;
-    el.remove();
-    map.delete(id);
+export function syncFaces(container: HTMLElement, markers: Map<string, HTMLElement>, faces: Face[], options: FaceOptions) {
+  const currentIds = new Set(faces.map((face) => face.id));
+  for (const [faceId, marker] of markers) {
+    if (currentIds.has(faceId)) continue;
+    marker.remove();
+    markers.delete(faceId);
   }
-  faces.forEach((face, i) => {
-    if (!map.has(face.id)) {
-      const el = createFaceEl(face, opts.interactive);
-      container.append(el);
-      map.set(face.id, el);
+  faces.forEach((face, index) => {
+    if (!markers.has(face.id)) {
+      const marker = createFaceMarker(face, options.interactive);
+      container.append(marker);
+      markers.set(face.id, marker);
     }
-    updateFaceEl(map.get(face.id)!, face, i, opts);
+    updateFaceMarker(markers.get(face.id)!, face, index, options);
   });
 }
 
-/** La proporción de la foto define el tamaño del escenario (ver .stage-area). */
-export function fitStageToPhoto(photo: HTMLImageElement, area: HTMLElement) {
+export function fitStageToPhoto(photo: HTMLImageElement, stageArea: HTMLElement) {
   photo.addEventListener('load', () => {
-    const ar = photo.naturalWidth / photo.naturalHeight;
-    if (ar > 0) area.style.setProperty('--ar', ar.toFixed(4));
+    const aspectRatio = photo.naturalWidth / photo.naturalHeight;
+    if (aspectRatio > 0) stageArea.style.setProperty('--ar', aspectRatio.toFixed(4));
   });
 }
