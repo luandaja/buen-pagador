@@ -20,6 +20,16 @@ export interface SharedState {
   faces: Face[];
 }
 
+/** Datos para pagar: viajan cifrados aparte del estado porque el QR pesa. */
+export interface PayInfo {
+  note: string;
+  qr: string | null;
+}
+
+export const payOf = (state: Pick<State, 'payNote' | 'payQr'>): PayInfo => ({ note: state.payNote.trim(), qr: state.payQr });
+
+export const hasPay = (pay: PayInfo) => !!(pay.note || pay.qr);
+
 export class ShareError extends Error {
   constructor(
     message: string,
@@ -74,23 +84,26 @@ async function request<T>(path: string, init: RequestInit = {}, token?: string):
 export async function createShare(state: State): Promise<ShareLink> {
   if (!state.image) throw new ShareError('Primero sube una foto.', 400);
   const { key, raw } = await newKey();
-  const [img, payload] = await Promise.all([
+  const pay = payOf(state);
+  const [img, payload, payData] = await Promise.all([
     shareImageBytes(state.image).then((bytes) => encrypt(key, bytes)),
     encryptJson(key, toShared(state)),
+    hasPay(pay) ? encryptJson(key, pay) : undefined,
   ]);
   const res = await request<{ id: string; token: string }>('/api/share', {
     method: 'POST',
-    body: JSON.stringify({ img, state: payload }),
+    body: JSON.stringify({ img, state: payload, pay: payData }),
   });
   return { id: res.id, key: raw, token: res.token };
 }
 
-export async function pushShare(link: ShareLink, state: State): Promise<number> {
+/** Sube el estado; con `withPay` también los datos para pagar (solo cuando cambiaron). */
+export async function pushShare(link: ShareLink, state: State, withPay = false): Promise<number> {
   const key = await importKey(link.key);
-  const payload = await encryptJson(key, toShared(state));
+  const [payload, pay] = await Promise.all([encryptJson(key, toShared(state)), withPay ? encryptJson(key, payOf(state)) : undefined]);
   const res = await request<{ v: number }>(
     `/api/share/${link.id}`,
-    { method: 'PUT', body: JSON.stringify({ state: payload }) },
+    { method: 'PUT', body: JSON.stringify({ state: payload, pay }) },
     link.token,
   );
   return res.v;
@@ -106,22 +119,27 @@ export interface Loaded {
   /** data: URL de la foto (solo si se pidió). */
   image?: string;
   canEdit?: boolean;
+  /** Datos para pagar (si se pidieron y existen). */
+  pay?: PayInfo;
+  /** Versión de los datos para pagar. */
+  pv: number;
 }
 
-type RawShare = { state: string; v: number; img?: string; canEdit?: boolean };
+type RawShare = { state: string; v: number; pv?: number; img?: string; pay?: string; canEdit?: boolean };
 
 async function decryptShare(key: CryptoKey, res: RawShare): Promise<Loaded> {
   const state = await decryptJson<SharedState>(key, res.state);
   const image = res.img ? await bytesToDataUrl(await decrypt(key, res.img)) : undefined;
-  return { state, v: res.v, image, canEdit: res.canEdit };
+  const pay = res.pay ? await decryptJson<PayInfo>(key, res.pay) : undefined;
+  return { state, v: res.v, pv: res.pv ?? 0, image, pay, canEdit: res.canEdit };
 }
 
-/** Descarga y descifra. Con `withImage` trae también la foto. */
 /** Lo necesario para leer un link: id y clave; con token, además se sabe si puede editar. */
 export type LinkRef = { id: string; key: string; token?: string };
 
-export async function loadShare(link: LinkRef, withImage: boolean): Promise<Loaded> {
-  const query = withImage ? '?img=1' : '';
+/** Descarga y descifra. Con `withImage` trae la foto (y los datos para pagar); con `withPay`, solo estos. */
+export async function loadShare(link: LinkRef, withImage: boolean, withPay = false): Promise<Loaded> {
+  const query = withImage ? '?img=1' : withPay ? '?pay=1' : '';
   const res = await request<RawShare>(`/api/share/${link.id}${query}`, {}, link.token);
   try {
     return await decryptShare(await importKey(link.key), res);

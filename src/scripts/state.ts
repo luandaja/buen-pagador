@@ -27,6 +27,10 @@ export interface Game {
   image: string | null;
   /** Miniatura para el historial. */
   thumb: string | null;
+  /** Cómo pagarle al organizador: número de Yape/Plin, cuenta, nombre… */
+  payNote: string;
+  /** QR para pagar (data: URL), opcional. */
+  payQr: string | null;
 }
 
 /** Preferencias de este dispositivo (localStorage). */
@@ -58,7 +62,7 @@ const PREFS_KEY = 'buen-pagador:prefs';
 /** Versión anterior: un solo partido guardado en localStorage. */
 const LEGACY_KEY = 'buen-pagador:v1';
 
-type GameBase = Partial<Pick<Game, 'title' | 'cost' | 'currency' | 'rounding'>>;
+type GameBase = Partial<Pick<Game, 'title' | 'cost' | 'currency' | 'rounding' | 'payNote' | 'payQr'>>;
 
 export function newGame(base: GameBase = {}): Game {
   const now = Date.now();
@@ -74,6 +78,8 @@ export function newGame(base: GameBase = {}): Game {
     share: null,
     image: null,
     thumb: null,
+    payNote: '',
+    payQr: null,
     ...base,
   };
 }

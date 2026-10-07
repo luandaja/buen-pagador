@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { containBox, fitText, renderCard, SIZE, statCells, statusLine } from '../src/scripts/export';
+import { bodyBoxes, containBox, fitText, renderCard, SIZE, statCells, statusLine } from '../src/scripts/export';
 import { computeTotals, defaultState, type Face, type State } from '../src/scripts/state';
 import { fakeContext, FakeImage, installFakeCanvas } from './helpers/canvas';
 
@@ -46,6 +46,26 @@ describe('renderCard', () => {
     const contexts = installFakeCanvas();
     await renderCard({ ...state, title: '  ', image: null });
     expect(texts(contexts.at(-1)!.calls)).toContain('LA CANCHA');
+  });
+});
+
+describe('datos para pagar en la tarjeta', () => {
+  it('dibuja la nota y el QR', async () => {
+    const contexts = installFakeCanvas();
+    await renderCard({ ...state, payNote: 'Yape 987 654 321', payQr: 'data:qr' });
+    const calls = contexts.at(-1)!.calls;
+    expect(texts(calls)).toEqual(expect.arrayContaining(['Para pagar: Yape 987 654 321', 'ESCANEA PARA PAGAR']));
+    expect(calls.filter((c) => c[0] === 'drawImage')).toHaveLength(2);
+  });
+
+  it('la nota baja el cuerpo y el QR achica el termómetro', () => {
+    const plain = bodyBoxes(false, false);
+    const full = bodyBoxes(true, true);
+    expect(plain.qr).toBeNull();
+    expect(full.left.y).toBeGreaterThan(plain.left.y);
+    expect(full.qr).toMatchObject({ x: full.thermo.x, y: full.left.y });
+    expect(full.thermo.y).toBeGreaterThan(full.qr!.y + full.qr!.h);
+    expect(full.thermo.h).toBeGreaterThan(250);
   });
 });
 

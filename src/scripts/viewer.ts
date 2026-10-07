@@ -1,7 +1,7 @@
 // Vista pública de solo lectura: /ver#<id>.<clave>
 import { renderCard } from './export';
 import { canvasToBlob } from './image';
-import { loadShare, parsePublicHash, ShareError, type SharedState } from './share';
+import { loadShare, parsePublicHash, ShareError, type Loaded, type PayInfo, type SharedState } from './share';
 import { fitStageToPhoto, renderTotals, syncFaces, totalsEls } from './view';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -18,6 +18,12 @@ const els = {
   title: $<HTMLHeadingElement>('viewTitle'),
   updated: $<HTMLParagraphElement>('updated'),
   download: $<HTMLButtonElement>('download'),
+  payBox: $<HTMLElement>('payBox'),
+  payNote: $<HTMLParagraphElement>('payNoteOut'),
+  copyPayNote: $<HTMLButtonElement>('copyPayNote'),
+  payQrBox: $<HTMLElement>('payQrBox'),
+  payQr: $<HTMLImageElement>('payQrOut'),
+  payQrSave: $<HTMLAnchorElement>('payQrSave'),
   exportMsg: $<HTMLParagraphElement>('exportMsg'),
 };
 const totals = totalsEls();
@@ -28,6 +34,9 @@ const POLL_MS = 30_000;
 let link: { id: string; key: string } | null = null;
 let shared: SharedState | null = null;
 let image: string | null = null;
+let pay: PayInfo | null = null;
+/** Versión de los datos para pagar que ya tenemos (-1: todavía ninguna). */
+let payVersion = -1;
 let pollTimer = 0;
 
 function showMessage(title: string, text: string) {
@@ -36,6 +45,19 @@ function showMessage(title: string, text: string) {
   els.panel.hidden = true;
   els.stateTitle.textContent = title;
   els.stateText.textContent = text;
+}
+
+function renderPay() {
+  els.payBox.hidden = !pay;
+  if (!pay) return;
+  els.payNote.textContent = pay.note;
+  els.payNote.hidden = !pay.note;
+  els.copyPayNote.hidden = !pay.note;
+  els.payQrBox.hidden = !pay.qr;
+  if (pay.qr) {
+    els.payQr.src = pay.qr;
+    els.payQrSave.href = pay.qr;
+  }
 }
 
 function render() {
@@ -54,6 +76,7 @@ function render() {
     label: (f, i) => `Persona ${i + 1}: ${f.paid ? 'pagó' : 'debe'}`,
   });
   renderTotals(totals, shared);
+  renderPay();
 
   const time = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit' }).format(new Date());
   els.updated.textContent = `Revisado a las ${time}`;
@@ -73,10 +96,19 @@ export function errorView(err: unknown, hasData: boolean): { title: string; text
   return { title: 'Sin conexión', text: 'No pudimos abrir el link. Revisa tu internet y recarga la página.', stop: false };
 }
 
+/** Si cambiaron los datos para pagar, los pide aparte (salvo que ya vinieran). */
+async function withPayIfChanged(target: { id: string; key: string }, loaded: Loaded, included: boolean): Promise<Loaded> {
+  if (loaded.pv === payVersion) return loaded;
+  const fresh = included ? loaded : await loadShare(target, false, true);
+  pay = fresh.pay ?? null;
+  payVersion = loaded.pv;
+  return loaded;
+}
+
 async function refresh(withImage = false) {
   if (!link) return;
   try {
-    const loaded = await loadShare(link, withImage);
+    const loaded = await withPayIfChanged(link, await loadShare(link, withImage), withImage);
     image = loaded.image ?? image;
     shared = loaded.state;
     render();
@@ -106,12 +138,22 @@ document.addEventListener('visibilitychange', () => {
 
 fitStageToPhoto(els.photo, els.stageArea);
 
+els.copyPayNote.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(pay?.note ?? '');
+    els.copyPayNote.textContent = 'Copiado ✓';
+    setTimeout(() => (els.copyPayNote.textContent = 'Copiar datos'), 1500);
+  } catch {
+    getSelection()?.selectAllChildren(els.payNote);
+  }
+});
+
 els.download.addEventListener('click', async () => {
   if (!shared || !image) return;
   els.download.disabled = true;
   els.exportMsg.textContent = 'Generando imagen…';
   try {
-    const canvas = await renderCard({ ...shared, image, includePhoto: true });
+    const canvas = await renderCard({ ...shared, image, includePhoto: true, payNote: pay?.note, payQr: pay?.qr });
     const blob = await canvasToBlob(canvas);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -141,6 +183,8 @@ async function start() {
 window.addEventListener('hashchange', () => {
   shared = null;
   image = null;
+  pay = null;
+  payVersion = -1;
   start();
 });
 

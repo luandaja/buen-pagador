@@ -44,14 +44,19 @@ afterEach(async () => {
   await unmount();
 });
 
+/** Abre la vista de un partido con datos para pagar. */
+async function openWith(extra: Partial<State>) {
+  return open(undefined, extra);
+}
+
 /** Crea un link con la API (con el DOM de la página ya montado) y abre la vista. */
-async function open(hash?: (link: ShareLink) => string) {
+async function open(hash?: (link: ShareLink) => string, extra: Partial<State> = {}) {
   mount(html, `${ORIGIN}/ver`);
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
   useApiFetch();
   HTMLAnchorElement.prototype.click = vi.fn();
-  const link = await createShare(game);
+  const link = await createShare({ ...game, ...extra });
   location.hash = hash ? hash(link) : `#${link.id}.${link.key}`;
   vi.resetModules();
   await import('../src/scripts/viewer');
@@ -134,6 +139,42 @@ describe('vista pública', () => {
     mocks.renderCard.mockRejectedValueOnce(new Error('canvas'));
     click($('download'));
     await eventually(() => expect(text('exportMsg')).toMatch(/No se pudo generar/));
+  });
+});
+
+describe('cómo pagar', () => {
+  it('muestra la nota y el QR, y los copia o guarda', async () => {
+    const writeText = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('no'));
+    await openWith({ payNote: 'Yape 987 654 321', payQr: 'data:image/jpeg;base64,QR' });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    await eventually(() => expect($('payBox').hidden).toBe(false));
+    expect(text('payNoteOut')).toBe('Yape 987 654 321');
+    expect($('payQrBox').hidden).toBe(false);
+    expect($<HTMLAnchorElement>('payQrSave').href).toMatch(/^data:image\/jpeg/);
+
+    click($('copyPayNote'));
+    await eventually(() => expect(text('copyPayNote')).toBe('Copiado ✓'));
+    const select = vi.spyOn(window.getSelection()!, 'selectAllChildren');
+    click($('copyPayNote'));
+    await eventually(() => expect(select).toHaveBeenCalled());
+
+    click($('download'));
+    await eventually(() => expect(mocks.renderCard).toHaveBeenCalledWith(expect.objectContaining({ payNote: 'Yape 987 654 321' })));
+  });
+
+  it('solo nota, sin QR; y se actualiza si cambian', async () => {
+    const link = await openWith({ payNote: 'Plin 123' });
+    await eventually(() => expect(text('payNoteOut')).toBe('Plin 123'));
+    expect($('payQrBox').hidden).toBe(true);
+    await pushShare(link, { ...game, payNote: 'Plin 456', payQr: null }, true);
+    document.dispatchEvent(new Event('visibilitychange'));
+    await eventually(() => expect(text('payNoteOut')).toBe('Plin 456'));
+  });
+
+  it('sin datos para pagar no muestra la sección', async () => {
+    await open();
+    await eventually(() => expect($('panel').hidden).toBe(false));
+    expect($('payBox').hidden).toBe(true);
   });
 });
 

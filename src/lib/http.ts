@@ -1,5 +1,9 @@
 export const MAX_IMG = 1_500_000; // ~1.1 MB de foto cifrada en base64url
 export const MAX_STATE = 64_000;
+export const MAX_PAY = 400_000; // nota + QR cifrados
+
+/** `pay` es opcional; si viene, debe ser un payload válido. */
+export const isOptionalPayload = (value: unknown, max: number) => value === undefined || isPayload(value, max);
 
 const B64URL = /^[A-Za-z0-9_-]+$/;
 const ID = /^[A-Za-z0-9]{10}$/;

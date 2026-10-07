@@ -54,3 +54,13 @@ export function bytesToDataUrl(bytes: Uint8Array, type = 'image/jpeg'): Promise<
 export async function thumbFrom(dataUrl: string): Promise<string> {
   return resizeToCanvas(await loadImage(dataUrl), 160).toDataURL('image/jpeg', 0.7);
 }
+
+/** QR subido → JPEG de hasta 480 px (se ve nítido y pesa poco). */
+export async function qrFromFile(file: File): Promise<string> {
+  const url = URL.createObjectURL(file);
+  try {
+    return resizeToCanvas(await loadImage(url), 480).toDataURL('image/jpeg', 0.9);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}

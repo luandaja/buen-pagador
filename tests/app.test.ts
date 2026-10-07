@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   detectFaces: vi.fn(),
   renderCard: vi.fn(),
   fileToDataUrl: vi.fn(),
+  qrFromFile: vi.fn(),
 }));
 
 vi.mock('../src/scripts/detect', () => ({ detectFaces: mocks.detectFaces, warmUp: vi.fn() }));
@@ -25,6 +26,7 @@ vi.mock('../src/scripts/image', () => ({
   shareImageBytes: vi.fn(async () => new Uint8Array([1, 2, 3])),
   bytesToDataUrl: vi.fn(async () => 'data:image/jpeg;base64,BBBB'),
   thumbFrom: vi.fn(async () => 'data:image/jpeg;base64,THUMB'),
+  qrFromFile: mocks.qrFromFile,
 }));
 
 const ORIGIN = 'http://localhost:4321';
@@ -46,6 +48,7 @@ beforeEach(() => {
   mocks.detectFaces.mockReset().mockImplementation(async () => mocks.boxes);
   mocks.renderCard.mockReset().mockImplementation(async () => ({}));
   mocks.fileToDataUrl.mockReset().mockImplementation(async () => 'data:image/jpeg;base64,AAAA');
+  mocks.qrFromFile.mockReset().mockImplementation(async () => 'data:image/jpeg;base64,QR');
 });
 
 afterEach(async () => {
@@ -301,6 +304,54 @@ describe('ficha del partido y guardado', () => {
     expect(localStorage.getItem('buen-pagador:v1')).toBeNull();
     await eventually(async () => expect((await current())?.thumb).toBe('data:image/jpeg;base64,THUMB'));
     expect(text('historyCount')).toBe('1');
+  });
+});
+
+describe('datos para pagar', () => {
+  function sendQr(type = 'image/png') {
+    const fileInput = $<HTMLInputElement>('payQrFile');
+    Object.defineProperty(fileInput, 'files', { configurable: true, value: [new File(['x'], 'qr.png', { type })] });
+    fileInput.dispatchEvent(new Event('change'));
+  }
+
+  it('se cargan en la ficha, se resumen y viajan con el link', async () => {
+    await startWith();
+    click($('editGame'));
+    input($<HTMLTextAreaElement>('payNote') as unknown as HTMLInputElement, 'Yape 987 654 321');
+    sendQr();
+    await eventually(() => expect($('payQrPreview').hidden).toBe(false));
+    expect(text('payQrLabel')).toBe('Cambiar QR');
+    expect($('payChip').hidden).toBe(true); // con la ficha abierta no hace falta
+    click($('doneGame'));
+    expect($('payChip').hidden).toBe(false);
+    expect(text('payChipNote')).toBe('Yape 987 654 321');
+
+    click($('linkAction'));
+    await eventually(() => expect(text('syncStatus')).toBe('En vivo'));
+    const link = (await eventually(async () => expect((await current())?.share).toBeTruthy()), (await current())!.share!);
+    expect((await loadShare(link, false, true)).pay).toEqual({ note: 'Yape 987 654 321', qr: 'data:image/jpeg;base64,QR' });
+
+    click($('editGame'));
+    click($('payQrRemove'));
+    expect($('payQrPreview').hidden).toBe(true);
+    await eventually(async () => expect((await loadShare(link, false, true)).pay?.qr).toBeNull());
+  });
+
+  it('ignora archivos que no son imagen y avisa si el QR no se puede leer', async () => {
+    await startWith();
+    sendQr('text/plain');
+    expect(mocks.qrFromFile).not.toHaveBeenCalled();
+    mocks.qrFromFile.mockRejectedValueOnce(new Error('rota'));
+    sendQr();
+    await eventually(() => expect(text('announce')).toMatch(/QR/));
+  });
+
+  it('se repiten en el próximo partido y llegan con el link maestro', async () => {
+    const paid = game({ title: 'Lunes', payNote: 'Plin 123', faces: game().faces.map((f) => ({ ...f, paid: true })) });
+    await start({ saved: [paid], current: paid.id });
+    click($('linkAction')); // Próximo partido
+    await eventually(() => expect($('stageWrap').hidden).toBe(true));
+    expect($<HTMLTextAreaElement>('payNote').value).toBe('Plin 123');
   });
 });
 
@@ -587,7 +638,7 @@ describe('link maestro', () => {
     mount(html, ORIGIN);
     useApiFetch();
     resetStore();
-    const link = await createShare({ ...defaultState(), ...game({ title, cost: 60 }) });
+    const link = await createShare({ ...defaultState(), ...game({ title, cost: 60, payNote: 'Yape 555' }) });
     await unmount();
     return link;
   }
@@ -601,6 +652,7 @@ describe('link maestro', () => {
     expect(location.hash).toBe('');
     await eventually(async () => expect((await games.findByShareId(link.id))?.title).toBe('Remoto'));
     expect((await current())?.thumb).toBe('data:image/jpeg;base64,THUMB');
+    expect($<HTMLTextAreaElement>('payNote').value).toBe('Yape 555');
   });
 
   it('si el equipo ya lo tenía, reusa ese partido; si ya está abierto, solo lo actualiza', async () => {

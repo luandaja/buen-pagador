@@ -34,6 +34,19 @@ import Progress from '../components/Progress.astro';
 
       <Progress perspective="public" />
 
+      <section class="pay-box" id="payBox" aria-labelledby="payTitle" hidden>
+        <h3 id="payTitle">Cómo pagar</h3>
+        <p class="pay-note" id="payNoteOut"></p>
+        <button type="button" class="secondary small" id="copyPayNote">Copiar datos</button>
+        <figure class="pay-qr" id="payQrBox" hidden>
+          <img id="payQrOut" alt="Código QR para pagar" />
+          <figcaption>
+            <a class="link" id="payQrSave" download="qr-para-pagar.jpg">Guardar QR</a>
+            <span>Yape y Plin lo pueden leer desde la galería.</span>
+          </figcaption>
+        </figure>
+      </section>
+
       <div class="panel-actions">
         <button type="button" class="primary" id="download">Guardar imagen</button>
       </div>

@@ -9,6 +9,8 @@ import {
   parsePublicHash,
   publicUrl,
   pushShare,
+  hasPay,
+  payOf,
   ShareError,
   toShared,
 } from '../src/scripts/share';
@@ -73,6 +75,22 @@ describe('ciclo completo contra la API', () => {
 
     await deleteShare(link);
     await expect(loadShare(link, false)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('los datos para pagar viajan cifrados y aparte', async () => {
+    const withPay = { ...state, payNote: ' Yape 987 ', payQr: 'data:image/jpeg;base64,QR' };
+    expect(payOf(withPay)).toEqual({ note: 'Yape 987', qr: 'data:image/jpeg;base64,QR' });
+    expect(hasPay({ note: '', qr: null })).toBe(false);
+
+    const link = await createShare(withPay);
+    expect(await loadShare(link, false)).toMatchObject({ pv: 1 });
+    expect((await loadShare(link, false)).pay).toBeUndefined();
+    expect((await loadShare(link, false, true)).pay).toEqual({ note: 'Yape 987', qr: 'data:image/jpeg;base64,QR' });
+
+    await pushShare(link, { ...withPay, payNote: 'Plin 123' }, true);
+    expect(await loadShare(link, false, true)).toMatchObject({ pv: 2, pay: { note: 'Plin 123' } });
+    await pushShare(link, withPay);
+    expect((await loadShare(link, false)).pv).toBe(2);
   });
 
   it('sin foto no se puede crear', async () => {
