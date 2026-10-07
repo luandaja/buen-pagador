@@ -43,8 +43,10 @@ export async function decrypt(key: CryptoKey, payload: string): Promise<Uint8Arr
   return new Uint8Array(plain);
 }
 
-export const encryptJson = (key: CryptoKey, value: unknown) =>
-  encrypt(key, new TextEncoder().encode(JSON.stringify(value)));
+export function encryptJson(key: CryptoKey, value: unknown): Promise<string> {
+  return encrypt(key, new TextEncoder().encode(JSON.stringify(value)));
+}
 
-export const decryptJson = async <T>(key: CryptoKey, payload: string): Promise<T> =>
-  JSON.parse(new TextDecoder().decode(await decrypt(key, payload)));
+export async function decryptJson<T>(key: CryptoKey, payload: string): Promise<T> {
+  return JSON.parse(new TextDecoder().decode(await decrypt(key, payload)));
+}

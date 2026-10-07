@@ -123,19 +123,31 @@ class MemoryStore implements Store {
   }
 }
 
+/** Credenciales de Upstash (nombres de la integración de Vercel o los de Upstash). */
+export function credentials(): { url: string; token: string } | null {
+  const url = env('KV_REST_API_URL') || env('UPSTASH_REDIS_REST_URL');
+  const token = env('KV_REST_API_TOKEN') || env('UPSTASH_REDIS_REST_TOKEN');
+  return url && token ? { url, token } : null;
+}
+
+function createStore(dev: boolean): Store {
+  const creds = credentials();
+  if (creds) return new RedisStore(new Redis({ ...creds, automaticDeserialization: false }));
+  if (!dev) throw new Error('Falta configurar Upstash Redis (KV_REST_API_URL y KV_REST_API_TOKEN).');
+  console.warn('[buen-pagador] Sin Upstash configurado: usando almacén en memoria.');
+  return new MemoryStore();
+}
+
 let store: Store | null = null;
 
 export function getStore(): Store {
-  if (store) return store;
-  const url = env('KV_REST_API_URL') ?? env('UPSTASH_REDIS_REST_URL');
-  const token = env('KV_REST_API_TOKEN') ?? env('UPSTASH_REDIS_REST_TOKEN');
-  if (url && token) {
-    store = new RedisStore(new Redis({ url, token, automaticDeserialization: false }));
-  } else if (import.meta.env.DEV) {
-    console.warn('[buen-pagador] Sin Upstash configurado: usando almacén en memoria.');
-    store = new MemoryStore();
-  } else {
-    throw new Error('Falta configurar Upstash Redis (KV_REST_API_URL y KV_REST_API_TOKEN).');
-  }
+  store ??= createStore(import.meta.env.DEV);
   return store;
 }
+
+/** Solo para tests: olvida el almacén elegido. */
+export function resetStore() {
+  store = null;
+}
+
+export { MemoryStore, RedisStore };
