@@ -12,7 +12,9 @@ import {
   togglePaid,
   type Mode,
 } from './faces';
-import { canvasToBlob, fileToDataUrl } from './image';
+import { deleteGame, findByShareId, listGames, loadGame, saveGame } from './games';
+import { renderHistory } from './history';
+import { canvasToBlob, fileToDataUrl, thumbFrom } from './image';
 import {
   createShare,
   deleteShare,
@@ -24,8 +26,20 @@ import {
   ShareError,
   type ShareLink,
 } from './share';
-import { loadState, pickEmojis, saveState, type State } from './state';
-import { fitStageToPhoto, renderTotals, syncFaces, totalsEls } from './view';
+import {
+  computeTotals,
+  loadPrefs,
+  newGame,
+  pickEmojis,
+  refreshEmojis,
+  savePrefs,
+  splitState,
+  takeLegacy,
+  type Game,
+  type Prefs,
+  type State,
+} from './state';
+import { fitStageToPhoto, gameMetaText, progressView, renderTotals, syncFaces, totalsEls } from './view';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -46,20 +60,42 @@ const els = {
   reroll: $<HTMLButtonElement>('reroll'),
   peek: $<HTMLButtonElement>('peek'),
   newPhoto: $<HTMLButtonElement>('newPhoto'),
+  gameTitle: $<HTMLHeadingElement>('gameTitle'),
+  gameMeta: $<HTMLParagraphElement>('gameMeta'),
+  editGame: $<HTMLButtonElement>('editGame'),
+  gameForm: $<HTMLDivElement>('gameForm'),
+  doneGame: $<HTMLButtonElement>('doneGame'),
   title: $<HTMLInputElement>('title'),
   currency: $<HTMLInputElement>('currency'),
   cost: $<HTMLInputElement>('cost'),
   rounding: $<HTMLSelectElement>('rounding'),
+  steps: $<HTMLOListElement>('steps'),
+  progressWrap: $<HTMLDivElement>('progressWrap'),
+  dockSum: $<HTMLParagraphElement>('dockSum'),
   includePhoto: $<HTMLInputElement>('includePhoto'),
   download: $<HTMLButtonElement>('download'),
   share: $<HTMLButtonElement>('share'),
   exportMsg: $<HTMLParagraphElement>('exportMsg'),
   syncStatus: $<HTMLSpanElement>('syncStatus'),
+  linkShare: $<HTMLElement>('linkShare'),
+  panelActions: document.querySelector<HTMLDivElement>('.panel-actions')!,
   linkAction: $<HTMLButtonElement>('linkAction'),
   linkReady: $<HTMLDivElement>('linkReady'),
-  publicUrl: $<HTMLInputElement>('publicUrl'),
-  masterUrl: $<HTMLInputElement>('masterUrl'),
+  publicUrl: $<HTMLSpanElement>('publicUrl'),
+  masterBox: $<HTMLDivElement>('masterBox'),
+  copyMaster: $<HTMLButtonElement>('copyMaster'),
   stopLink: $<HTMLButtonElement>('stopLink'),
+  announce: $<HTMLParagraphElement>('announce'),
+  openHistory: $<HTMLButtonElement>('openHistory'),
+  historyCount: $<HTMLSpanElement>('historyCount'),
+  historyCountLabel: $<HTMLSpanElement>('historyCountLabel'),
+  historyStatus: $<HTMLParagraphElement>('historyStatus'),
+  history: $<HTMLDialogElement>('history'),
+  closeHistory: $<HTMLButtonElement>('closeHistory'),
+  newGame: $<HTMLButtonElement>('newGame'),
+  historyList: $<HTMLDivElement>('historyList'),
+  historySummary: $<HTMLParagraphElement>('historySummary'),
+  historyEmpty: $<HTMLParagraphElement>('historyEmpty'),
 };
 const totals = totalsEls();
 
@@ -71,35 +107,64 @@ const HINTS: Record<Mode, string> = {
 
 /** Campos que ven los demás en el link: si cambian, se sincroniza. */
 const SHARED_FIELDS: (keyof State)[] = ['faces', 'cost', 'currency', 'title', 'rounding'];
+/** Campos del partido: si cambian, el partido sube en el historial. */
+const GAME_FIELDS: (keyof State)[] = [...SHARED_FIELDS, 'image', 'share'];
 
-let state: State = loadState();
 let mode: Mode = 'pay';
 let scanning = false;
 let creating = false;
 let copiedRecently = false;
+let formOpen = false;
 const faceEls = new Map<string, HTMLElement>();
 
-// ——— Persistencia ———
+// ——— Partido actual y preferencias ———
+async function migrateLegacy(prefs: Prefs): Promise<Prefs> {
+  const legacy = takeLegacy();
+  if (!legacy) return prefs;
+  if (legacy.game) await saveGame(legacy.game);
+  return { ...prefs, ...legacy.prefs, currentGameId: legacy.game?.id ?? prefs.currentGameId };
+}
+
+async function restore(): Promise<State> {
+  const prefs = await migrateLegacy(loadPrefs());
+  const saved = prefs.currentGameId ? await loadGame(prefs.currentGameId) : null;
+  const game = saved ?? newGame();
+  return { ...game, faces: refreshEmojis(game.faces, prefs.blocked), includePhoto: prefs.includePhoto, blocked: prefs.blocked };
+}
+
+let state: State = await restore();
+formOpen = !state.cost;
+
 let saveTimer = 0;
 function persist() {
   clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(() => saveState(state), 250);
+  saveTimer = window.setTimeout(flush, 200);
 }
 
-// Guarda de inmediato si la página se cierra o recarga antes del debounce.
-window.addEventListener('pagehide', () => {
+/** Guarda ya: preferencias en localStorage y, si tiene foto, el partido en el historial. */
+async function flush() {
   clearTimeout(saveTimer);
-  saveState(state);
+  const { game, prefs } = splitState(state);
+  savePrefs(prefs);
+  if (!game.image) return;
+  await saveGame(game);
+  await refreshHistoryCount();
+}
+
+window.addEventListener('pagehide', flush);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flush();
 });
 
-const touchesShared = (patch: Partial<State>) => SHARED_FIELDS.some((k) => k in patch);
+const touches = (patch: Partial<State>, fields: (keyof State)[]) => fields.some((k) => k in patch);
 
 /** Aplica cambios, guarda y repinta. `sync: false` cuando los datos ya vienen del servidor. */
 function update(patch: Partial<State>, sync = true) {
-  state = { ...state, ...patch };
+  const updatedAt = touches(patch, GAME_FIELDS) ? Date.now() : state.updatedAt;
+  state = { ...state, ...patch, updatedAt };
   persist();
   render();
-  if (sync && state.share && touchesShared(patch)) scheduleSync();
+  if (sync && state.share && touches(patch, SHARED_FIELDS)) scheduleSync();
 }
 
 // ——— Render ———
@@ -108,7 +173,7 @@ function setMode(next: Mode) {
   els.stage.classList.toggle('is-edit', mode === 'edit');
   els.hint.textContent = HINTS[mode];
   document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) => {
-    b.setAttribute('aria-checked', String(b.dataset.mode === mode));
+    b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
   });
   renderFaces();
 }
@@ -117,15 +182,48 @@ function renderFaces() {
   syncFaces(els.faces, faceEls, state.faces, { interactive: true, label: (f, i) => faceLabel(f, i, mode) });
 }
 
-const LINK_ACTION = { create: '🔗 Crear link para el grupo', copy: '🔗 Copiar link del grupo' };
+function renderGameCard() {
+  els.gameTitle.textContent = state.title.trim() || 'Nuevo partido';
+  els.gameMeta.textContent = gameMetaText(state);
+  els.gameForm.hidden = !formOpen;
+  els.editGame.setAttribute('aria-expanded', String(formOpen));
+}
+
+const isSettled = () => {
+  const t = computeTotals(state);
+  return t.people > 0 && t.paid === t.people;
+};
+
+function renderProgress() {
+  const hasImage = !!state.image;
+  els.steps.hidden = hasImage;
+  const done = [hasImage, !!state.cost, !!state.share];
+  els.steps.querySelectorAll('li').forEach((li, i) => li.classList.toggle('is-done', done[i]));
+  els.progressWrap.hidden = !hasImage;
+  const t = renderTotals(totals, state, statusMessage(state, scanning));
+  // En el celular, la barra fija repite lo esencial para no tener que bajar.
+  const view = progressView(t, state, true);
+  els.dockSum.textContent = `${view.label} ${view.hero} · ${t.paid}/${t.people}`;
+}
+
+const shareUrl = () => touch && typeof navigator.share === 'function';
+
+function linkActionLabel() {
+  if (isSettled()) return 'Próximo partido';
+  if (!state.share) return 'Crear link';
+  return shareUrl() ? 'Enviar link' : 'Copiar link';
+}
 
 function renderLink() {
   const link = state.share;
-  if (!copiedRecently) els.linkAction.textContent = link ? LINK_ACTION.copy : LINK_ACTION.create;
+  if (!copiedRecently) els.linkAction.textContent = linkActionLabel();
   els.linkAction.disabled = !state.image || scanning || creating;
+  els.linkAction.title = state.image ? '' : 'Sube la foto primero';
+  els.linkShare.hidden = !state.image;
+  els.panelActions.hidden = !state.image;
   els.linkReady.hidden = !link;
-  els.publicUrl.value = link ? publicUrl(link) : '';
-  els.masterUrl.value = link ? masterUrl(link) : '';
+  els.masterBox.hidden = !link;
+  els.publicUrl.textContent = link ? publicUrl(link) : '';
 }
 
 function render() {
@@ -134,12 +232,14 @@ function render() {
   els.stageWrap.hidden = !hasImage;
   if (hasImage && els.photo.getAttribute('src') !== state.image) els.photo.src = state.image!;
   els.scanning.hidden = !scanning;
-  els.download.disabled = scanning;
-  els.share.disabled = scanning;
+  els.openHistory.disabled = scanning || creating;
+  els.download.disabled = scanning || !hasImage;
+  els.share.disabled = scanning || !hasImage;
   els.blockedBar.hidden = state.blocked.length === 0;
   els.blockedList.textContent = state.blocked.join(' ');
   renderFaces();
-  renderTotals(totals, state, statusMessage(state, scanning));
+  renderGameCard();
+  renderProgress();
   renderLink();
 }
 
@@ -151,6 +251,10 @@ function fillForm() {
   els.includePhoto.checked = state.includePhoto;
 }
 
+function announce(text: string) {
+  els.announce.textContent = text;
+}
+
 // ——— Foto ———
 async function detect() {
   const boxes = await detectFaces(els.photo);
@@ -158,13 +262,23 @@ async function detect() {
   return boxesToFaces(boxes, aspect, pickEmojis(boxes.length, [], state.blocked));
 }
 
+/** Genera la miniatura y la guarda solo si seguimos en el mismo partido. */
+function makeThumb(image: string) {
+  const id = state.id;
+  thumbFrom(image).then(
+    (thumb) => state.id === id && update({ thumb }, false),
+    () => {},
+  );
+}
+
 function startScan(image: string) {
   scanning = true;
   setPeek(false);
-  // Una foto nueva es otro partido: el link anterior queda con su último estado.
+  // Una foto nueva es otra foto del partido: el link anterior queda con su último estado.
   setSync(state.share ? 'La foto nueva necesita un link nuevo.' : '');
-  update({ image, faces: [], share: null });
+  update({ image, faces: [], share: null, thumb: null });
   setMode('pay');
+  makeThumb(image);
 }
 
 function finishScan(faces: State['faces'], failed = false) {
@@ -182,13 +296,16 @@ async function handleFile(file: File | undefined) {
     els.exportMsg.textContent = file ? 'Ese archivo no es una imagen.' : '';
     return;
   }
+  const id = state.id;
   try {
     startScan(await fileToDataUrl(file));
     await els.photo.decode();
-    finishScan(await detect());
+    const faces = await detect();
+    // Si mientras tanto se abrió otro partido, estas caras ya no le corresponden.
+    if (state.id === id) finishScan(faces);
   } catch (err) {
     console.error(err);
-    finishScan([], true);
+    if (state.id === id) finishScan([], true);
   }
 }
 
@@ -211,13 +328,22 @@ els.dropzone.addEventListener('drop', (e) => {
   handleFile(e.dataTransfer?.files?.[0]);
 });
 
-els.newPhoto.addEventListener('click', () => els.file.click());
+const CHANGE_PHOTO = 'Se borran los pagos marcados de este partido. Para otro partido usa «Nuevo partido» en Mis partidos. ¿Cambiar la foto igual?';
+
+els.newPhoto.addEventListener('click', () => {
+  const hasPayments = state.faces.some((f) => f.paid);
+  if (!hasPayments || confirm(CHANGE_PHOTO)) els.file.click();
+});
 
 // ——— Caras ———
 const faceTarget = (e: Event) => (e.target as HTMLElement).closest<HTMLElement>('.face');
 
 function onFaceClick(id: string) {
-  update({ faces: mode === 'pay' ? togglePaid(state.faces, id) : removeFace(state.faces, id) });
+  if (mode === 'edit') return update({ faces: removeFace(state.faces, id) });
+  const index = state.faces.findIndex((f) => f.id === id);
+  update({ faces: togglePaid(state.faces, id) });
+  const t = computeTotals(state);
+  announce(`Persona ${index + 1} ${state.faces[index].paid ? 'pagó' : 'vuelve a deber'}. ${t.paid} de ${t.people} pagaron.`);
 }
 
 function onEmptyClick(e: MouseEvent) {
@@ -311,15 +437,22 @@ els.unblock.addEventListener('click', () => {
 function setPeek(on: boolean) {
   els.stage.classList.toggle('is-peek', on);
   els.peek.setAttribute('aria-pressed', String(on));
-  els.peek.innerHTML = on ? '🙈&nbsp;Tapar caras' : '👀&nbsp;Ver caras';
+  els.peek.innerHTML = on ? '<span aria-hidden="true">🙈</span>&nbsp;Tapar caras' : '<span aria-hidden="true">👀</span>&nbsp;Ver caras';
 }
 
 els.peek.addEventListener('click', () => setPeek(!els.stage.classList.contains('is-peek')));
 
 els.reroll.addEventListener('click', () => update({ faces: rerollEmojis(state.faces, state.blocked) }));
 
-// ——— Formulario ———
-fillForm();
+// ——— Ficha del partido ———
+function setFormOpen(open: boolean) {
+  formOpen = open;
+  renderGameCard();
+  (open ? els.title : els.editGame).focus();
+}
+
+els.editGame.addEventListener('click', () => setFormOpen(!formOpen));
+els.doneGame.addEventListener('click', () => setFormOpen(false));
 
 const parseCost = (value: string) => {
   const n = parseFloat(value);
@@ -352,7 +485,7 @@ els.download.addEventListener('click', async () => {
   try {
     const file = await buildFile();
     downloadFile(file);
-    els.exportMsg.textContent = `Imagen descargada: ${file.name}`;
+    els.exportMsg.textContent = `Imagen guardada: ${file.name}`;
   } catch (err) {
     console.error(err);
     els.exportMsg.textContent = 'No se pudo generar la imagen. Intenta de nuevo.';
@@ -361,14 +494,15 @@ els.download.addEventListener('click', async () => {
   }
 });
 
+const isAbort = (err: unknown) => (err as DOMException)?.name === 'AbortError';
+
 async function shareImage() {
   els.share.disabled = true;
   try {
     await navigator.share({ files: [await buildFile()], title: 'El Buen Pagador' });
     els.exportMsg.textContent = '';
   } catch (err) {
-    const aborted = (err as DOMException).name === 'AbortError';
-    if (!aborted) els.exportMsg.textContent = 'No se pudo compartir. Usa “Descargar imagen”.';
+    if (!isAbort(err)) els.exportMsg.textContent = 'No se pudo compartir. Usa “Guardar imagen”.';
   } finally {
     els.share.disabled = false;
   }
@@ -386,7 +520,10 @@ let dirty = false;
 function setSync(text: string, tone: 'ok' | 'busy' | 'error' | '' = '') {
   els.syncStatus.textContent = text;
   els.syncStatus.dataset.tone = tone;
+  if (tone === 'error') announce(text);
 }
+
+const LIVE = 'En vivo';
 
 const LOST_LINK: Record<number, string> = {
   404: 'El link expiró. Crea uno nuevo.',
@@ -416,7 +553,7 @@ function scheduleSync() {
 async function pushOnce(link: ShareLink) {
   try {
     await pushShare(link, state);
-    if (!dirty) setSync('Al día ✓', 'ok');
+    if (!dirty) setSync(LIVE, 'ok');
   } catch (err) {
     console.error(err);
     if (dropLinkOn(err)) return;
@@ -436,29 +573,42 @@ async function runSync() {
   syncing = null;
 }
 
+/** Trae los pagos del servidor: otro equipo con el link maestro pudo haberlos cambiado. */
+async function pullShared(link: ShareLink) {
+  try {
+    const loaded = await loadShare(link, false);
+    if (state.share?.id === link.id) update(loaded.state, false);
+    setSync(LIVE, 'ok');
+  } catch (err) {
+    if (!dropLinkOn(err)) setSync('Sin conexión: mostrando lo guardado aquí.', 'error');
+  }
+}
+
 async function createLink() {
+  const id = state.id;
   creating = true;
-  renderLink();
+  render();
   setSync('Creando link…', 'busy');
   try {
-    update({ share: await createShare(state) });
-    setSync('Al día ✓', 'ok');
+    const share = await createShare(state);
+    if (state.id === id) update({ share });
+    setSync(LIVE, 'ok');
   } catch (err) {
     console.error(err);
     setSync(err instanceof ShareError ? err.message : 'No se pudo crear el link. Intenta de nuevo.', 'error');
   } finally {
     creating = false;
-    renderLink();
+    render();
   }
 }
 
-async function copyText(text: string, input?: HTMLInputElement): Promise<boolean> {
+async function copyText(text: string, fallback?: HTMLElement): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
     return true;
   } catch {
     // Sin permiso de portapapeles: dejamos el texto seleccionado para copiarlo a mano.
-    input?.select();
+    if (fallback) getSelection()?.selectAllChildren(fallback);
     return false;
   }
 }
@@ -469,72 +619,205 @@ function flashCopied(btn: HTMLButtonElement, restore: () => void) {
   setTimeout(restore, 1500);
 }
 
-els.linkAction.addEventListener('click', async () => {
-  if (!state.share) return createLink();
-  if (!(await copyText(els.publicUrl.value, els.publicUrl))) return;
+async function sendLink(link: ShareLink) {
+  const url = publicUrl(link);
+  if (shareUrl()) {
+    await navigator.share({ title: state.title || 'El Buen Pagador', text: '¿Quién ya pagó la cancha?', url }).catch(() => {});
+    return;
+  }
+  if (!(await copyText(url, els.publicUrl))) return;
   copiedRecently = true;
   flashCopied(els.linkAction, () => {
     copiedRecently = false;
     renderLink();
   });
-});
+}
 
-document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((btn) =>
-  btn.addEventListener('click', async () => {
-    const input = $<HTMLInputElement>(btn.dataset.copy!);
-    if (await copyText(input.value, input)) flashCopied(btn, () => (btn.textContent = 'Copiar'));
-  }),
-);
+function onLinkAction() {
+  if (isSettled()) return startNewGame(baseOf(state));
+  return state.share ? sendLink(state.share) : createLink();
+}
+
+els.linkAction.addEventListener('click', onLinkAction);
+
+els.copyMaster.addEventListener('click', async () => {
+  if (state.share && (await copyText(masterUrl(state.share)))) {
+    flashCopied(els.copyMaster, () => (els.copyMaster.textContent = 'Copiar link para editar'));
+  }
+});
 
 async function stopSharing(link: ShareLink) {
   try {
     await deleteShare(link);
   } catch (err) {
-    if (!dropLinkOn(err)) return setSync('No se pudo borrar el link. Intenta de nuevo.', 'error');
+    if (!dropLinkOn(err)) return setSync('No se pudo desactivar el link. Intenta de nuevo.', 'error');
   }
   clearTimeout(syncTimer);
   update({ share: null });
-  setSync('Link borrado.');
+  setSync('Link desactivado.');
 }
 
 els.stopLink.addEventListener('click', () => {
-  if (state.share && confirm('El link dejará de funcionar para todos. ¿Dejar de compartir?')) stopSharing(state.share);
+  if (state.share && confirm('El link dejará de funcionar para todos. ¿Desactivarlo?')) stopSharing(state.share);
 });
 
-/** ¿Hay que importar este link maestro? Pregunta antes de reemplazar otra foto. */
-function wantsImport(link: ShareLink) {
-  if (state.share?.id === link.id) return false;
-  return !state.image || confirm('Este link reemplaza la foto y los pagos que tienes abiertos aquí. ¿Continuar?');
+// ——— Mis partidos ———
+async function refreshHistoryCount() {
+  const count = (await listGames()).length;
+  els.historyCount.hidden = count === 0;
+  els.historyCount.textContent = String(count);
+  els.historyCountLabel.textContent = count ? `, ${count} guardados` : '';
 }
 
+async function renderHistoryList() {
+  renderHistory({ list: els.historyList, summary: els.historySummary, empty: els.historyEmpty }, await listGames(), state.id);
+}
+
+/** Abre un partido: el actual queda guardado en el historial. */
+async function switchTo(game: Game) {
+  await flush();
+  scanning = false;
+  clearTimeout(syncTimer);
+  dirty = false;
+  setPeek(false);
+  setSync('');
+  state = { ...game, faces: refreshEmojis(game.faces, state.blocked), includePhoto: state.includePhoto, blocked: state.blocked };
+  formOpen = !state.cost;
+  fillForm();
+  setMode('pay');
+  render();
+  ensureThumb();
+  await flush();
+}
+
+/** Partidos guardados antes de que existieran las miniaturas. */
+function ensureThumb() {
+  if (state.image && !state.thumb) makeThumb(state.image);
+}
+
+type GameBase = Pick<Game, 'title' | 'cost' | 'currency' | 'rounding'>;
+const baseOf = ({ title, cost, currency, rounding }: GameBase): GameBase => ({ title, cost, currency, rounding });
+
+async function startNewGame(base: Partial<GameBase> = { currency: state.currency, rounding: state.rounding }) {
+  els.history.close();
+  await switchTo(newGame(base));
+  setFormOpen(true);
+}
+
+async function openGame(id: string) {
+  const game = await loadGame(id);
+  els.history.close();
+  if (!game || game.id === state.id) return;
+  await switchTo(game);
+  els.gameTitle.focus();
+  announce(`Abriste «${els.gameTitle.textContent}».`);
+  if (game.share) await pullShared(game.share);
+}
+
+async function removeGame(id: string) {
+  const game = await loadGame(id);
+  const name = game?.title.trim() || 'este partido';
+  if (!game || !confirm(`¿Borrar «${name}» de este dispositivo? El link del grupo, si existe, sigue funcionando.`)) return;
+  // Primero salimos del partido (eso lo guarda) y recién después lo borramos.
+  const ids = [...els.historyList.querySelectorAll<HTMLElement>('[data-id]')].map((li) => li.dataset.id);
+  if (id === state.id) await switchTo(newGame({ currency: state.currency, rounding: state.rounding }));
+  await deleteGame(id);
+  await renderHistoryList();
+  await refreshHistoryCount();
+  els.historyStatus.textContent = `Borraste «${name}».`;
+  focusAfterDelete(ids[ids.indexOf(id) + 1]);
+}
+
+/** Tras borrar, el foco va a la fila siguiente (o a "Nuevo partido"). */
+function focusAfterDelete(nextId: string | undefined) {
+  const next = els.historyList.querySelector<HTMLElement>(`[data-id="${nextId}"] .game-open`);
+  (next ?? els.newGame).focus();
+}
+
+async function repeatGame(id: string) {
+  const game = await loadGame(id);
+  if (game) await startNewGame(baseOf(game));
+}
+
+const HISTORY_ACTIONS: Record<string, (id: string) => Promise<void>> = {
+  open: openGame,
+  repeat: repeatGame,
+  delete: removeGame,
+};
+
+let historyBusy = false;
+
+els.historyList.addEventListener('click', async (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-action]');
+  const id = btn?.closest<HTMLElement>('[data-id]')?.dataset.id;
+  if (!btn || !id || historyBusy) return;
+  btn.closest('details')?.removeAttribute('open');
+  historyBusy = true;
+  try {
+    await HISTORY_ACTIONS[btn.dataset.action!](id);
+  } finally {
+    historyBusy = false;
+  }
+});
+
+els.openHistory.addEventListener('click', async () => {
+  if (els.history.open) return;
+  els.historyStatus.textContent = '';
+  els.history.showModal();
+  await flush();
+  await renderHistoryList();
+});
+els.closeHistory.addEventListener('click', () => els.history.close());
+// Tocar el fondo (fuera del panel) lo cierra; tocar fuera de un menú ⋯ cierra el menú.
+els.history.addEventListener('click', (e) => {
+  const target = e.target as Node;
+  if (target === els.history) return els.history.close();
+  els.history.querySelectorAll('details.row-menu[open]').forEach((menu) => {
+    if (!menu.contains(target)) menu.removeAttribute('open');
+  });
+});
+els.newGame.addEventListener('click', () => startNewGame());
+
+// ——— Link maestro ———
+/** Partido local para este link: el que ya lo tenía (con su foto) o uno nuevo. */
+async function gameForLink(link: ShareLink): Promise<Game> {
+  const existing = await findByShareId(link.id);
+  return (existing && (await loadGame(existing.id))) || newGame();
+}
+
+/** Abre un link maestro (#editar=…): el partido queda en el historial de este equipo. */
 async function openMasterLink(link: ShareLink) {
   setSync('Abriendo link maestro…', 'busy');
   try {
     const loaded = await loadShare(link, true);
     if (!loaded.canEdit) return setSync('Ese link maestro no es válido.', 'error');
-    setPeek(false);
-    update({ ...loaded.state, image: loaded.image ?? null, share: link }, false);
-    fillForm();
-    setSync('Al día ✓', 'ok');
+    const base = await gameForLink(link);
+    const image = loaded.image ?? base.image;
+    const thumb = base.thumb ?? (image ? await thumbFrom(image).catch(() => null) : null);
+    await switchTo({ ...base, ...loaded.state, image, thumb, share: link, updatedAt: Date.now() });
+    setSync(LIVE, 'ok');
   } catch (err) {
     console.error(err);
     setSync(err instanceof ShareError ? err.message : 'No se pudo abrir el link.', 'error');
   }
 }
 
-/** Abre un link maestro (#editar=…) y carga ese partido para editarlo aquí. */
 async function importFromMasterLink() {
   const link = parseMasterHash(location.hash);
   if (!link) return;
   history.replaceState(null, '', location.pathname + location.search);
-  if (wantsImport(link)) await openMasterLink(link);
+  if (state.share?.id === link.id) return pullShared(link);
+  await openMasterLink(link);
 }
 
 window.addEventListener('hashchange', importFromMasterLink);
 
 // ——— Inicio ———
+fillForm();
 setMode('pay');
 render();
-if (state.share) setSync('Al día ✓', 'ok');
+refreshHistoryCount();
+ensureThumb();
+if (state.share) pullShared(state.share);
 importFromMasterLink();
 warmUp();

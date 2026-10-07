@@ -111,7 +111,7 @@ els.download.addEventListener('click', async () => {
   els.download.disabled = true;
   els.exportMsg.textContent = 'Generando imagen…';
   try {
-    const canvas = await renderCard({ ...shared, image, includePhoto: true, blocked: [], share: null });
+    const canvas = await renderCard({ ...shared, image, includePhoto: true });
     const blob = await canvasToBlob(canvas);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

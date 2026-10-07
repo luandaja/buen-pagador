@@ -1,48 +1,72 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { computeTotals, type Face } from '../src/scripts/state';
-import { fitStageToPhoto, progressText, renderTotals, syncFaces, totalsEls } from '../src/scripts/view';
+import { fitStageToPhoto, gameMetaText, progressView, renderTotals, syncFaces, totalsEls } from '../src/scripts/view';
 
 const face = (id: string, paid: boolean, emoji = '🐸'): Face => ({ id, x: 0.1, y: 0.2, w: 0.1, h: 0.15, emoji, paid });
 
 beforeEach(() => {
   document.body.innerHTML = `
-    <span id="peopleOut"></span><span id="shareOut"></span><span id="paidOut"></span>
-    <div id="thermo"><div id="thermoFill"></div></div>
-    <p id="pctOut"></p><span id="collectedOut"></span><p id="missingOut"></p>
+    <section id="progress" data-perspective="owner">
+      <p id="progressLabel"></p><span id="paidOut"></span><p id="heroOut"></p>
+      <div id="thermo"></div>
+      <b id="shareOut"></b><b id="collectedOut"></b>
+      <p id="missingOut"></p>
+    </section>
     <div id="faces"></div>`;
 });
 
+const data = (faces: Face[], cost: number | null = 100) => ({ faces, cost, currency: 'S/', rounding: 0 });
+
 describe('renderTotals', () => {
-  it('pinta marcador, termómetro y mensaje', () => {
+  it('pinta cuánto falta, la barra y el detalle', () => {
     const els = totalsEls();
-    renderTotals(els, { faces: [face('a', true), face('b', false)], cost: 100, currency: 'S/', rounding: 0 });
-    expect(els.peopleOut.textContent).toBe('2');
-    expect(els.shareOut.textContent).toBe('S/ 50');
+    renderTotals(els, data([face('a', true), face('b', false)]));
+    expect(els.label.textContent).toBe('Te faltan');
+    expect(els.hero.textContent).toBe('S/\u00a050');
     expect(els.paidOut.textContent).toBe('1/2');
-    expect(els.thermoFill.style.height).toBe('50%');
-    expect(els.pctOut.textContent).toBe('50%');
-    expect(els.missingOut.textContent).toBe('Falta 1 persona · S/ 50');
+    expect(els.thermo.style.getPropertyValue('--pct')).toBe('0.5');
+    expect(els.thermo.style.getPropertyValue('--n')).toBe('2');
+    expect(els.thermo.getAttribute('aria-valuetext')).toBe('1 de 2 pagaron (50 %)');
+    expect(els.shareOut.textContent).toBe('S/\u00a050');
+    expect(els.collectedOut.textContent).toBe('S/\u00a050');
+    expect(els.missingOut.textContent).toBe('');
   });
 
-  it('marca el termómetro lleno y respeta un mensaje propio', () => {
+  it('marca el partido pagado, agrega un mensaje y junta los segmentos si son muchos', () => {
     const els = totalsEls();
-    renderTotals(els, { faces: [face('a', true)], cost: 10, currency: 'S/', rounding: 0 });
-    expect(els.thermo.classList.contains('is-full')).toBe(true);
-    expect(els.missingOut.classList.contains('done')).toBe(true);
-    renderTotals(els, { faces: [face('a', true)], cost: 10, currency: 'S/', rounding: 0 }, 'Otro mensaje');
+    renderTotals(els, data([face('a', true)]), 'Otro mensaje');
+    expect(els.progress.classList.contains('is-full')).toBe(true);
     expect(els.missingOut.textContent).toBe('Otro mensaje');
-    expect(els.missingOut.classList.contains('done')).toBe(false);
+    const many = Array.from({ length: 41 }, (_, i) => face(String(i), false));
+    renderTotals(els, data(many));
+    expect(els.thermo.classList.contains('is-dense')).toBe(true);
+  });
+
+  it('en la vista pública no le habla al organizador', () => {
+    const els = totalsEls();
+    els.progress.dataset.perspective = 'public';
+    renderTotals(els, data([face('a', false)]));
+    expect(els.label.textContent).toBe('Faltan');
   });
 });
 
-describe('progressText', () => {
-  const data = { cost: 100, currency: 'S/' };
+describe('progressView', () => {
+  const view = (faces: Face[], cost: number | null = 100) =>
+    progressView(computeTotals({ faces, cost, rounding: 0 }), { cost, currency: 'S/' }, true);
+
   it('cubre cada caso', () => {
-    expect(progressText(computeTotals({ faces: [], cost: 100, rounding: 0 }), data)).toMatch(/Todavía/);
-    expect(progressText(computeTotals({ faces: [face('a', true)], cost: 100, rounding: 0 }), data)).toMatch(/pagada/);
-    expect(progressText(computeTotals({ faces: [face('a', false), face('b', false)], cost: null, rounding: 0 }), { ...data, cost: null })).toBe(
-      'Faltan 2 personas.',
-    );
+    expect(view([])).toEqual({ label: 'Pagaron', hero: '—', full: false });
+    expect(view([face('a', true)])).toEqual({ label: '¡Cancha pagada!', hero: 'S/\u00a0100', full: true });
+    expect(view([face('a', true)], null)).toMatchObject({ hero: '1/1', full: true });
+    expect(view([face('a', false), face('b', false)], null)).toEqual({ label: 'Faltan pagar', hero: '2 de 2', full: false });
+  });
+});
+
+describe('gameMetaText', () => {
+  it('resume costo, jugadores y cuota', () => {
+    expect(gameMetaText(data([face('a', false), face('b', false)]))).toBe('Cancha S/ 100 · 2 jugadores');
+    expect(gameMetaText(data([face('a', false)], null))).toBe('1 jugador');
+    expect(gameMetaText(data([], null))).toBe('Ponle nombre y costo.');
   });
 });
 

@@ -1,7 +1,6 @@
 ---
 import Layout from '../components/Layout.astro';
-import Scoreboard from '../components/Scoreboard.astro';
-import Thermo from '../components/Thermo.astro';
+import Progress from '../components/Progress.astro';
 ---
 
 <Layout title="El Buen Pagador · ¿Quién ya pagó?">
@@ -16,7 +15,7 @@ import Thermo from '../components/Thermo.astro';
       <div class="stage-wrap" id="stageWrap" hidden>
         <div class="stage-toolbar">
           <p class="hint viewer-hint">Solo lectura · se actualiza solo</p>
-          <span class="read-only-badge">👀 Vista pública</span>
+          <span class="read-only-badge"><span aria-hidden="true">👀</span> Vista pública</span>
         </div>
         <div class="stage-area" id="stageArea">
           <div class="stage is-readonly" id="stage">
@@ -27,21 +26,18 @@ import Thermo from '../components/Thermo.astro';
       </div>
     </section>
 
-    <aside class="panel" id="panel" hidden>
-      <h2 class="view-title" id="viewTitle"></h2>
+    <aside class="panel" id="panel" aria-labelledby="viewTitle" hidden>
+      <section class="game">
+        <h2 class="game-title" id="viewTitle"></h2>
+        <p class="game-meta" id="updated"></p>
+      </section>
 
-      <Scoreboard />
+      <Progress perspective="public" />
 
-      <Thermo />
-
-      <p class="updated" id="updated"></p>
-
-      <div class="export">
-        <div class="export-actions">
-          <button type="button" class="primary" id="download">Descargar imagen</button>
-        </div>
-        <p class="export-msg" id="exportMsg" role="status"></p>
+      <div class="panel-actions">
+        <button type="button" class="primary" id="download">Guardar imagen</button>
       </div>
+      <p class="export-msg" id="exportMsg" role="status"></p>
     </aside>
   </main>
 

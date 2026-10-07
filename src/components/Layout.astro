@@ -13,7 +13,7 @@ const { title = 'El Buen Pagador', description = 'Quién ya pagó la cancha y qu
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#2340C8" />
     <meta name="description" content={description} />
     <meta name="referrer" content="no-referrer" />
@@ -30,8 +30,11 @@ const { title = 'El Buen Pagador', description = 'Quién ya pagó la cancha y qu
     <div class="court-lines" aria-hidden="true"></div>
 
     <header class="masthead">
-      <p class="eyebrow">Cuentas claras, amistades largas</p>
-      <h1 class="wordmark">El Buen <span>Pagador</span></h1>
+      <div>
+        <p class="eyebrow">Cuentas claras, amistades largas</p>
+        <h1 class="wordmark">El Buen <span>Pagador</span></h1>
+      </div>
+      <slot name="actions" />
     </header>
 
     <slot />
