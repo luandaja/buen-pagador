@@ -1,0 +1,40 @@
+---
+// Avance de pagos: cuánto falta, barra por persona y el detalle.
+// `owner` habla al organizador ("Te faltan"); `public` es neutro para el grupo.
+interface Props {
+  perspective?: 'owner' | 'public';
+}
+const { perspective = 'owner' } = Astro.props;
+const owner = perspective === 'owner';
+---
+
+<section class="progress" id="progress" data-perspective={perspective} aria-labelledby="progressLabel">
+  <div class="progress-head">
+    <p class="progress-label" id="progressLabel">{owner ? 'Te faltan' : 'Faltan'}</p>
+    <p class="progress-count"><span id="paidOut">0/0</span> pagaron</p>
+  </div>
+  <p class="progress-hero" id="heroOut">—</p>
+  <div
+    class="meter"
+    id="thermo"
+    role="meter"
+    aria-valuemin="0"
+    aria-valuemax="100"
+    aria-valuenow="0"
+    aria-label="Avance de pagos"
+    style="--pct:0;--n:1"
+  >
+    <div class="meter-track"><div class="meter-fill"></div></div>
+    <span class="meter-ball" aria-hidden="true">
+      <svg viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="46" fill="var(--ball)" stroke="var(--ink)" stroke-width="6"></circle>
+        <path d="M4 50h92M50 4v92M18 18c18 16 18 48 0 64M82 18c-18 16-18 48 0 64" fill="none" stroke="var(--ink)" stroke-width="6"></path>
+      </svg>
+    </span>
+  </div>
+  <p class="progress-sub">
+    <span>Cuota <b id="shareOut" class="is-accent">—</b></span>
+    <span>{owner ? 'Te pagaron' : 'Recaudado'} <b id="collectedOut">—</b></span>
+  </p>
+  <p class="progress-note" id="missingOut"></p>
+</section>

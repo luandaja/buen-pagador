@@ -49,3 +49,8 @@ export function bytesToDataUrl(bytes: Uint8Array, type = 'image/jpeg'): Promise<
     reader.readAsDataURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type }));
   });
 }
+
+/** Miniatura cuadrada-ish para el historial (máx. 160 px). */
+export async function thumbFrom(dataUrl: string): Promise<string> {
+  return resizeToCanvas(await loadImage(dataUrl), 160).toDataURL('image/jpeg', 0.7);
+}

@@ -1,6 +1,9 @@
 // @vitest-environment node
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { credentials, getStore, MemoryStore, RedisStore, resetStore, TTL_SECONDS, type ShareRecord } from '../src/lib/store';
+import { credentials, FileStore, getStore, MemoryStore, RedisStore, resetStore, TTL_SECONDS, type ShareRecord } from '../src/lib/store';
 
 const record: ShareRecord = { img: 'img', state: 'st', edit: 'hash', v: 1 };
 
@@ -31,6 +34,28 @@ describe('MemoryStore', () => {
   });
 });
 
+describe('FileStore (desarrollo)', () => {
+  it('guarda en un archivo para que otra instancia lo lea', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bp-'));
+    const file = join(dir, 'sub', 'shares.json');
+    const a = new FileStore(file);
+    await a.create('abc', record);
+    expect(JSON.parse(readFileSync(file, 'utf8'))[0][0]).toBe('abc');
+
+    const b = new FileStore(file);
+    expect(await b.get('abc', ['state'])).toEqual({ state: 'st' });
+    expect(await b.updateState('abc', 'st2')).toBe(2);
+    expect(await a.get('abc', ['state', 'v'])).toEqual({ state: 'st2', v: 2 });
+    await a.remove('abc');
+    expect(await b.get('abc', ['state'])).toBeNull();
+    rmSync(dir, { recursive: true });
+  });
+
+  it('un archivo inexistente o roto es un almacén vacío', async () => {
+    expect(await new FileStore(join(tmpdir(), 'no-existe-bp', 'x.json')).get('abc', ['state'])).toBeNull();
+  });
+});
+
 describe('RedisStore', () => {
   function fakeRedis(hmget: unknown) {
     const tx = { hset: vi.fn(), expire: vi.fn(), hincrby: vi.fn(), exec: vi.fn(async () => [1, 7, 1]) };
@@ -42,6 +67,12 @@ describe('RedisStore', () => {
     const { store, redis } = fakeRedis({ state: 's', v: '3' });
     expect(await store.get('id', ['state', 'v'])).toEqual({ state: 's', v: 3 });
     expect(redis.hmget).toHaveBeenCalledWith('bp:share:id', 'state', 'v');
+  });
+
+  it('entiende la respuesta real de Upstash: un arreglo en el orden pedido', async () => {
+    const { store } = fakeRedis(['s', '3', null]);
+    expect(await store.get('id', ['state', 'v', 'img'])).toEqual({ state: 's', v: 3 });
+    expect(await fakeRedis([null, null]).store.get('id', ['state', 'v'])).toBeNull();
   });
 
   it('devuelve null si no existe', async () => {

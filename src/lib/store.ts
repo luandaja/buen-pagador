@@ -1,5 +1,7 @@
 // Almacén de links compartidos. Solo guarda datos cifrados en el navegador:
 // el servidor nunca recibe la clave, así que no puede ver la foto ni los pagos.
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { Redis } from '@upstash/redis';
 
 export interface ShareRecord {
@@ -82,12 +84,14 @@ class RedisStore implements Store {
   }
 }
 
-/** Solo para desarrollo local: se pierde al reiniciar el servidor. */
+type Entry = { record: ShareRecord; expires: number };
+
+/** Para tests: vive en memoria. */
 class MemoryStore implements Store {
-  private data: Map<string, { record: ShareRecord; expires: number }>;
+  protected data: Map<string, Entry>;
 
   constructor() {
-    const g = globalThis as unknown as { __bpStore?: Map<string, { record: ShareRecord; expires: number }> };
+    const g = globalThis as unknown as { __bpStore?: Map<string, Entry> };
     this.data = g.__bpStore ??= new Map();
   }
 
@@ -130,18 +134,66 @@ export function credentials(): { url: string; token: string } | null {
   return url && token ? { url, token } : null;
 }
 
-function createStore(dev: boolean): Store {
+function createStore(dev: boolean, mode: string): Store {
   const creds = credentials();
   if (creds) return new RedisStore(new Redis({ ...creds, automaticDeserialization: false }));
   if (!dev) throw new Error('Falta configurar Upstash Redis (KV_REST_API_URL y KV_REST_API_TOKEN).');
-  console.warn('[buen-pagador] Sin Upstash configurado: usando almacén en memoria.');
-  return new MemoryStore();
+  if (mode === 'test') return new MemoryStore();
+  console.warn('[buen-pagador] Sin Upstash configurado: guardando los links en .astro/dev-shares.json.');
+  return new FileStore('.astro/dev-shares.json');
+}
+
+/**
+ * Para `astro dev`: guarda en un archivo, porque el servidor de desarrollo
+ * puede atender cada petición con un módulo nuevo y perder la memoria.
+ */
+class FileStore extends MemoryStore {
+  constructor(private file: string) {
+    super();
+  }
+
+  private load() {
+    try {
+      this.data = new Map(JSON.parse(readFileSync(this.file, 'utf8')));
+    } catch {
+      this.data = new Map();
+    }
+  }
+
+  private save() {
+    mkdirSync(dirname(this.file), { recursive: true });
+    writeFileSync(this.file, JSON.stringify([...this.data]));
+  }
+
+  override async get(id: string, fields: Field[]) {
+    this.load();
+    return super.get(id, fields);
+  }
+
+  override async create(id: string, record: ShareRecord) {
+    this.load();
+    await super.create(id, record);
+    this.save();
+  }
+
+  override async updateState(id: string, state: string) {
+    this.load();
+    const v = await super.updateState(id, state);
+    this.save();
+    return v;
+  }
+
+  override async remove(id: string) {
+    this.load();
+    await super.remove(id);
+    this.save();
+  }
 }
 
 let store: Store | null = null;
 
 export function getStore(): Store {
-  store ??= createStore(import.meta.env.DEV);
+  store ??= createStore(import.meta.env.DEV, import.meta.env.MODE);
   return store;
 }
 
@@ -150,4 +202,4 @@ export function resetStore() {
   store = null;
 }
 
-export { MemoryStore, RedisStore };
+export { FileStore, MemoryStore, RedisStore };

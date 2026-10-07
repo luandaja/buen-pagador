@@ -7,46 +7,62 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 
 export function totalsEls() {
   return {
-    peopleOut: $<HTMLSpanElement>('peopleOut'),
-    shareOut: $<HTMLSpanElement>('shareOut'),
+    progress: $<HTMLElement>('progress'),
+    label: $<HTMLParagraphElement>('progressLabel'),
+    hero: $<HTMLParagraphElement>('heroOut'),
     paidOut: $<HTMLSpanElement>('paidOut'),
     thermo: $<HTMLDivElement>('thermo'),
-    thermoFill: $<HTMLDivElement>('thermoFill'),
-    pctOut: $<HTMLParagraphElement>('pctOut'),
-    collectedOut: $<HTMLSpanElement>('collectedOut'),
+    shareOut: $<HTMLElement>('shareOut'),
+    collectedOut: $<HTMLElement>('collectedOut'),
     missingOut: $<HTMLParagraphElement>('missingOut'),
   };
 }
 
 export type TotalsEls = ReturnType<typeof totalsEls>;
 
-const pendingText = (pending: number) => (pending === 1 ? 'Falta 1 persona' : `Faltan ${pending} personas`);
-
-/** Texto bajo el porcentaje: cuántos faltan y cuánto falta recaudar. */
-export function progressText(t: Totals, data: Pick<TotalsInput, 'cost' | 'currency'>): string {
-  const pending = t.people - t.paid;
-  if (t.people === 0) return 'Todavía no hay jugadores.';
-  if (pending === 0) return '¡Cancha pagada! 🏀';
-  if (!data.cost) return `${pendingText(pending)}.`;
-  return `${pendingText(pending)} · ${money(t.missing, data.currency)}`;
+/** Resumen de la ficha del partido: "Cancha S/ 140 · 28 jugadores". */
+export function gameMetaText(game: Pick<TotalsInput, 'faces' | 'cost' | 'currency'>): string {
+  const people = game.faces.length;
+  const parts = [
+    game.cost ? `Cancha\u00a0${money(game.cost, game.currency)}` : '',
+    people ? `${people}\u00a0${people === 1 ? 'jugador' : 'jugadores'}` : '',
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'Ponle nombre y costo.';
 }
 
-/** Pinta marcador y termómetro. `message` reemplaza el texto de estado. */
+/** Barras con más segmentos que esto se ven como una sola. */
+const MAX_SEGMENTS = 40;
+
+/**
+ * Lo más importante del avance: cuánto falta cobrar.
+ * `owner` le habla al organizador ("Te faltan"); si no, es neutro.
+ */
+export function progressView(t: Totals, data: Pick<TotalsInput, 'cost' | 'currency'>, owner: boolean) {
+  const pending = t.people - t.paid;
+  if (t.people === 0) return { label: 'Pagaron', hero: '—', full: false };
+  if (pending === 0) return { label: '¡Cancha pagada!', hero: data.cost ? money(data.cost, data.currency) : `${t.people}/${t.people}`, full: true };
+  if (t.missing != null) return { label: owner ? 'Te faltan' : 'Faltan', hero: money(t.missing, data.currency), full: false };
+  return { label: 'Faltan pagar', hero: `${pending} de ${t.people}`, full: false };
+}
+
+/** Pinta el avance. `message` agrega una indicación debajo (p. ej. qué falta configurar). */
 export function renderTotals(els: TotalsEls, data: TotalsInput, message?: string): Totals {
   const t = computeTotals(data);
+  const view = progressView(t, data, els.progress.dataset.perspective !== 'public');
   const pct = Math.round(t.pct * 100);
-  const isFull = t.people > 0 && t.paid === t.people;
 
-  els.peopleOut.textContent = String(t.people);
-  els.shareOut.textContent = money(t.share, data.currency);
+  els.label.textContent = view.label;
+  els.hero.textContent = view.hero;
+  els.progress.classList.toggle('is-full', view.full);
   els.paidOut.textContent = `${t.paid}/${t.people}`;
-  els.thermoFill.style.height = `${t.pct * 100}%`;
+  els.thermo.style.setProperty('--pct', String(t.pct));
+  els.thermo.style.setProperty('--n', String(Math.max(1, t.people)));
+  els.thermo.classList.toggle('is-dense', t.people > MAX_SEGMENTS);
   els.thermo.setAttribute('aria-valuenow', String(pct));
-  els.thermo.classList.toggle('is-full', isFull);
-  els.pctOut.textContent = `${pct}%`;
+  els.thermo.setAttribute('aria-valuetext', `${t.paid} de ${t.people} pagaron (${pct} %)`);
+  els.shareOut.textContent = money(t.share, data.currency);
   els.collectedOut.textContent = money(t.collected, data.currency);
-  els.missingOut.classList.toggle('done', isFull && !message);
-  els.missingOut.textContent = message ?? progressText(t, data);
+  els.missingOut.textContent = message ?? '';
   return t;
 }
 

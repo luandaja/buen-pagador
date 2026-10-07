@@ -4,6 +4,8 @@ import { computeTotals, money, type Face, type State, type Totals } from './stat
 
 type Ctx = CanvasRenderingContext2D;
 type Box = { x: number; y: number; w: number; h: number };
+/** Lo que necesita la tarjeta: datos del partido y si va con foto. */
+export type CardInput = Pick<State, 'image' | 'faces' | 'cost' | 'currency' | 'title' | 'rounding' | 'includePhoto'>;
 
 const C = {
   court: '#2340c8',
@@ -200,7 +202,7 @@ function drawPhoto(ctx: Ctx, img: HTMLImageElement, faces: Face[], box: Box) {
 }
 
 /** Sin foto: porcentaje enorme y lo recaudado. */
-function drawPercent(ctx: Ctx, state: State, t: Totals, box: Box) {
+function drawPercent(ctx: Ctx, state: CardInput, t: Totals, box: Box) {
   const pctText = `${Math.round(t.pct * 100)}%`;
   ctx.textAlign = 'left';
   ctx.fillStyle = t.pct >= 1 ? C.paid : C.chalk;
@@ -279,7 +281,7 @@ async function loadFonts() {
   await Promise.all(faces.map((f) => document.fonts.load(f))).catch(() => {});
 }
 
-export async function renderCard(state: State): Promise<HTMLCanvasElement> {
+export async function renderCard(state: CardInput): Promise<HTMLCanvasElement> {
   await loadFonts();
   const t = computeTotals(state);
   const img = state.includePhoto && state.image ? await loadImage(state.image) : null;

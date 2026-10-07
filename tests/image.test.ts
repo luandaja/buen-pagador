@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { bytesToDataUrl, canvasToBlob, fileToDataUrl, loadImage, resizeToCanvas, shareImageBytes } from '../src/scripts/image';
+import { bytesToDataUrl, canvasToBlob, fileToDataUrl, loadImage, resizeToCanvas, shareImageBytes, thumbFrom } from '../src/scripts/image';
 import { FakeImage, installFakeCanvas } from './helpers/canvas';
 
 beforeEach(() => {
@@ -42,6 +42,11 @@ describe('codificación', () => {
     installFakeCanvas();
     const bytes = await shareImageBytes('data:ok');
     expect(new TextDecoder().decode(bytes)).toBe('fake-image');
+  });
+
+  it('thumbFrom genera una miniatura JPEG', async () => {
+    installFakeCanvas();
+    expect(await thumbFrom('data:ok')).toMatch(/^data:image\/jpeg/);
   });
 
   it('bytesToDataUrl codifica en base64', async () => {

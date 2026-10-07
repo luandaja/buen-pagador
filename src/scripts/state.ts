@@ -11,19 +11,34 @@ export interface Face {
   paid: boolean;
 }
 
-export interface State {
-  image: string | null;
-  faces: Face[];
+/** Un partido: foto, caras y pagos. Se guarda en IndexedDB (ver games.ts). */
+export interface Game {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  title: string;
   cost: number | null;
   currency: string;
-  title: string;
   rounding: number;
+  faces: Face[];
+  /** Link compartido activo (con su clave y token de edición). */
+  share: ShareLink | null;
+  /** Foto como data: URL. */
+  image: string | null;
+  /** Miniatura para el historial. */
+  thumb: string | null;
+}
+
+/** Preferencias de este dispositivo (localStorage). */
+export interface Prefs {
   includePhoto: boolean;
   /** Emojis que el usuario no quiere volver a ver. */
   blocked: string[];
-  /** Link compartido activo (con su clave y token de edición). */
-  share: ShareLink | null;
+  currentGameId: string | null;
 }
+
+/** Lo que tiene abierto el editor: el partido actual y las preferencias. */
+export type State = Game & Omit<Prefs, 'currentGameId'>;
 
 export interface Totals {
   people: number;
@@ -39,51 +54,91 @@ export const DEBTOR_EMOJIS = [
   '🐒', '🦆', '🤑', '🦃', '🐌', '🐙', '😎', '🤓', '🦊', '🐼',
 ];
 
-const STORAGE_KEY = 'buen-pagador:v1';
+const PREFS_KEY = 'buen-pagador:prefs';
+/** Versión anterior: un solo partido guardado en localStorage. */
+const LEGACY_KEY = 'buen-pagador:v1';
 
-export function defaultState(): State {
+type GameBase = Partial<Pick<Game, 'title' | 'cost' | 'currency' | 'rounding'>>;
+
+export function newGame(base: GameBase = {}): Game {
+  const now = Date.now();
   return {
-    image: null,
-    faces: [],
+    id: uid(),
+    createdAt: now,
+    updatedAt: now,
+    title: '',
     cost: null,
     currency: 'S/',
-    title: '',
     rounding: 0,
-    includePhoto: true,
-    blocked: [],
+    faces: [],
     share: null,
+    image: null,
+    thumb: null,
+    ...base,
   };
 }
 
-export function loadState(): State {
+export const defaultPrefs = (): Prefs => ({ includePhoto: true, blocked: [], currentGameId: null });
+
+export function defaultState(): State {
+  const { currentGameId: _, ...prefs } = defaultPrefs();
+  return { ...newGame(), ...prefs };
+}
+
+function readJson<T>(key: string): Partial<T> | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const saved: State = { ...defaultState(), ...JSON.parse(raw) };
-      // Reemplaza emojis que ya no están permitidos (versión anterior o bloqueados).
-      const allowed = availableEmojis(saved.blocked);
-      const stale = saved.faces.filter((f) => !allowed.includes(f.emoji));
-      const fresh = pickEmojis(stale.length, saved.faces.map((f) => f.emoji), saved.blocked);
-      saved.faces = saved.faces.map((f) => (allowed.includes(f.emoji) ? f : { ...f, emoji: fresh.shift()! }));
-      return saved;
-    }
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeJson(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
   } catch {
     /* almacenamiento no disponible */
   }
-  return defaultState();
 }
 
-export function saveState(state: State): void {
+export const loadPrefs = (): Prefs => ({ ...defaultPrefs(), ...readJson<Prefs>(PREFS_KEY) });
+
+export const savePrefs = (prefs: Prefs) => writeJson(PREFS_KEY, prefs);
+
+/** Partido y preferencias guardados por la versión anterior, si los hay. Los borra al leerlos. */
+export function takeLegacy(): { game: Game | null; prefs: Partial<Prefs> } | null {
+  const old = readJson<State>(LEGACY_KEY);
+  if (!old) return null;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.removeItem(LEGACY_KEY);
   } catch {
-    // Si la foto no cabe, guardamos al menos los datos.
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...state, image: null, faces: [] }));
-    } catch {
-      /* nada que hacer */
-    }
+    /* almacenamiento no disponible */
   }
+  const prefs = { includePhoto: old.includePhoto ?? true, blocked: old.blocked ?? [] };
+  const game = old.image ? { ...newGame(), ...pickGame(old) } : null;
+  return { game, prefs };
+}
+
+function pickGame(old: Partial<State>): Partial<Game> {
+  const { title, cost, currency, rounding, faces, share, image } = old;
+  return Object.fromEntries(
+    Object.entries({ title, cost, currency, rounding, faces, share, image }).filter(([, v]) => v !== undefined),
+  );
+}
+
+/** Reemplaza emojis que ya no están permitidos (versión anterior o bloqueados). */
+export function refreshEmojis(faces: Face[], blocked: string[]): Face[] {
+  const allowed = availableEmojis(blocked);
+  const stale = faces.filter((f) => !allowed.includes(f.emoji));
+  const fresh = pickEmojis(stale.length, faces.map((f) => f.emoji), blocked);
+  return faces.map((f) => (allowed.includes(f.emoji) ? f : { ...f, emoji: fresh.shift()! }));
+}
+
+/** Separa el partido de las preferencias. */
+export function splitState(state: State): { game: Game; prefs: Prefs } {
+  const { includePhoto, blocked, ...game } = state;
+  return { game, prefs: { includePhoto, blocked, currentGameId: game.id } };
 }
 
 /** Emojis que se pueden usar: la lista sin los bloqueados. */

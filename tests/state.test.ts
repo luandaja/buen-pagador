@@ -3,11 +3,16 @@ import {
   availableEmojis,
   computeTotals,
   DEBTOR_EMOJIS,
+  defaultPrefs,
   defaultState,
-  loadState,
+  loadPrefs,
   money,
+  newGame,
   pickEmojis,
-  saveState,
+  refreshEmojis,
+  savePrefs,
+  splitState,
+  takeLegacy,
   uid,
   type Face,
 } from '../src/scripts/state';
@@ -75,41 +80,89 @@ describe('emojis', () => {
   });
 });
 
-describe('persistencia', () => {
-  afterEach(() => localStorage.clear());
-
-  it('devuelve el estado por defecto si no hay nada', () => {
-    expect(loadState()).toEqual(defaultState());
+describe('partidos y preferencias', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
   });
 
-  it('guarda y recupera, cambiando emojis que ya no están permitidos', () => {
-    const state = { ...defaultState(), faces: [face(false, '🐷'), face(false, '🐸')], blocked: ['🐔'] };
-    saveState(state);
-    const loaded = loadState();
-    expect(loaded.blocked).toEqual(['🐔']);
-    expect(loaded.faces[1].emoji).toBe('🐸');
-    expect(DEBTOR_EMOJIS).toContain(loaded.faces[0].emoji);
-    expect(loaded.faces[0].emoji).not.toBe('🐸');
+  it('newGame crea un partido vacío con id y fechas, aceptando datos base', () => {
+    const game = newGame({ title: 'Jueves', cost: 90 });
+    expect(game).toMatchObject({ title: 'Jueves', cost: 90, currency: 'S/', faces: [], image: null, share: null });
+    expect(game.id).toMatch(/^\w+$/);
+    expect(game.createdAt).toBe(game.updatedAt);
   });
 
-  it('ignora datos corruptos', () => {
-    localStorage.setItem('buen-pagador:v1', '{roto');
-    expect(loadState()).toEqual(defaultState());
+  it('defaultState junta un partido nuevo con las preferencias por defecto', () => {
+    expect(defaultState()).toMatchObject({ includePhoto: true, blocked: [] });
+    expect(defaultState()).not.toHaveProperty('currentGameId');
   });
 
-  it('si la foto no cabe, guarda al menos los datos', () => {
-    const setItem = vi.spyOn(localStorage, 'setItem');
-    setItem.mockImplementationOnce(() => {
-      throw new Error('QuotaExceeded');
-    });
-    saveState({ ...defaultState(), image: 'data:big', title: 'Jueves', faces: [face(true)] });
-    expect(JSON.parse(localStorage.getItem('buen-pagador:v1')!)).toMatchObject({ image: null, faces: [], title: 'Jueves' });
+  it('guarda y lee las preferencias', () => {
+    expect(loadPrefs()).toEqual(defaultPrefs());
+    savePrefs({ includePhoto: false, blocked: ['🐔'], currentGameId: 'abc' });
+    expect(loadPrefs()).toEqual({ includePhoto: false, blocked: ['🐔'], currentGameId: 'abc' });
   });
 
-  it('no revienta si el almacenamiento no está disponible', () => {
-    vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+  it('ignora preferencias corruptas y almacenamiento bloqueado', () => {
+    localStorage.setItem('buen-pagador:prefs', '{roto');
+    expect(loadPrefs()).toEqual(defaultPrefs());
+    const spy = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
       throw new Error('blocked');
     });
-    expect(() => saveState(defaultState())).not.toThrow();
+    expect(() => savePrefs(defaultPrefs())).not.toThrow();
+    spy.mockRestore();
+  });
+
+  it('separa el partido de las preferencias', () => {
+    const state = { ...defaultState(), title: 'Jueves', blocked: ['🐔'] };
+    const { game, prefs } = splitState(state);
+    expect(game).not.toHaveProperty('blocked');
+    expect(game.title).toBe('Jueves');
+    expect(prefs).toEqual({ includePhoto: true, blocked: ['🐔'], currentGameId: state.id });
+  });
+
+  it('cambia los emojis que ya no están permitidos', () => {
+    const faces = [face(false, '🐷'), face(false, '🐸'), face(false, '🐔')];
+    const out = refreshEmojis(faces, ['🐔']);
+    expect(out[1].emoji).toBe('🐸');
+    expect(DEBTOR_EMOJIS).toContain(out[0].emoji);
+    expect(out.map((f) => f.emoji)).not.toContain('🐔');
+  });
+});
+
+describe('migración de la versión anterior', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it('no hay nada que migrar', () => {
+    expect(takeLegacy()).toBeNull();
+  });
+
+  it('convierte el partido guardado y lo borra de localStorage', () => {
+    localStorage.setItem(
+      'buen-pagador:v1',
+      JSON.stringify({ image: 'data:x', title: 'Viejo', cost: 50, faces: [face(true)], blocked: ['🐔'], includePhoto: false }),
+    );
+    const legacy = takeLegacy()!;
+    expect(legacy.prefs).toEqual({ includePhoto: false, blocked: ['🐔'] });
+    expect(legacy.game).toMatchObject({ image: 'data:x', title: 'Viejo', cost: 50, currency: 'S/' });
+    expect(localStorage.getItem('buen-pagador:v1')).toBeNull();
+  });
+
+  it('sin foto solo migra las preferencias', () => {
+    localStorage.setItem('buen-pagador:v1', JSON.stringify({ title: 'Sin foto' }));
+    expect(takeLegacy()).toEqual({ game: null, prefs: { includePhoto: true, blocked: [] } });
+  });
+
+  it('si no se puede borrar, igual migra', () => {
+    localStorage.setItem('buen-pagador:v1', JSON.stringify({ image: 'data:x' }));
+    const spy = vi.spyOn(localStorage, 'removeItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    expect(takeLegacy()?.game?.image).toBe('data:x');
+    spy.mockRestore();
   });
 });
