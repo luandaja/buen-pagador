@@ -9,7 +9,6 @@ const NOT_FOUND = 'Este link no existe o ya expiró.';
 
 type Field = keyof ShareRecord;
 
-/** Qué campos leer: el estado siempre; la foto con ?img=1; los datos para pagar con ?img=1 o ?pay=1. */
 function fieldsFor(url: URL): { fields: Field[]; img: boolean; pay: boolean } {
   const img = url.searchParams.get('img') === '1';
   const pay = img || url.searchParams.get('pay') === '1';
@@ -19,10 +18,6 @@ function fieldsFor(url: URL): { fields: Field[]; img: boolean; pay: boolean } {
   return { fields, img, pay };
 }
 
-/**
- * Lee un link. Por defecto solo el estado y versiones (para refrescar barato).
- * Si llega el token, indica si puede editar.
- */
 export const GET: APIRoute = async ({ params, request, url }) => {
   if (!isId(params.id)) return fail(404, NOT_FOUND);
   const want = fieldsFor(url);
@@ -32,7 +27,6 @@ export const GET: APIRoute = async ({ params, request, url }) => {
   return json({ ...publicFields(record, want), ...access });
 };
 
-/** Lo que se devuelve sin token: estado, versiones y, si se pidieron, foto y datos para pagar. */
 function publicFields(record: Partial<ShareRecord>, want: { img: boolean; pay: boolean }) {
   return {
     state: record.state,
@@ -43,7 +37,6 @@ function publicFields(record: Partial<ShareRecord>, want: { img: boolean; pay: b
   };
 }
 
-/** Actualiza los pagos. Requiere el token de edición. */
 export const PUT: APIRoute = async ({ params, request }) => {
   if (!isId(params.id)) return fail(404, NOT_FOUND);
   const store = getStore();
@@ -57,7 +50,6 @@ export const PUT: APIRoute = async ({ params, request }) => {
   return json({ v });
 };
 
-/** Deja de compartir: borra el link. Requiere el token de edición. */
 export const DELETE: APIRoute = async ({ params, request }) => {
   if (!isId(params.id)) return fail(404, NOT_FOUND);
   const store = getStore();

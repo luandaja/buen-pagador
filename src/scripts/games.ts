@@ -1,10 +1,7 @@
-// Historial de partidos en IndexedDB (solo en este dispositivo).
-// Los datos y las fotos van en almacenes separados para listar rápido.
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Game } from './state';
 
 export type GameMeta = Omit<Game, 'image'>;
-/** Como queda en IndexedDB: versiones anteriores no tenían los datos para pagar. */
 type StoredGame = Omit<GameMeta, 'payNote' | 'payQr'> & Partial<Pick<GameMeta, 'payNote' | 'payQr'>>;
 
 interface Schema extends DBSchema {
@@ -13,7 +10,6 @@ interface Schema extends DBSchema {
 }
 
 let dbPromise: Promise<IDBPDatabase<Schema>> | null = null;
-/** Última foto guardada por partido: evita reescribirla en cada pago. */
 const savedImages = new Map<string, string>();
 
 function db() {
@@ -26,10 +22,8 @@ function db() {
   return dbPromise;
 }
 
-/** Partidos guardados por versiones anteriores no tienen los campos nuevos. */
 const withDefaults = (meta: StoredGame): GameMeta => ({ payNote: '', payQr: null, ...meta });
 
-/** Partidos guardados, del más reciente al más antiguo. */
 export async function listGames(): Promise<GameMeta[]> {
   const all = await (await db()).getAll('games');
   return all.map(withDefaults).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -60,12 +54,10 @@ export async function deleteGame(id: string): Promise<void> {
   savedImages.delete(id);
 }
 
-/** Partido local que ya usa ese link compartido (p. ej. abierto antes con el link maestro). */
 export async function findByShareId(shareId: string): Promise<GameMeta | undefined> {
   return (await listGames()).find((g) => g.share?.id === shareId);
 }
 
-/** Solo para tests: olvida la conexión y el caché. */
 export function resetGamesDb() {
   dbPromise = null;
   savedImages.clear();

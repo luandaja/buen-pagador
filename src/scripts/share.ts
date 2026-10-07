@@ -1,17 +1,13 @@
-// Cliente de links compartidos: arma los links, cifra y habla con /api/share.
 import { decrypt, decryptJson, encrypt, encryptJson, importKey, newKey } from './crypto';
 import { bytesToDataUrl, shareImageBytes } from './image';
 import type { Face, State } from './state';
 
 export interface ShareLink {
   id: string;
-  /** Clave AES en base64url (va solo en el # del link). */
   key: string;
-  /** Token de edición (solo en el link maestro). */
   token: string;
 }
 
-/** Lo que ven los demás: sin foto, sin emojis bloqueados ni preferencias locales. */
 export interface SharedState {
   title: string;
   cost: number | null;
@@ -20,7 +16,6 @@ export interface SharedState {
   faces: Face[];
 }
 
-/** Datos para pagar: viajan cifrados aparte del estado porque el QR pesa. */
 export interface PayInfo {
   note: string;
   qr: string | null;
@@ -97,7 +92,6 @@ export async function createShare(state: State): Promise<ShareLink> {
   return { id: res.id, key: raw, token: res.token };
 }
 
-/** Sube el estado; con `withPay` también los datos para pagar (solo cuando cambiaron). */
 export async function pushShare(link: ShareLink, state: State, withPay = false): Promise<number> {
   const key = await importKey(link.key);
   const [payload, pay] = await Promise.all([encryptJson(key, toShared(state)), withPay ? encryptJson(key, payOf(state)) : undefined]);
@@ -116,12 +110,9 @@ export async function deleteShare(link: ShareLink): Promise<void> {
 export interface Loaded {
   state: SharedState;
   v: number;
-  /** data: URL de la foto (solo si se pidió). */
   image?: string;
   canEdit?: boolean;
-  /** Datos para pagar (si se pidieron y existen). */
   pay?: PayInfo;
-  /** Versión de los datos para pagar. */
   pv: number;
 }
 
@@ -134,10 +125,8 @@ async function decryptShare(key: CryptoKey, res: RawShare): Promise<Loaded> {
   return { state, v: res.v, pv: res.pv ?? 0, image, pay, canEdit: res.canEdit };
 }
 
-/** Lo necesario para leer un link: id y clave; con token, además se sabe si puede editar. */
 export type LinkRef = { id: string; key: string; token?: string };
 
-/** Descarga y descifra. Con `withImage` trae la foto (y los datos para pagar); con `withPay`, solo estos. */
 export async function loadShare(link: LinkRef, withImage: boolean, withPay = false): Promise<Loaded> {
   const query = withImage ? '?img=1' : withPay ? '?pay=1' : '';
   const res = await request<RawShare>(`/api/share/${link.id}${query}`, {}, link.token);

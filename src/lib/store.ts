@@ -1,27 +1,18 @@
-// Almacén de links compartidos. Solo guarda datos cifrados en el navegador:
-// el servidor nunca recibe la clave, así que no puede ver la foto ni los pagos.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { Redis } from '@upstash/redis';
 
 export interface ShareRecord {
-  /** Foto cifrada (base64url). */
   img: string;
-  /** Estado cifrado (base64url): caras, pagos, cuota, título. */
   state: string;
-  /** SHA-256 del token de edición. */
   edit: string;
-  /** Versión, sube con cada cambio. */
   v: number;
-  /** Datos para pagar cifrados (nota y QR), opcional. Viaja aparte porque el QR pesa. */
   pay?: string;
-  /** Versión de los datos para pagar: la vista pública solo los vuelve a pedir si cambia. */
   pv?: number;
 }
 
 type Field = keyof ShareRecord;
 
-/** Los links expiran a los 30 días sin cambios. */
 export const TTL_SECONDS = 60 * 60 * 24 * 30;
 
 const PREFIX = 'bp:share:';
@@ -29,13 +20,11 @@ const PREFIX = 'bp:share:';
 interface Store {
   get(id: string, fields: Field[]): Promise<Partial<ShareRecord> | null>;
   create(id: string, record: ShareRecord): Promise<void>;
-  /** Guarda el estado (y los datos para pagar, si vienen). Devuelve la nueva versión. */
   updateState(id: string, state: string, pay?: string): Promise<number>;
   remove(id: string): Promise<void>;
 }
 
 function env(name: string): string | undefined {
-  // En Vercel las variables llegan por process.env en tiempo de ejecución.
   const runtime = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env;
   return runtime?.[name] ?? (import.meta.env[name] as string | undefined);
 }
@@ -61,7 +50,6 @@ class RedisStore implements Store {
   constructor(private redis: Redis) {}
 
   async get(id: string, fields: Field[]) {
-    // Sin deserialización automática, Upstash devuelve los valores como arreglo, en el orden pedido.
     const raw: unknown = await this.redis.hmget(PREFIX + id, ...fields);
     return parse(toRecord(raw, fields), fields);
   }
@@ -93,7 +81,6 @@ class RedisStore implements Store {
 
 type Entry = { record: ShareRecord; expires: number };
 
-/** Para tests: vive en memoria. */
 class MemoryStore implements Store {
   protected data: Map<string, Entry>;
 
@@ -135,7 +122,6 @@ class MemoryStore implements Store {
   }
 }
 
-/** Credenciales de Upstash (nombres de la integración de Vercel o los de Upstash). */
 export function credentials(): { url: string; token: string } | null {
   const url = env('KV_REST_API_URL') || env('UPSTASH_REDIS_REST_URL');
   const token = env('KV_REST_API_TOKEN') || env('UPSTASH_REDIS_REST_TOKEN');
@@ -151,10 +137,6 @@ function createStore(dev: boolean, mode: string): Store {
   return new FileStore('.astro/dev-shares.json');
 }
 
-/**
- * Para `astro dev`: guarda en un archivo, porque el servidor de desarrollo
- * puede atender cada petición con un módulo nuevo y perder la memoria.
- */
 class FileStore extends MemoryStore {
   constructor(private file: string) {
     super();
@@ -205,7 +187,6 @@ export function getStore(): Store {
   return store;
 }
 
-/** Solo para tests: olvida el almacén elegido. */
 export function resetStore() {
   store = null;
 }

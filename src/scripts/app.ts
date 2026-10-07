@@ -114,11 +114,8 @@ const HINTS: Record<Mode, string> = {
   edit: 'Toca un espacio vacío para agregar a alguien que no detectamos. Toca una cara para quitarla.',
 };
 
-/** Campos que ven los demás en el link: si cambian, se sincroniza. */
 const SHARED_FIELDS: (keyof State)[] = ['faces', 'cost', 'currency', 'title', 'rounding'];
-/** Datos para pagar: van al link aparte, solo cuando cambian. */
 const PAY_FIELDS: (keyof State)[] = ['payNote', 'payQr'];
-/** Campos del partido: si cambian, el partido sube en el historial. */
 const GAME_FIELDS: (keyof State)[] = [...SHARED_FIELDS, ...PAY_FIELDS, 'image', 'share'];
 
 let mode: Mode = 'pay';
@@ -128,7 +125,6 @@ let copiedRecently = false;
 let formOpen = false;
 const faceEls = new Map<string, HTMLElement>();
 
-// ——— Partido actual y preferencias ———
 async function migrateLegacy(prefs: Prefs): Promise<Prefs> {
   const legacy = takeLegacy();
   if (!legacy) return prefs;
@@ -152,7 +148,6 @@ function persist() {
   saveTimer = window.setTimeout(flush, 200);
 }
 
-/** Guarda ya: preferencias en localStorage y, si tiene foto, el partido en el historial. */
 async function flush() {
   clearTimeout(saveTimer);
   const { game, prefs } = splitState(state);
@@ -176,7 +171,6 @@ function queueShareSync(patch: Partial<State>) {
   if (pay || touches(patch, SHARED_FIELDS)) scheduleSync();
 }
 
-/** Aplica cambios, guarda y repinta. `sync: false` cuando los datos ya vienen del servidor. */
 function update(patch: Partial<State>, sync = true) {
   const updatedAt = touches(patch, GAME_FIELDS) ? Date.now() : state.updatedAt;
   state = { ...state, ...patch, updatedAt };
@@ -185,7 +179,6 @@ function update(patch: Partial<State>, sync = true) {
   if (sync && state.share) queueShareSync(patch);
 }
 
-// ——— Render ———
 function setMode(next: Mode) {
   mode = next;
   els.stage.classList.toggle('is-edit', mode === 'edit');
@@ -207,7 +200,6 @@ function renderPay() {
   els.payQrRemove.hidden = !qr;
   els.payQrLabel.textContent = qr ? 'Cambiar QR' : 'Subir QR de Yape o Plin';
   if (qr) els.payQrPreview.src = qr;
-  // Con la ficha plegada, un resumen de lo que verá el grupo.
   els.payChip.hidden = formOpen || !(note || qr);
   els.payChipNote.textContent = note || 'QR';
   els.payChipQr.hidden = !qr;
@@ -234,7 +226,6 @@ function renderProgress() {
   els.steps.querySelectorAll('li').forEach((li, i) => li.classList.toggle('is-done', done[i]));
   els.progressWrap.hidden = !hasImage;
   const t = renderTotals(totals, state, statusMessage(state, scanning));
-  // En el celular, la barra fija repite lo esencial para no tener que bajar.
   const view = progressView(t, state, true);
   els.dockSum.textContent = `${view.label} ${view.hero} · ${t.paid}/${t.people}`;
 }
@@ -289,14 +280,12 @@ function announce(text: string) {
   els.announce.textContent = text;
 }
 
-// ——— Foto ———
 async function detect() {
   const boxes = await detectFaces(els.photo);
   const aspect = els.photo.naturalWidth / els.photo.naturalHeight;
   return boxesToFaces(boxes, aspect, pickEmojis(boxes.length, [], state.blocked));
 }
 
-/** Genera la miniatura y la guarda solo si seguimos en el mismo partido. */
 function makeThumb(image: string) {
   const id = state.id;
   thumbFrom(image).then(
@@ -308,7 +297,6 @@ function makeThumb(image: string) {
 function startScan(image: string) {
   scanning = true;
   setPeek(false);
-  // Una foto nueva es otra foto del partido: el link anterior queda con su último estado.
   setSync(state.share ? 'La foto nueva necesita un link nuevo.' : '');
   update({ image, faces: [], share: null, thumb: null });
   setMode('pay');
@@ -335,7 +323,6 @@ async function handleFile(file: File | undefined) {
     startScan(await fileToDataUrl(file));
     await els.photo.decode();
     const faces = await detect();
-    // Si mientras tanto se abrió otro partido, estas caras ya no le corresponden.
     if (state.id === id) finishScan(faces);
   } catch (err) {
     console.error(err);
@@ -369,7 +356,6 @@ els.newPhoto.addEventListener('click', () => {
   if (!hasPayments || confirm(CHANGE_PHOTO)) els.file.click();
 });
 
-// ——— Caras ———
 const faceTarget = (e: Event) => (e.target as HTMLElement).closest<HTMLElement>('.face');
 
 function onFaceClick(id: string) {
@@ -398,12 +384,8 @@ document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((b) =>
   b.addEventListener('click', () => setMode(b.dataset.mode as Mode)),
 );
 
-// ——— Bloquear emojis ———
-// Clic derecho (o mantener presionado en el celular) sobre un emoji lo bloquea:
-// todas las caras con ese emoji reciben otro y no vuelve a salir.
 let lastBlock = { id: '', at: 0 };
 
-/** Android dispara contextmenu y también nuestro long-press: evitamos doble bloqueo. */
 function isRepeatedBlock(faceId: string) {
   const now = Date.now();
   const repeated = lastBlock.id === faceId && now - lastBlock.at < 1000;
@@ -432,7 +414,6 @@ els.faces.addEventListener('contextmenu', (e) => {
   blockEmojiOf(target.dataset.id!);
 });
 
-// Long-press para iOS (Safari no dispara contextmenu en botones).
 let pressTimer = 0;
 let suppressClick = false;
 els.faces.addEventListener('pointerdown', (e) => {
@@ -449,7 +430,6 @@ for (const type of ['pointerup', 'pointercancel', 'pointerleave']) els.faces.add
 els.faces.addEventListener('pointermove', (e) => {
   if (e.pointerType === 'touch') cancelPress();
 });
-// Evita que el "click" posterior al long-press marque la cara como pagada.
 els.faces.addEventListener(
   'click',
   (e) => {
@@ -465,9 +445,6 @@ els.unblock.addEventListener('click', () => {
   els.hint.textContent = HINTS[mode];
 });
 
-// ——— Ver caras ———
-// Quita los emojis temporalmente para identificar a cada uno. No se guarda
-// ni afecta la imagen exportada.
 function setPeek(on: boolean) {
   els.stage.classList.toggle('is-peek', on);
   els.peek.setAttribute('aria-pressed', String(on));
@@ -478,7 +455,6 @@ els.peek.addEventListener('click', () => setPeek(!els.stage.classList.contains('
 
 els.reroll.addEventListener('click', () => update({ faces: rerollEmojis(state.faces, state.blocked) }));
 
-// ——— Ficha del partido ———
 function setFormOpen(open: boolean) {
   formOpen = open;
   renderGameCard();
@@ -510,7 +486,6 @@ els.cost.addEventListener('input', () => update({ cost: parseCost(els.cost.value
 els.rounding.addEventListener('change', () => update({ rounding: parseFloat(els.rounding.value) }));
 els.includePhoto.addEventListener('change', () => update({ includePhoto: els.includePhoto.checked }));
 
-// ——— Exportar ———
 async function buildFile() {
   const blob = await canvasToBlob(await renderCard(state));
   return new File([blob], fileName(state.title), { type: 'image/png' });
@@ -558,7 +533,6 @@ const probe = new File([new Blob()], 'x.png', { type: 'image/png' });
 els.share.hidden = !navigator.canShare?.({ files: [probe] });
 els.share.addEventListener('click', shareImage);
 
-// ——— Link compartido ———
 let syncTimer = 0;
 let syncing: Promise<void> | null = null;
 let dirty = false;
@@ -576,7 +550,6 @@ const LOST_LINK: Record<number, string> = {
   403: 'Este equipo ya no puede editar ese link.',
 };
 
-/** Si el servidor dice que el link ya no sirve, lo soltamos. */
 function dropLinkOn(err: unknown): boolean {
   const message = err instanceof ShareError ? LOST_LINK[err.status] : undefined;
   if (!message) return false;
@@ -612,7 +585,6 @@ async function pushOnce(link: ShareLink) {
 }
 
 async function runSync() {
-  // Si hay un envío en curso, esperamos a que termine.
   await syncing;
   const link = state.share;
   if (!link || !dirty) return;
@@ -622,10 +594,8 @@ async function runSync() {
   syncing = null;
 }
 
-/** Nota y QR tal como vinieron del link (si vinieron). */
 const payFields = (pay?: PayInfo): Partial<State> => (pay ? { payNote: pay.note, payQr: pay.qr } : {});
 
-/** Trae los pagos del servidor: otro equipo con el link maestro pudo haberlos cambiado. */
 async function pullShared(link: ShareLink) {
   try {
     const loaded = await loadShare(link, false, true);
@@ -659,13 +629,11 @@ async function copyText(text: string, fallback?: HTMLElement): Promise<boolean> 
     await navigator.clipboard.writeText(text);
     return true;
   } catch {
-    // Sin permiso de portapapeles: dejamos el texto seleccionado para copiarlo a mano.
     if (fallback) getSelection()?.selectAllChildren(fallback);
     return false;
   }
 }
 
-/** Muestra "Copiado" en el botón por un momento. */
 function flashCopied(btn: HTMLButtonElement, restore: () => void) {
   btn.textContent = 'Copiado ✓';
   setTimeout(restore, 1500);
@@ -713,7 +681,6 @@ els.stopLink.addEventListener('click', () => {
   if (state.share && confirm('El link dejará de funcionar para todos. ¿Desactivarlo?')) stopSharing(state.share);
 });
 
-// ——— Mis partidos ———
 async function refreshHistoryCount() {
   const count = (await listGames()).length;
   els.historyCount.hidden = count === 0;
@@ -725,7 +692,6 @@ async function renderHistoryList() {
   renderHistory({ list: els.historyList, summary: els.historySummary, empty: els.historyEmpty }, await listGames(), state.id);
 }
 
-/** Abre un partido: el actual queda guardado en el historial. */
 async function switchTo(game: Game) {
   await flush();
   scanning = false;
@@ -743,13 +709,11 @@ async function switchTo(game: Game) {
   await flush();
 }
 
-/** Partidos guardados antes de que existieran las miniaturas. */
 function ensureThumb() {
   if (state.image && !state.thumb) makeThumb(state.image);
 }
 
 type GameBase = Pick<Game, 'title' | 'cost' | 'currency' | 'rounding' | 'payNote' | 'payQr'>;
-/** Lo que se repite de un partido a otro: nombre, costo y cómo pagar. */
 const baseOf = ({ title, cost, currency, rounding, payNote, payQr }: GameBase): GameBase => ({ title, cost, currency, rounding, payNote, payQr });
 
 async function startNewGame(base: Partial<GameBase> = { currency: state.currency, rounding: state.rounding }) {
@@ -772,7 +736,6 @@ async function removeGame(id: string) {
   const game = await loadGame(id);
   const name = game?.title.trim() || 'este partido';
   if (!game || !confirm(`¿Borrar «${name}» de este dispositivo? El link del grupo, si existe, sigue funcionando.`)) return;
-  // Primero salimos del partido (eso lo guarda) y recién después lo borramos.
   const ids = [...els.historyList.querySelectorAll<HTMLElement>('[data-id]')].map((li) => li.dataset.id);
   if (id === state.id) await switchTo(newGame({ currency: state.currency, rounding: state.rounding }));
   await deleteGame(id);
@@ -782,7 +745,6 @@ async function removeGame(id: string) {
   focusAfterDelete(ids[ids.indexOf(id) + 1]);
 }
 
-/** Tras borrar, el foco va a la fila siguiente (o a "Nuevo partido"). */
 function focusAfterDelete(nextId: string | undefined) {
   const next = els.historyList.querySelector<HTMLElement>(`[data-id="${nextId}"] .game-open`);
   (next ?? els.newGame).focus();
@@ -822,7 +784,6 @@ els.openHistory.addEventListener('click', async () => {
   await renderHistoryList();
 });
 els.closeHistory.addEventListener('click', () => els.history.close());
-// Tocar el fondo (fuera del panel) lo cierra; tocar fuera de un menú ⋯ cierra el menú.
 els.history.addEventListener('click', (e) => {
   const target = e.target as Node;
   if (target === els.history) return els.history.close();
@@ -832,14 +793,11 @@ els.history.addEventListener('click', (e) => {
 });
 els.newGame.addEventListener('click', () => startNewGame());
 
-// ——— Link maestro ———
-/** Partido local para este link: el que ya lo tenía (con su foto) o uno nuevo. */
 async function gameForLink(link: ShareLink): Promise<Game> {
   const existing = await findByShareId(link.id);
   return (existing && (await loadGame(existing.id))) || newGame();
 }
 
-/** Abre un link maestro (#editar=…): el partido queda en el historial de este equipo. */
 async function openMasterLink(link: ShareLink) {
   setSync('Abriendo link maestro…', 'busy');
   try {
@@ -866,7 +824,6 @@ async function importFromMasterLink() {
 
 window.addEventListener('hashchange', importFromMasterLink);
 
-// ——— Inicio ———
 fillForm();
 setMode('pay');
 render();

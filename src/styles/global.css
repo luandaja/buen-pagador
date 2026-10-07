@@ -40,7 +40,6 @@ body {
   overflow-x: hidden;
 }
 
-/* Líneas de cancha de fondo: círculo central + media cancha */
 .court-lines {
   position: fixed;
   inset: 0;
@@ -69,7 +68,6 @@ select {
   display: none !important;
 }
 
-/* ——— Cabecera ——— */
 .masthead {
   position: relative;
   z-index: 1;
@@ -106,7 +104,6 @@ select {
   -webkit-text-stroke: 0;
 }
 
-/* ——— Layout ——— */
 .layout {
   position: relative;
   z-index: 1;
@@ -181,7 +178,6 @@ select {
   }
 }
 
-/* ——— Estado vacío ——— */
 .dropzone {
   display: grid;
   place-items: center;
@@ -236,7 +232,6 @@ select {
   }
 }
 
-/* ——— Foto ——— */
 .stage-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -334,11 +329,6 @@ select {
   cursor: pointer;
 }
 
-/*
- * La foto se ajusta al espacio disponible (como object-fit: contain):
- * .stage-area es un contenedor con tamaño y .stage toma el mayor tamaño
- * posible manteniendo la proporción de la foto (--ar, puesta desde JS).
- */
 .stage-area {
   --ar: 1.333;
   container-type: size;
@@ -477,7 +467,6 @@ select {
   transform: none;
 }
 
-/* Modo corregir */
 .stage.is-edit .face {
   outline: 2px dashed rgba(247, 248, 252, 0.9);
   outline-offset: 2px;
@@ -508,7 +497,6 @@ select {
   display: block;
 }
 
-/* Escaneo */
 .scanning {
   position: absolute;
   inset: 0;
@@ -580,7 +568,6 @@ select {
 
 }
 
-/* Ver caras: emojis ocultos, los que deben quedan con aro naranja punteado */
 .stage.is-peek .face:not(.is-paid) .face-emoji {
   opacity: 0;
   transform: translate(-50%, -50%) scale(0.6);
@@ -594,7 +581,6 @@ select {
   transition-delay: 0s;
 }
 
-/* ——— Vista pública ——— */
 .viewer-state {
   display: grid;
   place-items: center;
@@ -647,8 +633,6 @@ select {
   }
 }
 
-
-/* ——— Utilidades ——— */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -659,7 +643,6 @@ select {
   white-space: nowrap;
 }
 
-/* ——— Botones ——— */
 .primary,
 .secondary {
   min-height: 52px;
@@ -762,7 +745,6 @@ select {
   color: var(--warn);
 }
 
-/* ——— Cabecera: Mis partidos ——— */
 .history-btn {
   display: inline-flex;
   align-items: center;
@@ -797,7 +779,6 @@ select {
   font-weight: 800;
 }
 
-/* ——— Panel: tablero del partido ——— */
 .panel {
   position: relative;
   display: grid;
@@ -825,7 +806,6 @@ select {
   }
 }
 
-/* Ficha del partido */
 .game-head {
   display: flex;
   align-items: flex-start;
@@ -939,7 +919,6 @@ select {
   font-weight: 700;
 }
 
-/* Pasos del estado vacío */
 .steps {
   display: grid;
   gap: 12px;
@@ -983,7 +962,6 @@ select {
   color: var(--chalk);
 }
 
-/* Avance */
 .progress-wrap {
   display: grid;
   gap: 14px;
@@ -1037,7 +1015,6 @@ select {
   color: var(--paid);
 }
 
-/* Termómetro horizontal: un segmento por persona y la pelota rueda al avanzar */
 .meter {
   --ball-size: 40px;
   position: relative;
@@ -1104,7 +1081,6 @@ select {
   display: none;
 }
 
-/* Compartir */
 .share {
   display: grid;
   gap: 10px;
@@ -1242,7 +1218,6 @@ select {
   display: none;
 }
 
-/* Acciones fijas al pie del panel */
 .panel-actions {
   position: sticky;
   bottom: 0;
@@ -1277,7 +1252,6 @@ select {
   }
 }
 
-/* En el celular, la barra no tapa el campo que se está escribiendo. */
 @media (max-width: 900px) {
   .panel:has(.field input:focus, .field select:focus) .panel-actions {
     position: static;
@@ -1288,7 +1262,6 @@ select {
   }
 }
 
-/* ——— Mis partidos ——— */
 .drawer {
   position: fixed;
   inset: 0 0 0 auto;
@@ -1310,7 +1283,6 @@ select {
   animation: drawer-in 0.25s ease-out;
 }
 
-/* El relleno va dentro: así un clic en el diálogo mismo es un clic en el fondo. */
 .drawer-body {
   display: flex;
   flex-direction: column;
@@ -1556,7 +1528,6 @@ html:has(.drawer[open]) {
 }
 
 @media (max-width: 600px) {
-  /* El botón va en la fila del lema y la marca ocupa todo el ancho. */
   .masthead {
     display: grid;
     grid-template-columns: 1fr auto;
@@ -1643,7 +1614,6 @@ html:has(.drawer[open]) {
   cursor: not-allowed;
 }
 
-/* Resumen en la barra fija: solo en el celular, donde el número grande queda lejos. */
 .dock-sum {
   display: none;
 }
@@ -1672,7 +1642,6 @@ html:has(.drawer[open]) {
   cursor: not-allowed;
 }
 
-/* ——— Datos para pagar ——— */
 .field textarea {
   resize: vertical;
   font: inherit;
@@ -1736,7 +1705,6 @@ html:has(.drawer[open]) {
   color: #ffb48a;
 }
 
-/* Vista pública: cómo pagar */
 .pay-box {
   display: grid;
   gap: 10px;

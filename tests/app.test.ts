@@ -1,5 +1,4 @@
 // @vitest-environment node
-// Integración del editor: HTML real de la página + API real en proceso + IndexedDB en memoria.
 import { IDBFactory } from 'fake-indexeddb';
 import 'fake-indexeddb/auto';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -56,16 +55,12 @@ afterEach(async () => {
 });
 
 interface StartOptions {
-  /** Partido guardado por la versión anterior (se migra al arrancar). */
   legacy?: Partial<State>;
-  /** Partidos ya guardados en el historial. */
   saved?: Game[];
-  /** Partido abierto al arrancar. */
   current?: string;
   hash?: string;
 }
 
-/** Monta la página, prepara el almacenamiento y arranca el script del editor. */
 async function start({ legacy, saved = [], current, hash = '' }: StartOptions = {}) {
   mount(html, `${ORIGIN}/${hash}`);
   globalThis.indexedDB = new IDBFactory();
@@ -95,7 +90,6 @@ async function upload(type = 'image/jpeg') {
   fileInput.dispatchEvent(new Event('change'));
 }
 
-/** happy-dom no implementa confirm(). */
 function stubConfirm(answer = true) {
   const fn = vi.fn(() => answer);
   globalThis.confirm = fn;
@@ -107,7 +101,6 @@ const masterHash = (link: { id: string; key: string; token: string }) => `#edita
 const faces = () => [...document.querySelectorAll<HTMLButtonElement>('.face')];
 const text = (id: string) => $(id).textContent;
 const prefs = () => JSON.parse(localStorage.getItem('buen-pagador:prefs') ?? '{}');
-/** El partido abierto, tal como quedó guardado en IndexedDB. */
 const current = async () => games.loadGame(prefs().currentGameId);
 const rows = () => [...document.querySelectorAll<HTMLElement>('.game-row')];
 const rowNamed = (title: string) => rows().find((r) => r.querySelector('strong')?.textContent === title)!;
@@ -122,7 +115,6 @@ function game(extra: Partial<Game> = {}): Game {
   };
 }
 
-/** Arranca con un partido con foto ya abierto. */
 async function startWith(extra: Partial<Game> = {}, others: Game[] = []) {
   const g = game(extra);
   await start({ saved: [g, ...others], current: g.id });
@@ -169,7 +161,7 @@ describe('foto y caras', () => {
     click(faces()[0]);
     expect(text('announce')).toBe('Persona 1 vuelve a deber. 0 de 3 pagaron.');
 
-    click($('faces')); // en modo pagos, tocar el vacío no hace nada
+    click($('faces'));
     expect(faces()).toHaveLength(3);
 
     click(document.querySelector('[data-mode="edit"]')!);
@@ -227,7 +219,6 @@ describe('emojis', () => {
     faces()[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     expect(text('hint')).toBe(`Listo, ${before} no vuelve a salir.`);
     expect(text('blockedList')).toBe(before);
-    // Un segundo evento inmediato (Android) no bloquea otra vez.
     faces()[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     expect(text('blockedList')).toBe(before);
     click($('unblock'));
@@ -248,7 +239,6 @@ describe('emojis', () => {
     click(target);
     expect(text('paidOut')).toBe('0/3');
 
-    // Un toque corto se cancela al levantar el dedo o moverlo.
     for (const [type, pointerType] of [
       ['pointerdown', 'touch'],
       ['pointermove', 'touch'],
@@ -321,7 +311,7 @@ describe('datos para pagar', () => {
     sendQr();
     await eventually(() => expect($('payQrPreview').hidden).toBe(false));
     expect(text('payQrLabel')).toBe('Cambiar QR');
-    expect($('payChip').hidden).toBe(true); // con la ficha abierta no hace falta
+    expect($('payChip').hidden).toBe(true);
     click($('doneGame'));
     expect($('payChip').hidden).toBe(false);
     expect(text('payChipNote')).toBe('Yape 987 654 321');
@@ -349,7 +339,7 @@ describe('datos para pagar', () => {
   it('se repiten en el próximo partido y llegan con el link maestro', async () => {
     const paid = game({ title: 'Lunes', payNote: 'Plin 123', faces: game().faces.map((f) => ({ ...f, paid: true })) });
     await start({ saved: [paid], current: paid.id });
-    click($('linkAction')); // Próximo partido
+    click($('linkAction'));
     await eventually(() => expect($('stageWrap').hidden).toBe(true));
     expect($<HTMLTextAreaElement>('payNote').value).toBe('Plin 123');
   });
@@ -443,7 +433,6 @@ describe('link para el grupo', () => {
     const matchMedia = window.matchMedia.bind(window);
     await unmount();
     await startWith();
-    // El modo táctil se decide al cargar: lo simulamos recargando el script.
     window.matchMedia = ((q: string) => ({ ...matchMedia(q), matches: q.includes('hover: none') })) as typeof window.matchMedia;
     const share = vi.fn(async () => {});
     Object.assign(navigator, { share });
@@ -552,7 +541,6 @@ describe('Mis partidos', () => {
     expect(text('linkAction')).toBe('Próximo partido');
     expect($('progress').classList.contains('is-full')).toBe(true);
 
-    // Abrir el que ya está abierto solo cierra el panel.
     await openHistory();
     click(rowNamed('Lunes').querySelector('[data-action=open]')!);
     await eventually(() => expect($<HTMLDialogElement>('history').open).toBe(false));
@@ -562,7 +550,7 @@ describe('Mis partidos', () => {
     const paid = game({ title: 'Lunes', cost: 60, rounding: 1, faces: game().faces.map((f) => ({ ...f, paid: true })) });
     await start({ saved: [paid], current: paid.id });
 
-    click($('linkAction')); // Próximo partido
+    click($('linkAction'));
     await eventually(() => expect($('stageWrap').hidden).toBe(true));
     expect(text('gameTitle')).toBe('Lunes');
     expect($<HTMLInputElement>('cost').value).toBe('60');
@@ -610,7 +598,7 @@ describe('Mis partidos', () => {
     const a = game({ title: 'A' });
     await start({ saved: [a], current: a.id });
     await openHistory();
-    click($('openHistory')); // ya abierto: no hace nada
+    click($('openHistory'));
     const menu = rowNamed('A').querySelector('details')!;
     menu.open = true;
     click($('historySummary'));

@@ -1,10 +1,8 @@
-// Dibuja la tarjeta para compartir (1080×1080) directamente en un canvas.
 import { loadImage } from './image';
 import { computeTotals, money, type Face, type State, type Totals } from './state';
 
 type Ctx = CanvasRenderingContext2D;
 type Box = { x: number; y: number; w: number; h: number };
-/** Lo que necesita la tarjeta: datos del partido y si va con foto. */
 export type CardInput = Pick<State, 'image' | 'faces' | 'cost' | 'currency' | 'title' | 'rounding' | 'includePhoto'> &
   Partial<Pick<State, 'payNote' | 'payQr'>>;
 
@@ -24,14 +22,12 @@ const DISPLAY = '"Big Shoulders Display", "Arial Narrow", Impact, sans-serif';
 const BODY = '"Familjen Grotesk", system-ui, sans-serif';
 const EMOJI = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
 
-/** Formato cuadrado 1:1 (ideal para WhatsApp e Instagram). */
 export const SIZE = 1080;
 const PAD = 56;
 const CONTENT_W = SIZE - PAD * 2;
 const THERMO_W = 170;
 const GAP = 32;
 
-/** Zonas verticales fijas de la tarjeta. */
 export const LAYOUT = (() => {
   const statsH = 136;
   const statsTop = SIZE - PAD + 16 - statsH;
@@ -46,7 +42,6 @@ function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: numb
   ctx.roundRect(x, y, w, h, r);
 }
 
-/** Reduce la fuente hasta que el texto quepa en `maxWidth` (mínimo 24 px). */
 export function fitText(ctx: Ctx, text: string, maxWidth: number, size: number, weight: number, family: string) {
   let s = size;
   ctx.font = `${weight} ${s}px ${family}`;
@@ -57,14 +52,12 @@ export function fitText(ctx: Ctx, text: string, maxWidth: number, size: number, 
   return s;
 }
 
-/** Encaja una foto de proporción `ar` dentro de una caja, centrada. */
 export function containBox(ar: number, box: Box): Box {
   const w = Math.min(box.w, box.h * ar);
   const h = w / ar;
   return { x: box.x + (box.w - w) / 2, y: box.y + (box.h - h) / 2, w, h };
 }
 
-/** Frase de estado bajo la foto. */
 export function statusLine(t: Totals): { text: string; done: boolean } {
   const pending = t.people - t.paid;
   if (t.people === 0) return { text: 'SIN JUGADORES TODAVÍA', done: false };
@@ -202,7 +195,6 @@ function drawPhoto(ctx: Ctx, img: HTMLImageElement, faces: Face[], box: Box) {
   ctx.stroke();
 }
 
-/** Sin foto: porcentaje enorme y lo recaudado. */
 function drawPercent(ctx: Ctx, state: CardInput, t: Totals, box: Box) {
   const pctText = `${Math.round(t.pct * 100)}%`;
   ctx.textAlign = 'left';
@@ -285,7 +277,6 @@ async function loadFonts() {
 const NOTE_H = 52;
 const QR_LABEL_H = 64;
 
-/** Cajas del cuerpo: la nota de pago empuja todo hacia abajo y el QR va sobre el termómetro. */
 export function bodyBoxes(hasNote: boolean, hasQr: boolean) {
   const top = LAYOUT.bodyTop + (hasNote ? NOTE_H : 0);
   const h = LAYOUT.bodyH - (hasNote ? NOTE_H : 0);
@@ -323,7 +314,6 @@ function drawQr(ctx: Ctx, qr: HTMLImageElement, box: Box) {
 
 const loadIf = (src: string | null | undefined, wanted = true) => (src && wanted ? loadImage(src) : null);
 
-/** Foto (o porcentaje), nota y QR, según lo que tenga el partido. */
 function drawBody(ctx: Ctx, state: CardInput, t: Totals, img: HTMLImageElement | null, qr: HTMLImageElement | null) {
   const note = state.payNote?.trim() ?? '';
   const boxes = bodyBoxes(!!note, !!qr);

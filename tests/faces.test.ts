@@ -18,7 +18,6 @@ const make = (id: string, emoji: string, paid = false, w = 0.1): Face => ({ id, 
 describe('boxesToFaces', () => {
   it('convierte detecciones en cajas cuadradas centradas', () => {
     const [f] = boxesToFaces([{ x: 0.2, y: 0.3, w: 0.1, h: 0.2, score: 0.9 }], 2, ['🐸']);
-    // aspecto 2: ancho 0.1 → 0.2 en unidades de alto; el lado es 0.2
     expect(f).toMatchObject({ emoji: '🐸', paid: false, w: 0.1, h: 0.2 });
     expect(f.x).toBeCloseTo(0.2);
     expect(f.y).toBeCloseTo(0.3);

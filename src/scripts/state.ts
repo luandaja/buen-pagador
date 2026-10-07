@@ -2,7 +2,6 @@ import type { ShareLink } from './share';
 
 export interface Face {
   id: string;
-  /** Caja normalizada 0–1 respecto a la foto (cuadrada en píxeles). */
   x: number;
   y: number;
   w: number;
@@ -11,7 +10,6 @@ export interface Face {
   paid: boolean;
 }
 
-/** Un partido: foto, caras y pagos. Se guarda en IndexedDB (ver games.ts). */
 export interface Game {
   id: string;
   createdAt: number;
@@ -21,27 +19,19 @@ export interface Game {
   currency: string;
   rounding: number;
   faces: Face[];
-  /** Link compartido activo (con su clave y token de edición). */
   share: ShareLink | null;
-  /** Foto como data: URL. */
   image: string | null;
-  /** Miniatura para el historial. */
   thumb: string | null;
-  /** Cómo pagarle al organizador: número de Yape/Plin, cuenta, nombre… */
   payNote: string;
-  /** QR para pagar (data: URL), opcional. */
   payQr: string | null;
 }
 
-/** Preferencias de este dispositivo (localStorage). */
 export interface Prefs {
   includePhoto: boolean;
-  /** Emojis que el usuario no quiere volver a ver. */
   blocked: string[];
   currentGameId: string | null;
 }
 
-/** Lo que tiene abierto el editor: el partido actual y las preferencias. */
 export type State = Game & Omit<Prefs, 'currentGameId'>;
 
 export interface Totals {
@@ -59,7 +49,6 @@ export const DEBTOR_EMOJIS = [
 ];
 
 const PREFS_KEY = 'buen-pagador:prefs';
-/** Versión anterior: un solo partido guardado en localStorage. */
 const LEGACY_KEY = 'buen-pagador:v1';
 
 type GameBase = Partial<Pick<Game, 'title' | 'cost' | 'currency' | 'rounding' | 'payNote' | 'payQr'>>;
@@ -104,7 +93,6 @@ function writeJson(key: string, value: unknown) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    /* almacenamiento no disponible */
   }
 }
 
@@ -112,14 +100,12 @@ export const loadPrefs = (): Prefs => ({ ...defaultPrefs(), ...readJson<Prefs>(P
 
 export const savePrefs = (prefs: Prefs) => writeJson(PREFS_KEY, prefs);
 
-/** Partido y preferencias guardados por la versión anterior, si los hay. Los borra al leerlos. */
 export function takeLegacy(): { game: Game | null; prefs: Partial<Prefs> } | null {
   const old = readJson<State>(LEGACY_KEY);
   if (!old) return null;
   try {
     localStorage.removeItem(LEGACY_KEY);
   } catch {
-    /* almacenamiento no disponible */
   }
   const prefs = { includePhoto: old.includePhoto ?? true, blocked: old.blocked ?? [] };
   const game = old.image ? { ...newGame(), ...pickGame(old) } : null;
@@ -133,7 +119,6 @@ function pickGame(old: Partial<State>): Partial<Game> {
   );
 }
 
-/** Reemplaza emojis que ya no están permitidos (versión anterior o bloqueados). */
 export function refreshEmojis(faces: Face[], blocked: string[]): Face[] {
   const allowed = availableEmojis(blocked);
   const stale = faces.filter((f) => !allowed.includes(f.emoji));
@@ -141,19 +126,16 @@ export function refreshEmojis(faces: Face[], blocked: string[]): Face[] {
   return faces.map((f) => (allowed.includes(f.emoji) ? f : { ...f, emoji: fresh.shift()! }));
 }
 
-/** Separa el partido de las preferencias. */
 export function splitState(state: State): { game: Game; prefs: Prefs } {
   const { includePhoto, blocked, ...game } = state;
   return { game, prefs: { includePhoto, blocked, currentGameId: game.id } };
 }
 
-/** Emojis que se pueden usar: la lista sin los bloqueados. */
 export function availableEmojis(blocked: string[] = []): string[] {
   const list = DEBTOR_EMOJIS.filter((e) => !blocked.includes(e));
   return list.length ? list : [...DEBTOR_EMOJIS];
 }
 
-/** Reparte emojis distintos mientras alcancen, evitando los que se excluyan. */
 export function pickEmojis(count: number, avoid: string[] = [], blocked: string[] = []): string[] {
   const allowed = availableEmojis(blocked);
   const out: string[] = [];

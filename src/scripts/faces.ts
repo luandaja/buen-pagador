@@ -1,13 +1,10 @@
-// Operaciones puras sobre las caras y los emojis (sin DOM).
 import type { DetectedBox } from './detect';
 import { DEBTOR_EMOJIS, pickEmojis, uid, type Face, type State } from './state';
 
 export type Mode = 'pay' | 'edit';
 
-/** Siempre deben quedar al menos estos emojis disponibles al bloquear. */
 export const MIN_AVAILABLE = 3;
 
-/** Convierte detecciones en caras con caja cuadrada en píxeles, centrada en la cara. */
 export function boxesToFaces(boxes: DetectedBox[], aspect: number, emojis: string[]): Face[] {
   return boxes.map((b, i) => {
     const side = Math.max(b.w * aspect, b.h);
@@ -22,13 +19,11 @@ export const togglePaid = (faces: Face[], id: string): Face[] =>
 
 export const removeFace = (faces: Face[], id: string): Face[] => faces.filter((f) => f.id !== id);
 
-/** Tamaño típico de las caras de la foto (mediana), para las que se agregan a mano. */
 export function defaultFaceSize(faces: Face[]): number {
   const ws = faces.map((f) => f.w).sort((a, b) => a - b);
   return ws.length ? ws[Math.floor(ws.length / 2)] : 0.1;
 }
 
-/** Agrega una cara centrada en (cx, cy), coordenadas normalizadas. */
 export function addFaceAt(faces: Face[], cx: number, cy: number, aspect: number, blocked: string[]): Face[] {
   const w = defaultFaceSize(faces);
   const h = w * aspect;
@@ -45,7 +40,6 @@ export type BlockResult =
   | { ok: true; emoji: string; faces: Face[]; blocked: string[] }
   | { ok: false; reason: 'not-found' | 'too-few' };
 
-/** Bloquea el emoji de una cara: todas las caras con ese emoji reciben otro. */
 export function blockEmoji(state: Pick<State, 'faces' | 'blocked'>, faceId: string): BlockResult {
   const face = state.faces.find((f) => f.id === faceId && !f.paid);
   if (!face) return { ok: false, reason: 'not-found' };
@@ -66,7 +60,6 @@ export function faceLabel(face: Face, index: number, mode: Mode): string {
   return face.paid ? `${who}: pagó. Tocar para deshacer` : `${who}: debe. Tocar para marcar como pagado`;
 }
 
-/** Mensaje de estado del editor cuando todavía falta algo por hacer. */
 export function statusMessage(state: Pick<State, 'image' | 'faces' | 'cost'>, scanning: boolean): string | undefined {
   const steps: [boolean, string][] = [
     [!state.image, 'Sube una foto para empezar.'],
@@ -77,7 +70,6 @@ export function statusMessage(state: Pick<State, 'image' | 'faces' | 'cost'>, sc
   return steps.find(([pending]) => pending)?.[1];
 }
 
-/** Nombre de archivo a partir del título: "Jueves 9 pm" → buen-pagador-jueves-9-pm.png */
 export function fileName(title: string): string {
   const slug = title
     .toLowerCase()

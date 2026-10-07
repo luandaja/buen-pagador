@@ -3,7 +3,6 @@ import { installFakeCanvas } from './helpers/canvas';
 
 type Detection = { box: { x: number; y: number; width: number; height: number }; score: number };
 
-// Doble de face-api: cada pasada (foto completa y luego cada cuadrante) toma la siguiente respuesta.
 const detections = vi.hoisted(() => ({ queue: [] as Detection[][] }));
 
 vi.mock('@vladmandic/face-api', () => ({
@@ -21,7 +20,6 @@ const photo = (w: number, h: number) => ({ naturalWidth: w, naturalHeight: h }) 
 beforeEach(() => {
   vi.resetModules();
   vi.unstubAllGlobals();
-  // Por defecto, sin worker: se prueba el camino en la página.
   vi.stubGlobal('createImageBitmap', undefined);
   installFakeCanvas();
   detections.queue = [];
@@ -37,18 +35,13 @@ describe('detectFaces', () => {
 
   it('en fotos grandes suma los cuadrantes y descarta duplicados y ruido', async () => {
     const { detectFaces } = await import('../src/scripts/detect');
-    // Foto 2000×1000: la pasada completa va a 1024 px (escala 0.512) y cada
-    // cuadrante de 1200×600 también a 1024 px.
     const full = 1024 / 2000;
     const q = 1024 / 1200;
     detections.queue = [
       [{ box: { x: 1000 * full, y: 100 * full, width: 100 * full, height: 100 * full }, score: 0.95 }],
       [
-        // La misma cara vista en el primer cuadrante: es un duplicado.
         { box: { x: 1000 * q, y: 100 * q, width: 100 * q, height: 100 * q }, score: 0.8 },
-        // Una cara chica que solo aparece en el cuadrante.
         { box: { x: 100 * q, y: 100 * q, width: 40 * q, height: 40 * q }, score: 0.7 },
-        // Ruido de 5 px.
         { box: { x: 300 * q, y: 300 * q, width: 5 * q, height: 5 * q }, score: 0.9 },
       ],
     ];
@@ -68,7 +61,6 @@ describe('detectFaces', () => {
   });
 });
 
-/** Worker falso: responde lo que diga `reply` para cada mensaje. */
 function fakeWorker(reply: (msg: { id: number }) => object | null) {
   const posted: unknown[] = [];
   class FakeWorker {

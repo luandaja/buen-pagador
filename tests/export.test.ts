@@ -15,7 +15,6 @@ const state: State = {
 
 beforeEach(() => {
   vi.stubGlobal('Image', FakeImage);
-  // happy-dom no implementa la carga de fuentes.
   Object.defineProperty(document, 'fonts', {
     configurable: true,
     value: { ready: Promise.resolve(), load: vi.fn(async () => []) },

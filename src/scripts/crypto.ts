@@ -1,6 +1,3 @@
-// Cifrado AES-GCM en el navegador. La clave viaja solo en el # del link,
-// que el navegador nunca envía al servidor.
-
 export function toB64url(bytes: Uint8Array): string {
   let bin = '';
   const chunk = 0x8000;

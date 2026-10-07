@@ -1,5 +1,4 @@
 // @vitest-environment node
-// Integración de la vista pública (/ver): HTML real + API real en proceso.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetStore } from '../src/lib/store';
 import Ver from '../src/pages/ver.astro';
@@ -44,12 +43,10 @@ afterEach(async () => {
   await unmount();
 });
 
-/** Abre la vista de un partido con datos para pagar. */
 async function openWith(extra: Partial<State>) {
   return open(undefined, extra);
 }
 
-/** Crea un link con la API (con el DOM de la página ya montado) y abre la vista. */
 async function open(hash?: (link: ShareLink) => string, extra: Partial<State> = {}) {
   mount(html, `${ORIGIN}/ver`);
   vi.spyOn(console, 'warn').mockImplementation(() => {});

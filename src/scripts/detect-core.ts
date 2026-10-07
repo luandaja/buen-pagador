@@ -1,9 +1,4 @@
-// Lógica de detección que no depende de dónde corre (página o Web Worker).
-// Para fotos grupales se hace una pasada a la foto completa y otra en
-// cuadrantes solapados, así las caras pequeñas del fondo también aparecen.
-
 export interface DetectedBox {
-  /** Coordenadas normalizadas 0–1 respecto a la imagen. */
   x: number;
   y: number;
   w: number;
@@ -11,7 +6,6 @@ export interface DetectedBox {
   score: number;
 }
 
-/** Recorte de la foto a analizar, en píxeles. */
 export interface Region {
   sx: number;
   sy: number;
@@ -20,13 +14,11 @@ export interface Region {
   minConfidence: number;
 }
 
-/** Lo que devuelve face-api para cada cara (en píxeles del recorte escalado). */
 export interface RawDetection {
   box: { x: number; y: number; width: number; height: number };
   score: number;
 }
 
-/** Analiza un recorte ya escalado por `scale` y devuelve sus detecciones. */
 export type RegionDetector = (region: Region, scale: number) => Promise<RawDetection[]>;
 
 export const MAX_SIDE = 1024;
@@ -56,7 +48,6 @@ export function toBoxes(found: RawDetection[], r: Region, scale: number, W: numb
 }
 
 function overlap(a: DetectedBox, b: DetectedBox, aspect: number) {
-  // Trabajamos en píxeles relativos para que el aspecto no distorsione el área.
   const iw = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
   const ih = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
   const inter = iw * ih * aspect;
@@ -65,7 +56,6 @@ function overlap(a: DetectedBox, b: DetectedBox, aspect: number) {
   return { iou: inter / (areaA + areaB - inter), containment: inter / Math.min(areaA, areaB) };
 }
 
-/** Quita duplicados (la misma cara vista en dos pasadas), quedándose con la más segura. */
 export function merge(boxes: DetectedBox[], aspect: number): DetectedBox[] {
   const kept: DetectedBox[] = [];
   for (const box of [...boxes].sort((a, b) => b.score - a.score)) {
@@ -81,10 +71,6 @@ export function merge(boxes: DetectedBox[], aspect: number): DetectedBox[] {
 type Pause = () => Promise<void>;
 const noPause: Pause = async () => {};
 
-/**
- * Corre todas las pasadas con `detect` y une los resultados.
- * `pause` se llama entre pasadas (en la página, para no congelar la interfaz).
- */
 export async function runDetection(W: number, H: number, detect: RegionDetector, pause = noPause): Promise<DetectedBox[]> {
   const all: DetectedBox[] = [];
   for (const region of planRegions(W, H)) {
@@ -92,7 +78,6 @@ export async function runDetection(W: number, H: number, detect: RegionDetector,
     all.push(...toBoxes(await detect(region, scale), region, scale, W, H));
     await pause();
   }
-  // Sin cuadrados minúsculos (ruido) y ordenadas de izquierda a derecha.
   return merge(all, W / H)
     .filter((b) => b.w * W >= 14)
     .sort((a, b) => a.x - b.x);

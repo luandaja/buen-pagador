@@ -1,6 +1,3 @@
-// Detección de rostros en el navegador con SSD MobileNet (face-api).
-// Corre en un Web Worker para no congelar la página; si el navegador no
-// puede, corre aquí mismo con pausas entre pasadas.
 import { runDetection, type DetectedBox, type Region } from './detect-core';
 
 export type { DetectedBox } from './detect-core';
@@ -8,7 +5,6 @@ export type { DetectedBox } from './detect-core';
 type FaceApi = typeof import('@vladmandic/face-api');
 type Reply = { id: number; boxes?: DetectedBox[]; error?: string };
 
-// ——— Web Worker ———
 let worker: Worker | null | undefined;
 let lastId = 0;
 
@@ -22,7 +18,6 @@ function getWorker(): Worker | null {
   return worker;
 }
 
-/** Manda la foto al worker y espera las cajas. */
 function askWorker(w: Worker, bitmap: ImageBitmap): Promise<DetectedBox[]> {
   const id = ++lastId;
   return new Promise((resolve, reject) => {
@@ -38,7 +33,6 @@ function askWorker(w: Worker, bitmap: ImageBitmap): Promise<DetectedBox[]> {
   });
 }
 
-// ——— En la página (respaldo) ———
 let apiPromise: Promise<FaceApi> | null = null;
 
 function loadApi(): Promise<FaceApi> {
@@ -59,7 +53,6 @@ function cropCanvas(img: HTMLImageElement, r: Region, scale: number) {
   return canvas;
 }
 
-/** Deja respirar a la interfaz entre pasadas. */
 const yieldToPage = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 async function detectInPage(img: HTMLImageElement): Promise<DetectedBox[]> {
@@ -69,7 +62,6 @@ async function detectInPage(img: HTMLImageElement): Promise<DetectedBox[]> {
   return runDetection(img.naturalWidth, img.naturalHeight, detect, yieldToPage);
 }
 
-// ——— API ———
 export async function detectFaces(img: HTMLImageElement): Promise<DetectedBox[]> {
   const w = typeof createImageBitmap === 'function' ? getWorker() : null;
   if (w) {
@@ -83,7 +75,6 @@ export async function detectFaces(img: HTMLImageElement): Promise<DetectedBox[]>
   return detectInPage(img);
 }
 
-/** Empieza a descargar el modelo sin bloquear (útil al cargar la página). */
 export function warmUp(): void {
   const w = getWorker();
   if (w) return w.postMessage({ id: 0 });
@@ -92,7 +83,6 @@ export function warmUp(): void {
   });
 }
 
-/** Solo para tests: olvida el worker y el modelo. */
 export function resetDetector() {
   worker = undefined;
   apiPromise = null;

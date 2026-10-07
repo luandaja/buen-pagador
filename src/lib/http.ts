@@ -1,8 +1,7 @@
-export const MAX_IMG = 1_500_000; // ~1.1 MB de foto cifrada en base64url
+export const MAX_IMG = 1_500_000;
 export const MAX_STATE = 64_000;
-export const MAX_PAY = 400_000; // nota + QR cifrados
+export const MAX_PAY = 400_000;
 
-/** `pay` es opcional; si viene, debe ser un payload válido. */
 export const isOptionalPayload = (value: unknown, max: number) => value === undefined || isPayload(value, max);
 
 const B64URL = /^[A-Za-z0-9_-]+$/;
@@ -62,7 +61,6 @@ export function bearerToken(request: Request): string {
   return header.startsWith('Bearer ') ? header.slice(7).trim() : '';
 }
 
-/** Comparación en tiempo constante (no revela cuántos caracteres coinciden). */
 export function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -70,7 +68,6 @@ export function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/** Compara el token del header Authorization con el hash guardado. */
 export async function canEdit(request: Request, editHash: string | undefined): Promise<boolean> {
   const token = bearerToken(request);
   if (!token || !editHash) return false;

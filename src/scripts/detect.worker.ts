@@ -1,13 +1,9 @@
-// Detección de caras en un Web Worker: así la página no se congela mientras
-// TensorFlow analiza la foto y se puede seguir escribiendo el precio, etc.
 import * as faceapi from '@vladmandic/face-api';
 import { runDetection, type Region } from './detect-core';
 
-// face-api espera un DOM; en el worker le damos uno hecho con OffscreenCanvas.
 const unsupported = () => {
   throw new Error('No disponible en el worker');
 };
-// Image y Video son clases vacías: así face-api trata cada entrada como canvas.
 class NoImage {}
 class NoVideo {}
 faceapi.env.setEnv({
@@ -28,7 +24,6 @@ let ready: Promise<void> | null = null;
 function load() {
   ready ??= (async () => {
     await (faceapi.tf as unknown as { ready(): Promise<void> }).ready();
-    // URL absoluta: dentro del worker las rutas relativas apuntan a /_astro/.
     await faceapi.nets.ssdMobilenetv1.loadFromUri(new URL('/models', self.location.origin).href);
   })();
   return ready;

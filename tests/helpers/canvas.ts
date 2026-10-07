@@ -1,5 +1,3 @@
-// happy-dom no implementa canvas ni carga imágenes: estos dobles graban las
-// llamadas para poder verificar qué se dibuja.
 export type Call = [method: string, ...args: unknown[]];
 
 export function fakeContext() {
@@ -26,7 +24,6 @@ export function fakeContext() {
   return ctx as unknown as CanvasRenderingContext2D & { calls: Call[] };
 }
 
-/** Parcha HTMLCanvasElement para que tenga contexto 2D, toDataURL y toBlob. */
 export function installFakeCanvas(opts: { failBlob?: boolean } = {}) {
   const contexts: ReturnType<typeof fakeContext>[] = [];
   const proto = HTMLCanvasElement.prototype as unknown as Record<string, unknown>;
@@ -44,7 +41,6 @@ export function installFakeCanvas(opts: { failBlob?: boolean } = {}) {
   return contexts;
 }
 
-/** Image que "carga" en el siguiente tick; falla si el src contiene "broken". */
 export class FakeImage {
   naturalWidth = 800;
   naturalHeight = 600;

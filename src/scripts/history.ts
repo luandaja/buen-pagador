@@ -1,4 +1,3 @@
-// Historial de partidos: resúmenes (puros) y la lista en el DOM.
 import type { GameMeta } from './games';
 import { computeTotals, money } from './state';
 
@@ -7,7 +6,6 @@ export interface GameSummary {
   title: string;
   date: string;
   detail: string;
-  /** Monto destacado a la derecha ("S/ 110" o "Pagado ✓"). */
   amount: string;
   badge: { text: string; tone: 'debt' | 'paid' | 'empty' };
   debt: number;
@@ -43,7 +41,6 @@ export function summarize(game: GameMeta): GameSummary {
   };
 }
 
-/** Primero los que tienen deudas; después los pagados (o vacíos). */
 export function groupGames(games: GameMeta[]) {
   const summaries = games.map(summarize);
   return {
@@ -52,7 +49,6 @@ export function groupGames(games: GameMeta[]) {
   };
 }
 
-/** "Te deben S/ 25 en 2 partidos", sumando por moneda. */
 export function debtSummary(summaries: GameSummary[]): string {
   const owing = summaries.filter((s) => s.debt > 0);
   if (owing.length === 0) return 'Nadie te debe nada.';
@@ -88,7 +84,6 @@ function actionButton(action: string, label: string): HTMLButtonElement {
   return btn;
 }
 
-/** Menú ⋯ de cada partido: repetir o borrar. */
 function rowMenu(summary: GameSummary): HTMLDetailsElement {
   const menu = el('details', 'row-menu');
   const toggle = el('summary', 'icon-btn');
@@ -130,7 +125,6 @@ function sectionEl(title: string, summaries: GameSummary[], currentId: string | 
 
 type HistoryEls = { list: HTMLElement; summary: HTMLElement; empty: HTMLElement };
 
-/** Pinta la lista agrupada y el resumen de deudas. */
 export function renderHistory(els: HistoryEls, games: GameMeta[], currentId: string | null) {
   const { debts, settled } = groupGames(games);
   els.list.replaceChildren(sectionEl('Con deudas', debts, currentId), sectionEl('Pagados', settled, currentId));

@@ -1,4 +1,3 @@
-// Vista pública de solo lectura: /ver#<id>.<clave>
 import { renderCard } from './export';
 import { canvasToBlob } from './image';
 import { loadShare, parsePublicHash, ShareError, type Loaded, type PayInfo, type SharedState } from './share';
@@ -35,7 +34,6 @@ let link: { id: string; key: string } | null = null;
 let shared: SharedState | null = null;
 let image: string | null = null;
 let pay: PayInfo | null = null;
-/** Versión de los datos para pagar que ya tenemos (-1: todavía ninguna). */
 let payVersion = -1;
 let pollTimer = 0;
 
@@ -82,7 +80,6 @@ function render() {
   els.updated.textContent = `Revisado a las ${time}`;
 }
 
-/** Qué mostrar si falla la carga. `stop`: el link no se va a arreglar solo. */
 export function errorView(err: unknown, hasData: boolean): { title: string; text: string; stop: boolean } | null {
   const status = err instanceof ShareError ? err.status : 0;
   if (status === 404)
@@ -92,11 +89,10 @@ export function errorView(err: unknown, hasData: boolean): { title: string; text
       stop: true,
     };
   if (status === 400) return { title: 'Link incompleto', text: 'Pide que te lo vuelvan a mandar, copiándolo completo.', stop: true };
-  if (hasData) return null; // Fallo pasajero: seguimos mostrando lo último.
+  if (hasData) return null;
   return { title: 'Sin conexión', text: 'No pudimos abrir el link. Revisa tu internet y recarga la página.', stop: false };
 }
 
-/** Si cambiaron los datos para pagar, los pide aparte (salvo que ya vinieran). */
 async function withPayIfChanged(target: { id: string; key: string }, loaded: Loaded, included: boolean): Promise<Loaded> {
   if (loaded.pv === payVersion) return loaded;
   const fresh = included ? loaded : await loadShare(target, false, true);

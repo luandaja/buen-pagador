@@ -1,4 +1,3 @@
-// Render compartido entre el editor y la vista de solo lectura.
 import { computeTotals, money, type Face, type Totals } from './state';
 
 type TotalsInput = { faces: Face[]; cost: number | null; currency: string; rounding: number };
@@ -20,7 +19,6 @@ export function totalsEls() {
 
 export type TotalsEls = ReturnType<typeof totalsEls>;
 
-/** Resumen de la ficha del partido: "Cancha S/ 140 · 28 jugadores". */
 export function gameMetaText(game: Pick<TotalsInput, 'faces' | 'cost' | 'currency'>): string {
   const people = game.faces.length;
   const parts = [
@@ -30,13 +28,8 @@ export function gameMetaText(game: Pick<TotalsInput, 'faces' | 'cost' | 'currenc
   return parts.length ? parts.join(' · ') : 'Ponle nombre y costo.';
 }
 
-/** Barras con más segmentos que esto se ven como una sola. */
 const MAX_SEGMENTS = 40;
 
-/**
- * Lo más importante del avance: cuánto falta cobrar.
- * `owner` le habla al organizador ("Te faltan"); si no, es neutro.
- */
 export function progressView(t: Totals, data: Pick<TotalsInput, 'cost' | 'currency'>, owner: boolean) {
   const pending = t.people - t.paid;
   if (t.people === 0) return { label: 'Pagaron', hero: '—', full: false };
@@ -45,7 +38,6 @@ export function progressView(t: Totals, data: Pick<TotalsInput, 'cost' | 'curren
   return { label: 'Faltan pagar', hero: `${pending} de ${t.people}`, full: false };
 }
 
-/** Pinta el avance. `message` agrega una indicación debajo (p. ej. qué falta configurar). */
 export function renderTotals(els: TotalsEls, data: TotalsInput, message?: string): Totals {
   const t = computeTotals(data);
   const view = progressView(t, data, els.progress.dataset.perspective !== 'public');
@@ -78,7 +70,6 @@ function createFaceEl(face: Face, interactive: boolean): HTMLElement {
   el.className = 'face';
   el.dataset.id = face.id;
   el.innerHTML = FACE_HTML;
-  // Si ya venía pagado (al cargar) no repetimos la animación.
   if (face.paid) el.classList.add('is-settled');
   return el;
 }
@@ -95,10 +86,6 @@ function updateFaceEl(el: HTMLElement, face: Face, index: number, opts: FaceOpti
   el.setAttribute('aria-label', opts.label(face, index));
 }
 
-/**
- * Sincroniza los marcadores de caras con el DOM sin recrearlos, para que la
- * animación de "pagó" solo corra cuando cambia el estado.
- */
 export function syncFaces(container: HTMLElement, map: Map<string, HTMLElement>, faces: Face[], opts: FaceOptions) {
   const ids = new Set(faces.map((f) => f.id));
   for (const [id, el] of map) {
@@ -116,7 +103,6 @@ export function syncFaces(container: HTMLElement, map: Map<string, HTMLElement>,
   });
 }
 
-/** La proporción de la foto define el tamaño del escenario (ver .stage-area). */
 export function fitStageToPhoto(photo: HTMLImageElement, area: HTMLElement) {
   photo.addEventListener('load', () => {
     const ar = photo.naturalWidth / photo.naturalHeight;
