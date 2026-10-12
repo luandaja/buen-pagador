@@ -7,6 +7,9 @@ import {
   computeBalances,
   computeGroupTotals,
   isValidEmoji,
+  nextEmoji,
+  PERSON_EMOJIS,
+  rotateEmoji,
   newGroup,
   removeExpense,
   removePerson,
@@ -143,6 +146,19 @@ describe('paid / not paid', () => {
     expect(toggleSettled(group, 'nobody')).toBe(group);
     const even = trip();
     expect(toggleSettled(even, even.people[1].id)).toBe(even);
+  });
+});
+
+describe('person emojis', () => {
+  it('starts with neutral faces and rotates to unused ones', () => {
+    let group = trip();
+    expect(group.people.map((person) => person.emoji)).toEqual(['🤖', '👻', '👽']);
+    group = rotateEmoji(group, group.people[0].id);
+    expect(group.people[0].emoji).toBe('👾');
+    expect(rotateEmoji(group, 'nobody')).toBe(group);
+    expect(nextEmoji('🐔', [])).toBe('🤖');
+    expect(nextEmoji('🚀', ['🤖'])).toBe('👻');
+    expect(nextEmoji(null, PERSON_EMOJIS)).toBe('🤖');
   });
 });
 

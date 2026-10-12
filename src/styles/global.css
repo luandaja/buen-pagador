@@ -1804,3 +1804,18 @@ html:has(.drawer[open]) {
   background: var(--chalk);
   color: var(--ink);
 }
+
+.qr-download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.preview-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  text-decoration: none;
+}

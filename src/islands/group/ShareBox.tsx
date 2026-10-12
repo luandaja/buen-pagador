@@ -3,6 +3,7 @@ import { es } from '../../i18n/es';
 import { groupEditUrl, groupPublicUrl } from '../../scripts/group/remote';
 import type { GroupLink } from '../../scripts/group/model';
 import { summaryText } from '../../scripts/group/text';
+import { expiryText } from '../../scripts/links';
 import { group } from './store';
 import { startSharing, stopSharing, syncStatus } from './sync';
 
@@ -60,6 +61,7 @@ function Links({ link }: { link: GroupLink }) {
   };
   return (
     <>
+      {link.expiresAt && <p class="help link-expiry">{expiryText(link.expiresAt)}</p>}
       <CopyButton label={t.copyEdit} text={groupEditUrl(link)} />
       <CopyButton label={t.copyView} text={groupPublicUrl(link)} />
       <button type="button" class="link danger" onClick={stop}>
@@ -81,6 +83,9 @@ export function ShareBox() {
         </span>
       </div>
       <p class="help">{t.shareHelp}</p>
+      <a class="secondary small preview-link" href="/c#preview" target="_blank" rel="noopener">
+        <span aria-hidden="true">👀</span>&nbsp;{es.preview.open}
+      </a>
       <SummaryButton />
       {link ? (
         <Links link={link} />

@@ -70,11 +70,13 @@ describe('full cycle against the API', () => {
     const link = await createShare(state);
     expect(link.key).toHaveLength(43);
 
+    expect(link.expiresAt).toBeGreaterThan(Date.now());
     const first = await loadShare(link, true);
+    expect(first.expiresAt).toBeGreaterThan(Date.now());
     expect(first).toMatchObject({ v: 1, canEdit: true, state: { title: 'Thursday', cost: 100 } });
     expect(first.image).toMatch(/^data:image\/jpeg;base64,/);
 
-    expect(await pushShare(link, { ...state, title: 'Friday' })).toBe(2);
+    expect(await pushShare(link, { ...state, title: 'Friday' })).toEqual({ v: 2, expiresAt: expect.any(Number) });
     const publicView = await loadShare({ id: link.id, key: link.key }, false);
     expect(publicView).toMatchObject({ v: 2, state: { title: 'Friday' } });
     expect(publicView.image).toBeUndefined();

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest';
 import { MAX_FIELD } from '../../src/lib/group-http';
-import { resetGroupStore } from '../../src/lib/group-store';
+import { GROUP_TTL_SECONDS, resetGroupStore } from '../../src/lib/group-store';
 import { callApi } from '../helpers/api';
 
 beforeEach(() => resetGroupStore());
@@ -40,10 +40,10 @@ describe('POST /api/group', () => {
 describe('GET /api/group/:id', () => {
   it('returns the fields, tells editors apart and skips unchanged versions', async () => {
     const { id, token } = await created();
-    expect(await (await callApi(`/api/group/${id}`)).json()).toEqual({ fields: { m: 'bWV0YQ', 'p:ana1': 'YW5h' }, v: 1 });
+    expect(await (await callApi(`/api/group/${id}`)).json()).toEqual({ fields: { m: 'bWV0YQ', 'p:ana1': 'YW5h' }, v: 1, ttl: GROUP_TTL_SECONDS });
     expect(await (await send(`/api/group/${id}`, 'GET', undefined, token)).json()).toMatchObject({ canEdit: true });
     expect(await (await send(`/api/group/${id}`, 'GET', undefined, 'wrong')).json()).toMatchObject({ canEdit: false });
-    expect(await (await callApi(`/api/group/${id}?since=1`)).json()).toEqual({ v: 1, unchanged: true });
+    expect(await (await callApi(`/api/group/${id}?since=1`)).json()).toEqual({ v: 1, unchanged: true, ttl: GROUP_TTL_SECONDS });
     expect(await (await callApi(`/api/group/${id}?since=7`)).json()).toMatchObject({ v: 1, fields: {} });
   });
 
@@ -58,9 +58,9 @@ describe('PATCH /api/group/:id', () => {
     const { id, token } = await created();
     expect((await send(`/api/group/${id}`, 'PATCH', { set: { 'e:taxi1': 'dGF4aQ' } })).status).toBe(403);
     const patched = await send(`/api/group/${id}`, 'PATCH', { set: { 'e:taxi1': 'dGF4aQ' }, del: ['p:ana1'] }, token);
-    expect(await patched.json()).toEqual({ v: 2 });
+    expect(await patched.json()).toEqual({ v: 2, ttl: GROUP_TTL_SECONDS });
     expect((await (await callApi(`/api/group/${id}`)).json()).fields).toEqual({ m: 'bWV0YQ', 'e:taxi1': 'dGF4aQ' });
-    expect(await (await send(`/api/group/${id}`, 'PATCH', { del: ['e:taxi1'] }, token)).json()).toEqual({ v: 3 });
+    expect(await (await send(`/api/group/${id}`, 'PATCH', { del: ['e:taxi1'] }, token)).json()).toEqual({ v: 3, ttl: GROUP_TTL_SECONDS });
   });
 
   it('rejects invalid patches, deleting the meta and unknown groups', async () => {

@@ -116,3 +116,22 @@ describe('getGroupStore', () => {
     expect(getGroupStore()).toBeInstanceOf(FileGroupStore);
   });
 });
+
+describe('group link lifetime', () => {
+  it('reports the seconds left in every store', async () => {
+    const memory = new MemoryGroupStore();
+    await memory.create('life', 'hash', { m: 'meta' });
+    expect(await memory.ttl('life')).toBe(GROUP_TTL_SECONDS);
+    expect(await memory.ttl('missing')).toBeNull();
+    const redis = { ttl: vi.fn(async () => -1) };
+    expect(await new RedisGroupStore(redis as never).ttl('id')).toBeNull();
+    redis.ttl.mockResolvedValueOnce(99);
+    expect(await new RedisGroupStore(redis as never).ttl('id')).toBe(99);
+
+    const dir = mkdtempSync(join(tmpdir(), 'bp-gttl-'));
+    const file = new FileGroupStore(join(dir, 'g.json'));
+    await file.create('g', 'hash', { m: 'meta' });
+    expect(await new FileGroupStore(join(dir, 'g.json')).ttl('g')).toBe(GROUP_TTL_SECONDS);
+    rmSync(dir, { recursive: true });
+  });
+});

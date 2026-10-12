@@ -9,15 +9,18 @@ interface Meta {
   emoji: string;
   currency: string;
   palette: string;
+  payNote?: string;
 }
 
 const META = 'm';
+const QR = 'q';
 const PERSON = 'p:';
 const EXPENSE = 'e:';
 
 export function toPlain(group: Group): Plain {
-  const meta: Meta = { schemaVersion: GROUP_SCHEMA_VERSION, title: group.title, emoji: group.emoji, currency: group.currency, palette: group.palette };
+  const meta: Meta = { schemaVersion: GROUP_SCHEMA_VERSION, title: group.title, emoji: group.emoji, currency: group.currency, palette: group.palette, payNote: group.payNote || undefined };
   const plain: Plain = { [META]: JSON.stringify(meta) };
+  if (group.payQr) plain[QR] = JSON.stringify(group.payQr);
   for (const person of group.people) plain[PERSON + person.id] = JSON.stringify(person);
   for (const expense of group.expenses) plain[EXPENSE + expense.id] = JSON.stringify(expense);
   return plain;
@@ -40,6 +43,8 @@ export function fromPlain(plain: Plain, base: Group): Group {
     emoji: meta.emoji ?? DEFAULT_GROUP_EMOJI,
     currency: meta.currency ?? base.currency,
     palette: meta.palette ?? DEFAULT_PALETTE,
+    payNote: meta.payNote ?? '',
+    payQr: plain[QR] ? (JSON.parse(plain[QR]) as string) : null,
     people: byCreation(parseItems<Person>(plain, PERSON)),
     expenses: byCreation(parseItems<Expense>(plain, EXPENSE)),
   };

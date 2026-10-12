@@ -1,4 +1,4 @@
-import { createId, pickEmojis } from '../state';
+import { createId } from '../state';
 
 export const GROUP_SCHEMA_VERSION = 2;
 
@@ -10,6 +10,13 @@ export interface Person {
   at?: number;
 }
 
+export interface ReceiptItem {
+  id: string;
+  what: string;
+  amount: number;
+  for: string[];
+}
+
 export interface Expense {
   id: string;
   what: string;
@@ -18,6 +25,8 @@ export interface Expense {
   for?: string[];
   note?: string;
   at?: number;
+  items?: ReceiptItem[];
+  tip?: number;
 }
 
 export interface GroupLink {
@@ -25,6 +34,7 @@ export interface GroupLink {
   key: string;
   token: string;
   owner?: boolean;
+  expiresAt?: number;
 }
 
 export interface SyncState {
@@ -42,6 +52,8 @@ export interface Group {
   palette: string;
   people: Person[];
   expenses: Expense[];
+  payNote?: string;
+  payQr?: string | null;
   share?: GroupLink | null;
   sync?: SyncState | null;
 }
@@ -103,14 +115,47 @@ export function beneficiaries(expense: Expense, people: Person[]): string[] {
   return chosen?.length ? chosen : ids;
 }
 
+export function splitByWeight(total: number, weights: number[]): number[] {
+  const sum = weights.reduce((acc, weight) => acc + weight, 0);
+  if (sum <= 0) return splitCents(total, weights.length);
+  const exact = weights.map((weight) => (total * weight) / sum);
+  const parts = exact.map(Math.floor);
+  const order = exact.map((value, index) => [value - parts[index], index]).sort((first, second) => second[0] - first[0]);
+  for (let extra = total - parts.reduce((acc, part) => acc + part, 0), index = 0; extra > 0; extra--, index++) parts[order[index][1]] += 1;
+  return parts;
+}
+
+function addTo(shares: Map<string, number>, ids: string[], parts: number[]) {
+  parts.forEach((part, index) => shares.set(ids[index], (shares.get(ids[index]) ?? 0) + part));
+}
+
+export function itemizedShares(expense: Expense, people: Person[]): Map<string, number> {
+  const known = new Set(people.map((person) => person.id));
+  const shares = new Map<string, number>();
+  for (const item of expense.items ?? []) {
+    const among = item.for.filter((id) => known.has(id));
+    const ids = among.length ? among : [...known];
+    addTo(shares, ids, splitCents(toCents(item.amount), ids.length));
+  }
+  const ids = people.map((person) => person.id);
+  addTo(shares, ids, splitByWeight(toCents(expense.tip ?? 0), ids.map((id) => shares.get(id) ?? 0)));
+  return shares;
+}
+
+function expenseShares(expense: Expense, people: Person[]): Map<string, number> {
+  if (expense.items?.length) return itemizedShares(expense, people);
+  const among = beneficiaries(expense, people);
+  const shares = new Map<string, number>();
+  addTo(shares, among, splitCents(toCents(expense.amount), among.length));
+  return shares;
+}
+
 function centsByPerson(group: Pick<Group, 'people' | 'expenses'>) {
   const paid = new Map(group.people.map((person) => [person.id, 0]));
   const share = new Map(paid);
   for (const expense of group.expenses) {
-    const cents = toCents(expense.amount);
-    if (paid.has(expense.by)) paid.set(expense.by, paid.get(expense.by)! + cents);
-    const among = beneficiaries(expense, group.people);
-    splitCents(cents, among.length).forEach((part, index) => share.set(among[index], share.get(among[index])! + part));
+    if (paid.has(expense.by)) paid.set(expense.by, paid.get(expense.by)! + toCents(expense.amount));
+    for (const [id, cents] of expenseShares(expense, group.people)) share.set(id, share.get(id)! + cents);
   }
   return { paid, share };
 }
@@ -155,15 +200,15 @@ const touch = (group: Group, patch: Partial<Group>): Group => ({ ...group, ...pa
 
 export const nextAt = (items: { at?: number }[]) => Math.max(Date.now(), ...items.map((item) => (item.at ?? 0) + 1));
 
-export function addPerson(group: Group, name: string, blocked: string[] = []): Group {
+export function addPerson(group: Group, name: string): Group {
   const trimmed = name.trim();
   if (!trimmed) return group;
-  const [emoji] = pickEmojis(1, group.people.map((person) => person.emoji), blocked);
+  const emoji = nextEmoji(null, group.people.map((person) => person.emoji));
   return touch(group, { people: [...group.people, { id: createId(), name: trimmed, emoji, settled: 0, at: nextAt(group.people) }] });
 }
 
 export const isReferenced = (group: Pick<Group, 'expenses'>, personId: string) =>
-  group.expenses.some((expense) => expense.by === personId || expense.for?.includes(personId));
+  group.expenses.some((expense) => expense.by === personId || expense.for?.includes(personId) || expense.items?.some((item) => item.for.includes(personId)));
 
 export function removePerson(group: Group, personId: string): Group {
   if (isReferenced(group, personId)) return group;
@@ -197,6 +242,22 @@ export function toggleSettled(group: Group, personId: string): Group {
 export function isValidEmoji(text: string): boolean {
   const segments = [...new Intl.Segmenter().segment(text.trim())];
   return segments.length === 1 && /\p{Extended_Pictographic}/u.test(text);
+}
+
+export const PERSON_EMOJIS = ['🤖', '👻', '👽', '👾', '🦊', '🐼', '🐨', '🦁', '🐯', '🐸', '🐙', '🦄', '🐧', '🐢', '🦉', '🐝', '🐳', '🦋', '🌵', '🍄', '⭐', '🌈', '🎈', '🚀'];
+
+export function nextEmoji(current: string | null, taken: string[]): string {
+  const start = current ? PERSON_EMOJIS.indexOf(current) + 1 : 0;
+  const ordered = [...PERSON_EMOJIS.slice(start), ...PERSON_EMOJIS.slice(0, start)];
+  return ordered.find((emoji) => !taken.includes(emoji) && emoji !== current) ?? ordered[0];
+}
+
+export function rotateEmoji(group: Group, personId: string): Group {
+  const person = group.people.find((current) => current.id === personId);
+  if (!person) return group;
+  const taken = group.people.filter((other) => other.id !== personId).map((other) => other.emoji);
+  const emoji = nextEmoji(person.emoji, taken);
+  return touch(group, { people: group.people.map((current) => (current.id === personId ? { ...current, emoji } : current)) });
 }
 
 export const GROUP_EMOJIS = ['🧾', '✈️', '🏖️', '🏕️', '🍕', '🍻', '🎂', '🎁', '🏠', '🚗', '🎉', '🛒', '⚽', '🏀', '🎮', '🍣'];

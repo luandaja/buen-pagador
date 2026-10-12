@@ -17,8 +17,8 @@ const v = es.viewer;
 
       <div class="stage-wrap" id="stageWrap" hidden>
         <div class="stage-toolbar">
-          <p class="hint viewer-hint">{v.readOnly}</p>
-          <span class="read-only-badge"><span aria-hidden="true">👀</span> {v.badge}</span>
+          <p class="hint viewer-hint" id="viewerHint">{v.readOnly}</p>
+          <span class="read-only-badge"><span aria-hidden="true">👀</span> <span id="viewerBadge">{v.badge}</span></span>
         </div>
         <div class="stage-area" id="stageArea">
           <div class="stage is-readonly" id="stage">
@@ -44,7 +44,7 @@ const v = es.viewer;
         <figure class="pay-qr" id="payQrBox" hidden>
           <img id="payQrOut" alt={es.pay.qrPublicAlt} />
           <figcaption>
-            <a class="link" id="payQrSave" download={es.pay.qrFileName}>{es.pay.saveQr}</a>
+            <a class="secondary small qr-download" id="payQrSave" download={es.pay.qrFileName}>{es.pay.saveQr}</a>
             <span>{es.pay.qrHelp}</span>
           </figcaption>
         </figure>

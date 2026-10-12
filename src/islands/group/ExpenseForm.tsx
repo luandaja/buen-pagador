@@ -22,12 +22,29 @@ function toggleId(ids: string[], id: string): string[] {
   return ids.length > 1 ? ids.filter((current) => current !== id) : ids;
 }
 
+export function AmongPicker({ people, among, onChange, legend = t.among }: { people: Person[]; among: string[]; onChange: (ids: string[]) => void; legend?: string }) {
+  const everyone = among.length === people.length;
+  return (
+    <fieldset class="among">
+      <legend>{legend}</legend>
+      <button type="button" class="chip chip-all" aria-pressed={everyone} aria-label={t.allLabel} onClick={() => onChange(people.map((person) => person.id))}>
+        {t.all}
+      </button>
+      {people.map((person) => (
+        <button type="button" key={person.id} class="chip" aria-pressed={!everyone && among.includes(person.id)} onClick={() => onChange(everyone ? [person.id] : toggleId(among, person.id))}>
+          {person.name}
+        </button>
+      ))}
+    </fieldset>
+  );
+}
+
 function initialDraft(editing: Expense | undefined, people: Person[]) {
   if (!editing) return { what: '', amount: '', by: people[0].id, among: people.map((person) => person.id), note: '' };
   return { what: editing.what, amount: String(editing.amount), by: editing.by, among: beneficiaries(editing, people), note: editing.note ?? '' };
 }
 
-async function storeReceipt(groupId: string, expenseId: string, receipt: Receipt) {
+export async function storeReceipt(groupId: string, expenseId: string, receipt: Receipt) {
   if (receipt === undefined) return;
   if (receipt) await saveReceipt(groupId, expenseId, receipt);
   else await deleteReceipt(groupId, expenseId);
@@ -165,14 +182,7 @@ export function ExpenseForm({ editing, onDone }: Props) {
           ))}
         </select>
       </div>
-      <fieldset class="among">
-        <legend>{t.among}</legend>
-        {people.map((person) => (
-          <button type="button" key={person.id} class="chip" aria-pressed={among.includes(person.id)} onClick={() => setAmong(toggleId(among, person.id))}>
-            {person.name}
-          </button>
-        ))}
-      </fieldset>
+      <AmongPicker people={people} among={among} onChange={setAmong} />
       <Details note={note} receipt={receipt} what={what} onNote={setNote} onReceipt={setReceipt} />
       {error && (
         <p class="form-error" role="alert">

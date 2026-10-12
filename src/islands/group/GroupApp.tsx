@@ -6,6 +6,7 @@ import { applyPalette } from '../../scripts/palettes';
 import { ExpensesCard } from './Expenses';
 import { GroupHeader } from './GroupHeader';
 import { GroupList } from './GroupList';
+import { PayDetails } from './Pay';
 import { People } from './People';
 import { refreshReceipts } from './receipts';
 import { ShareBox } from './ShareBox';
@@ -56,6 +57,7 @@ export function GroupApp() {
         <GroupHeader />
         <People />
         <Totals />
+        <PayDetails />
         <ShareBox />
         <GroupList />
       </aside>

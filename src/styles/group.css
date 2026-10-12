@@ -559,3 +559,127 @@ span.emoji-current {
 .swatch span {
   display: block;
 }
+
+button.person-emoji {
+  border: 1.5px dashed transparent;
+  background: none;
+  cursor: pointer;
+}
+
+button.person-emoji:hover {
+  border-color: rgba(247, 248, 252, 0.4);
+}
+
+.chip-all {
+  font-weight: 800;
+}
+
+.pay-details {
+  display: grid;
+  gap: 10px;
+  padding-top: 20px;
+  border-top: 1px solid var(--board-line);
+}
+
+.receipt-upload {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.receipt-upload .is-busy {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.receipt-splitter {
+  display: grid;
+  gap: 14px;
+}
+
+.receipt-progress {
+  margin: 0;
+  font-weight: 700;
+}
+
+.receipt-orphans {
+  color: var(--warn);
+}
+
+.receipt-items {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.receipt-item {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1.5px solid transparent;
+  background: var(--board-field);
+}
+
+.receipt-item.is-orphan {
+  border-color: color-mix(in srgb, var(--warn) 70%, transparent);
+}
+
+.receipt-item-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.receipt-item-head input {
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1.5px solid rgba(247, 248, 252, 0.2);
+  border-radius: 10px;
+  background: var(--board-field);
+  color: var(--chalk);
+}
+
+.receipt-item-name {
+  flex: 1;
+}
+
+.receipt-item-amount {
+  width: 92px;
+  flex: none;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.receipt-item .among legend {
+  font-size: 12px;
+}
+
+.receipt-item .chip {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.receipt-check {
+  margin: 0;
+  font-weight: 700;
+}
+
+.receipt-check.is-ok {
+  color: var(--paid);
+}
+
+.receipt-check.is-warn {
+  color: var(--warn);
+}
+
+.receipt-fix {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

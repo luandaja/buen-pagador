@@ -5,6 +5,7 @@ import { computeBalances, computeGroupTotals, newGroup, type Group } from '../..
 export const group = signal<Group | null>(null);
 export const savedGroups = signal<Group[]>([]);
 export const readOnly = signal(false);
+export const preview = signal(false);
 
 export const balances = computed(() => (group.value ? computeBalances(group.value) : []));
 export const totals = computed(() => (group.value ? computeGroupTotals(group.value) : null));

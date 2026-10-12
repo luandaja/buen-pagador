@@ -69,6 +69,13 @@ async function cycle(start: Group, link: GroupLink) {
   const pulled = await pullRemote(link, hasChanges ? undefined : base.v);
   const remote = 'unchanged' in pulled ? base.fields : pulled.plain;
   await apply(start, hasChanges ? local : base.fields, remote, pulled.v);
+  noteExpiry(start.id, pulled.expiresAt);
+}
+
+function noteExpiry(groupId: string, expiresAt: number | undefined) {
+  const current = group.value;
+  if (current?.id !== groupId || !current.share || !expiresAt) return;
+  group.value = { ...current, share: { ...current.share, expiresAt } };
 }
 
 export async function syncNow() {

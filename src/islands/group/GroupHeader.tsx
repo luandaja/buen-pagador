@@ -1,6 +1,6 @@
 import { es } from '../../i18n/es';
 import { EmojiPicker } from './EmojiPicker';
-import { edit, group, readOnly } from './store';
+import { edit, group, preview, readOnly } from './store';
 
 const t = es.group;
 
@@ -13,7 +13,7 @@ function ReadOnlyHeader() {
       </span>
       <div class="game-id">
         <h2 class="game-title">{current.title.trim() || t.unnamed}</h2>
-        <p class="game-meta">{t.viewerBadge}</p>
+        <p class="game-meta">{preview.value ? `👀 ${es.preview.badge} · ${es.preview.hint}` : t.viewerBadge}</p>
       </div>
     </section>
   );
@@ -40,16 +40,6 @@ export function GroupHeader() {
           autocomplete="off"
           placeholder={t.titlePlaceholder}
           onInput={(event) => edit((draft) => ({ ...draft, title: event.currentTarget.value }))}
-        />
-      </div>
-      <div class="field currency-field">
-        <label for="groupCurrency">{t.currency}</label>
-        <input
-          id="groupCurrency"
-          value={current.currency}
-          maxLength={4}
-          autocomplete="off"
-          onInput={(event) => edit((draft) => ({ ...draft, currency: event.currentTarget.value }))}
         />
       </div>
     </section>

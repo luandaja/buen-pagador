@@ -35,6 +35,7 @@ export function toggleLabel(balance: Balance): string {
 }
 
 export function amongText(expense: Expense, people: Person[]): string {
+  if (expense.items?.length) return t.itemsSummary(expense.items.length, !!expense.tip);
   const among = beneficiaries(expense, people);
   if (among.length === people.length) return t.everyone;
   const names = among.map((id) => people.find((person) => person.id === id)!.name);
