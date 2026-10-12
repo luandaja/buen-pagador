@@ -9,7 +9,9 @@ import {
   isValidEmoji,
   nextEmoji,
   PERSON_EMOJIS,
+  randomEmoji,
   rotateEmoji,
+  shuffleEmojis,
   newGroup,
   removeExpense,
   removePerson,
@@ -153,12 +155,33 @@ describe('person emojis', () => {
   it('starts with neutral faces and rotates to unused ones', () => {
     let group = trip();
     expect(group.people.map((person) => person.emoji)).toEqual(['🤖', '👻', '👽']);
-    group = rotateEmoji(group, group.people[0].id);
+    group = rotateEmoji(group, group.people[0].id, () => 0);
     expect(group.people[0].emoji).toBe('👾');
     expect(rotateEmoji(group, 'nobody')).toBe(group);
+    for (let index = 0; index < 20; index++) {
+      const emoji = rotateEmoji(group, group.people[0].id).people[0].emoji;
+      expect(['👾', '👻', '👽']).not.toContain(emoji);
+      expect(PERSON_EMOJIS).toContain(emoji);
+    }
     expect(nextEmoji('🐔', [])).toBe('🤖');
     expect(nextEmoji('🚀', ['🤖'])).toBe('👻');
     expect(nextEmoji(null, PERSON_EMOJIS)).toBe('🤖');
+  });
+
+  it('picks a random emoji that is new and unused, if any is left', () => {
+    expect(randomEmoji('🤖', ['👻'], () => 0)).toBe('👽');
+    expect(randomEmoji('🤖', ['👻'], () => 0.999)).toBe('🚀');
+    expect(randomEmoji('🤖', PERSON_EMOJIS, () => 0)).toBe('👻');
+  });
+
+  it('shuffles everyone to new, distinct emojis', () => {
+    const group = trip();
+    const before = group.people.map((person) => person.emoji);
+    const after = shuffleEmojis(group).people.map((person) => person.emoji);
+    expect(new Set(after).size).toBe(after.length);
+    after.forEach((emoji, index) => expect(emoji).not.toBe(before[index]));
+    const empty = newGroup();
+    expect(shuffleEmojis(empty)).toBe(empty);
   });
 });
 

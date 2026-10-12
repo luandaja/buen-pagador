@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { es } from '../../i18n/es';
-import { addPerson, isReferenced, removePerson, rotateEmoji, toggleSettled, type Balance } from '../../scripts/group/model';
+import { addPerson, isReferenced, removePerson, rotateEmoji, shuffleEmojis, toggleSettled, type Balance } from '../../scripts/group/model';
 import { statusText, toggleLabel } from '../../scripts/group/text';
 import { balances, edit, group, readOnly } from './store';
 
@@ -97,6 +97,11 @@ export function People() {
     <section class="people" aria-labelledby="peopleTitle">
       <div class="section-head">
         <h3 id="peopleTitle">{t.people}</h3>
+        {count > 0 && !readOnly.value && (
+          <button type="button" class="link" title={t.shuffleEmojisTitle} onClick={() => edit(shuffleEmojis)}>
+            <span aria-hidden="true">🎲</span>&nbsp;{t.shuffleEmojis}
+          </button>
+        )}
       </div>
       {count > 0 && !readOnly.value && <p class="help">{t.peopleHelp}</p>}
       <ul class="person-list">
