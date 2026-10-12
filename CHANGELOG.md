@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.0](https://github.com/luandaja/buen-pagador/compare/v1.3.0...v1.4.0) (2026-10-12)
+
+
+### Features
+
+* guardar boletas sin asignar todo, cantidades editables y lupa de la boleta ([fa94285](https://github.com/luandaja/buen-pagador/commit/fa94285024a9baf0a0f5b97409707fc23a5a1616))
+* save receipts with items to assign later, editable quantities and a receipt lens ([3d96241](https://github.com/luandaja/buen-pagador/commit/3d96241b9bff0a9ec67af92ba8d416c4cf3f515a))
+
 ## [1.3.0](https://github.com/luandaja/buen-pagador/compare/v1.2.0...v1.3.0) (2026-10-12)
 
 
