@@ -75,9 +75,29 @@ describe('receipt photo', () => {
     expect(locate.getAttribute('aria-pressed')).toBe('true');
     fireEvent.focusIn(within(items()[0]).getByLabelText('Ítem'));
     expect(document.querySelector<HTMLElement>('.receipt-band')!.style.top).toBe('20.0%');
+    expect(screen.getByText('2×')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Ampliar' }));
-    expect(screen.getByRole('button', { name: 'Reducir' }).getAttribute('aria-pressed')).toBe('true');
-    expect(document.querySelector('.receipt-photo-frame')!.classList.contains('is-zoomed')).toBe(true);
+    expect(screen.getByText('3×')).toBeTruthy();
+    for (let step = 0; step < 4; step++) fireEvent.click(screen.getByRole('button', { name: 'Ampliar' }));
+    expect(screen.getByRole('button', { name: 'Ampliar' })).toHaveProperty('disabled', true);
+    for (let step = 0; step < 5; step++) fireEvent.click(screen.getByRole('button', { name: 'Reducir' }));
+    expect(screen.getByText('1×')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Reducir' })).toHaveProperty('disabled', true);
+  });
+
+  it('opens the photo full screen with its own zoom and closes it', async () => {
+    HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+      this.setAttribute('open', '');
+    };
+    await openFriends();
+    uploadReceipt();
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver en grande' }));
+    const viewer = document.querySelector('.receipt-viewer')!;
+    expect(viewer.querySelector('img')).toBeTruthy();
+    fireEvent.click(within(viewer as HTMLElement).getByRole('button', { name: 'Ampliar' }));
+    expect((viewer.querySelector('.receipt-viewer-image') as HTMLElement).style.width).toBe('150%');
+    fireEvent.click(within(viewer as HTMLElement).getByRole('button', { name: 'Cerrar' }));
+    expect(document.querySelector('.receipt-viewer')).toBeNull();
   });
 
   it('brings back the saved photo and its marks when reopening the receipt', async () => {
@@ -96,7 +116,40 @@ describe('receipt photo', () => {
 });
 
 describe('receipt splitter', () => {
-  it('reads the receipt, refuses orphans and saves a split that matches the photo', async () => {
+  it('saves with items still unassigned, charges them to whoever paid and lets you assign them later', async () => {
+    const friends = await openFriends();
+    uploadReceipt();
+    await screen.findByText('Leída con IA. Revisa los montos.');
+    expect(screen.getByText('Puedes guardar y asignarlos después. Mientras tanto los cubre quien pagó la cuenta.')).toBeTruthy();
+    assign(0, 'Beto');
+    fireEvent.click(save());
+    await screen.findByText('Pagó Ana · 14 ítems + propina · 13 sin asignar');
+    const owes = computeBalances(group.value!).find((balance) => balance.person.name === 'Beto')!;
+    expect(owes.share).toBeGreaterThan(47.9);
+    expect(owes.share).toBeLessThan(60);
+    fireEvent.click(screen.getByRole('button', { name: 'Editar TP Punta Hermosa' }));
+    expect(await screen.findByText('Asignados 1 de 14')).toBeTruthy();
+    expect(friends.id).toBe(group.value!.id);
+  });
+
+  it('corrects the quantity of a line and splits it into units', async () => {
+    await openFriends();
+    uploadReceipt();
+    await screen.findByText('Leída con IA. Revisa los montos.');
+    const first = within(items()[0]);
+    expect(first.getByRole('button', { name: 'Menos unidades de Duo Carretillero' })).toHaveProperty('disabled', true);
+    fireEvent.click(first.getByRole('button', { name: 'Más unidades de Duo Carretillero' }));
+    expect(first.getByText('×2')).toBeTruthy();
+    const water = within(items()[11]);
+    fireEvent.click(water.getByRole('button', { name: /Menos unidades/ }));
+    fireEvent.click(water.getByRole('button', { name: /Menos unidades/ }));
+    expect(water.queryByRole('button', { name: /Separar/ })).toBeNull();
+    fireEvent.click(first.getByRole('button', { name: 'Separar ×2' }));
+    expect(items()).toHaveLength(15);
+    expect(within(items()[0]).getByLabelText('Importe Duo Carretillero')).toHaveProperty('value', '23.95');
+  });
+
+  it('reads the receipt and saves a split that matches the photo', async () => {
     const friends = await openFriends();
     uploadReceipt();
     await screen.findByText('Leída con IA. Revisa los montos.');
@@ -104,7 +157,7 @@ describe('receipt splitter', () => {
     expect(screen.getByText('Asignados 0 de 14')).toBeTruthy();
     expect(screen.getByText(/Falta asignar 14 ítems/)).toBeTruthy();
     expect(screen.getByText('Cuadra con la boleta: S/ 497.09 ✓')).toBeTruthy();
-    expect(save().disabled).toBe(true);
+    expect(save().disabled).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: 'Separar ×3' }));
     expect(items()).toHaveLength(16);

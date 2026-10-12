@@ -13,6 +13,8 @@ export interface Person {
 export interface Band {
   top: number;
   bottom: number;
+  left?: number;
+  right?: number;
 }
 
 export interface ReceiptItem {
@@ -135,12 +137,19 @@ function addTo(shares: Map<string, number>, ids: string[], parts: number[]) {
   parts.forEach((part, index) => shares.set(ids[index], (shares.get(ids[index]) ?? 0) + part));
 }
 
+function itemOwners(item: ReceiptItem, known: Set<string>, payer: string): string[] {
+  if (item.for.length === 0) return known.has(payer) ? [payer] : [...known];
+  const among = item.for.filter((id) => known.has(id));
+  return among.length ? among : [...known];
+}
+
+export const unassignedItems = (expense: Pick<Expense, 'items'>) => (expense.items ?? []).filter((item) => item.for.length === 0).length;
+
 export function itemizedShares(expense: Expense, people: Person[]): Map<string, number> {
   const known = new Set(people.map((person) => person.id));
   const shares = new Map<string, number>();
   for (const item of expense.items ?? []) {
-    const among = item.for.filter((id) => known.has(id));
-    const ids = among.length ? among : [...known];
+    const ids = itemOwners(item, known, expense.by);
     addTo(shares, ids, splitCents(toCents(item.amount), ids.length));
   }
   const ids = people.map((person) => person.id);

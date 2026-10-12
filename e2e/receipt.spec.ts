@@ -37,7 +37,7 @@ test('splits a restaurant receipt by item so every cent, tip included, is charge
   await expect(page.getByText('Leída con IA. Revisa los montos.')).toBeVisible();
   await expect(page.getByAltText('Foto de la boleta')).toBeVisible();
   await expect(page.getByText('Cuadra con la boleta: S/ 497.09 ✓')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Guardar boleta' })).toBeDisabled();
+  await expect(page.getByText('Puedes guardar y asignarlos después.', { exact: false })).toBeVisible();
 
   await page.getByRole('button', { name: 'Separar ×3' }).click();
   const items = page.locator('.receipt-item');

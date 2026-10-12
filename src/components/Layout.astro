@@ -42,20 +42,21 @@ const sections = [
         <p class="eyebrow">{es.brand.tagline}</p>
         <h1 class="wordmark">{es.brand.first} <span>{es.brand.second}</span></h1>
       </div>
-      <slot name="actions" />
+      <div class="masthead-actions">
+        {
+          nav && (
+            <nav class="section-nav" aria-label={es.nav.label}>
+              {sections.map((section) => (
+                <a href={section.href} aria-current={section.id === nav ? 'page' : undefined}>
+                  <span aria-hidden="true">{section.emoji}</span> {section.label}
+                </a>
+              ))}
+            </nav>
+          )
+        }
+        <slot name="actions" />
+      </div>
     </header>
-
-    {
-      nav && (
-        <nav class="section-nav" aria-label={es.nav.label}>
-          {sections.map((section) => (
-            <a href={section.href} aria-current={section.id === nav ? 'page' : undefined}>
-              <span aria-hidden="true">{section.emoji}</span> {section.label}
-            </a>
-          ))}
-        </nav>
-      )
-    }
 
     <slot />
 
