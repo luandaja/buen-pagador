@@ -482,3 +482,44 @@
 span.emoji-current {
   cursor: default;
 }
+
+.expense-details summary {
+  min-height: 36px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--board-dim);
+}
+
+.receipt-field {
+  justify-items: start;
+}
+
+.receipt-preview {
+  max-width: 100%;
+  max-height: 260px;
+  border-radius: 10px;
+  object-fit: contain;
+  background: var(--board-field);
+}
+
+.receipt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.receipt-mark {
+  margin-left: 6px;
+  font-size: 14px;
+}
+
+.expense-text .expense-note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: italic;
+}
