@@ -84,7 +84,7 @@ export function toShared(state: State): SharedState {
 
 const errorText = (body: { error?: string }) => es.errors[body.error ?? 'network'] ?? es.errors.network;
 
-async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body) headers.set('content-type', 'application/json');
   if (token) headers.set('authorization', `Bearer ${token}`);

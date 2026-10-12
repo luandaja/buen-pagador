@@ -1769,3 +1769,38 @@ html:has(.drawer[open]) {
   color: var(--chalk-dim);
   font-variant-numeric: tabular-nums;
 }
+
+.section-nav {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 8px;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 8px 16px 0;
+}
+
+.section-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  color: var(--chalk-dim);
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.section-nav a:hover {
+  border-color: var(--chalk);
+  color: var(--chalk);
+}
+
+.section-nav a[aria-current='page'] {
+  border-color: var(--chalk);
+  background: var(--chalk);
+  color: var(--ink);
+}

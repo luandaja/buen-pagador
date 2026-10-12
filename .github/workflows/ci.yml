@@ -26,9 +26,9 @@ jobs:
         shell: bash
         run: pnpm crap --threshold 10 --format markdown --top 20 | tee -a "$GITHUB_STEP_SUMMARY"
       - run: pnpm build
-      - name: JS must stay under 50 KB gz (face-api excluded)
+      - name: Initial JS must stay under 40 KB gz per page (face-api is lazy)
         shell: bash
-        run: pnpm js-budget 50 | tee -a "$GITHUB_STEP_SUMMARY"
+        run: pnpm js-budget 40 | tee -a "$GITHUB_STEP_SUMMARY"
 
   e2e:
     runs-on: ubuntu-latest
