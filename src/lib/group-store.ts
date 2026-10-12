@@ -17,6 +17,7 @@ export interface GroupStore {
   create(id: string, edit: string, fields: Fields): Promise<void>;
   patch(id: string, set: Fields, del: string[]): Promise<number>;
   remove(id: string): Promise<void>;
+  ttl(id: string): Promise<number | null>;
 }
 
 export const GROUP_TTL_SECONDS = 60 * 60 * 24 * 90;
@@ -65,6 +66,11 @@ class RedisGroupStore implements GroupStore {
   async remove(id: string) {
     await this.redis.del(PREFIX + id);
   }
+
+  async ttl(id: string) {
+    const seconds = await this.redis.ttl(PREFIX + id);
+    return seconds > 0 ? seconds : null;
+  }
 }
 
 type Entry = { record: GroupRecord; expires: number };
@@ -108,6 +114,11 @@ class MemoryGroupStore implements GroupStore {
 
   async remove(id: string) {
     this.data.delete(id);
+  }
+
+  async ttl(id: string) {
+    const entry = this.live(id);
+    return entry ? Math.ceil((entry.expires - Date.now()) / 1000) : null;
   }
 }
 
@@ -156,6 +167,11 @@ class FileGroupStore extends MemoryGroupStore {
     this.load();
     await super.remove(id);
     this.save();
+  }
+
+  override async ttl(id: string) {
+    this.load();
+    return super.ttl(id);
   }
 }
 

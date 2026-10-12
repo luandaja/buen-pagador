@@ -22,9 +22,10 @@ interface Store {
   create(id: string, record: ShareRecord): Promise<void>;
   updateState(id: string, state: string, pay?: string): Promise<number>;
   remove(id: string): Promise<void>;
+  ttl(id: string): Promise<number | null>;
 }
 
-function readEnv(name: string): string | undefined {
+export function readEnv(name: string): string | undefined {
   const runtime = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env;
   return runtime?.[name] ?? (import.meta.env[name] as string | undefined);
 }
@@ -77,6 +78,11 @@ class RedisStore implements Store {
   async remove(id: string) {
     await this.redis.del(PREFIX + id);
   }
+
+  async ttl(id: string) {
+    const seconds = await this.redis.ttl(PREFIX + id);
+    return seconds > 0 ? seconds : null;
+  }
 }
 
 type Entry = { record: ShareRecord; expires: number };
@@ -119,6 +125,11 @@ class MemoryStore implements Store {
 
   async remove(id: string) {
     this.data.delete(id);
+  }
+
+  async ttl(id: string) {
+    const entry = this.liveEntry(id);
+    return entry ? Math.ceil((entry.expires - Date.now()) / 1000) : null;
   }
 }
 
@@ -177,6 +188,11 @@ class FileStore extends MemoryStore {
     this.load();
     await super.remove(id);
     this.save();
+  }
+
+  override async ttl(id: string) {
+    this.load();
+    return super.ttl(id);
   }
 }
 

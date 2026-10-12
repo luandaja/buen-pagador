@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
 import { es } from '../../i18n/es';
-import { addPerson, isReferenced, removePerson, toggleSettled, type Balance } from '../../scripts/group/model';
+import { addPerson, isReferenced, removePerson, rotateEmoji, toggleSettled, type Balance } from '../../scripts/group/model';
 import { statusText, toggleLabel } from '../../scripts/group/text';
 import { balances, edit, group, readOnly } from './store';
 
@@ -32,14 +32,29 @@ function PersonActions({ balance }: { balance: Balance }) {
   );
 }
 
+function PersonEmoji({ balance }: { balance: Balance }) {
+  const { person, status } = balance;
+  const shown = status === 'settled' ? '✓' : person.emoji;
+  if (readOnly.value || status === 'settled') {
+    return (
+      <span class="person-emoji" aria-hidden="true">
+        {shown}
+      </span>
+    );
+  }
+  return (
+    <button type="button" class="person-emoji" aria-label={t.rotateEmoji(person.name)} title={t.rotateEmoji(person.name)} onClick={() => edit((draft) => rotateEmoji(draft, person.id))}>
+      {shown}
+    </button>
+  );
+}
+
 function PersonRow({ balance }: { balance: Balance }) {
   const { person, status } = balance;
   const current = group.value!;
   return (
     <li class={`person is-${status}`}>
-      <span class="person-emoji" aria-hidden="true">
-        {status === 'settled' ? '✓' : person.emoji}
-      </span>
+      <PersonEmoji balance={balance} />
       <span class="person-text">
         <strong>{person.name}</strong>
         <span>{statusText(balance, current.currency)}</span>

@@ -1,6 +1,7 @@
 import { decrypt, decryptJson, encrypt, encryptJson, importKey, newKey } from './crypto';
 import { es } from '../i18n/es';
 import { bytesToDataUrl, shareImageBytes } from './image';
+import { expiresAtFrom } from './links';
 import { PUBLIC_PATH } from './routes';
 import type { Face, State } from './state';
 
@@ -8,6 +9,7 @@ export interface ShareLink {
   id: string;
   key: string;
   token: string;
+  expiresAt?: number;
 }
 
 export const SCHEMA_VERSION = 1;
@@ -103,25 +105,25 @@ export async function createShare(state: State): Promise<ShareLink> {
     encryptJson(key, toShared(state)),
     hasPay(pay) ? encryptJson(key, pay) : undefined,
   ]);
-  const created = await request<{ id: string; token: string }>('/api/share', {
+  const created = await request<{ id: string; token: string; ttl?: number }>('/api/share', {
     method: 'POST',
     body: JSON.stringify({ img: encryptedImage, state: encryptedState, pay: encryptedPay }),
   });
-  return { id: created.id, key: raw, token: created.token };
+  return { id: created.id, key: raw, token: created.token, expiresAt: expiresAtFrom(created.ttl) };
 }
 
-export async function pushShare(link: ShareLink, state: State, withPay = false): Promise<number> {
+export async function pushShare(link: ShareLink, state: State, withPay = false): Promise<{ v: number; expiresAt?: number }> {
   const key = await importKey(link.key);
   const [encryptedState, encryptedPay] = await Promise.all([
     encryptJson(key, toShared(state)),
     withPay ? encryptJson(key, payOf(state)) : undefined,
   ]);
-  const updated = await request<{ v: number }>(
+  const updated = await request<{ v: number; ttl?: number }>(
     `/api/share/${link.id}`,
     { method: 'PUT', body: JSON.stringify({ state: encryptedState, pay: encryptedPay }) },
     link.token,
   );
-  return updated.v;
+  return { v: updated.v, expiresAt: expiresAtFrom(updated.ttl) };
 }
 
 export async function deleteShare(link: ShareLink): Promise<void> {
@@ -135,15 +137,16 @@ export interface Loaded {
   canEdit?: boolean;
   pay?: PayInfo;
   pv: number;
+  expiresAt?: number;
 }
 
-type RawShare = { state: string; v: number; pv?: number; img?: string; pay?: string; canEdit?: boolean };
+type RawShare = { state: string; v: number; pv?: number; img?: string; pay?: string; canEdit?: boolean; ttl?: number };
 
 async function decryptShare(key: CryptoKey, encrypted: RawShare): Promise<Loaded> {
   const state = { schemaVersion: 1, ...(await decryptJson<Partial<SharedState>>(key, encrypted.state)) } as SharedState;
   const image = encrypted.img ? await bytesToDataUrl(await decrypt(key, encrypted.img)) : undefined;
   const pay = encrypted.pay ? await decryptJson<PayInfo>(key, encrypted.pay) : undefined;
-  return { state, v: encrypted.v, pv: encrypted.pv ?? 0, image, pay, canEdit: encrypted.canEdit };
+  return { state, v: encrypted.v, pv: encrypted.pv ?? 0, image, pay, canEdit: encrypted.canEdit, expiresAt: expiresAtFrom(encrypted.ttl) };
 }
 
 export type LinkRef = { id: string; key: string; token?: string };

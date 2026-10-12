@@ -58,6 +58,7 @@ describe('share box', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Crear links' }));
     const copyEdit = await screen.findByRole('button', { name: 'Copiar link para editar' });
     await waitFor(() => expect(screen.getByRole('status').textContent).toBe('En vivo'));
+    expect(screen.getByText('El link vence en 90 días si nadie lo cambia. Cada cambio lo renueva.')).toBeTruthy();
 
     fireEvent.click(copyEdit);
     await screen.findByRole('button', { name: 'Copiado ✓' });

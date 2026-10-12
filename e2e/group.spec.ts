@@ -27,7 +27,8 @@ test('splits a trip, marks who paid and keeps it after reload', async ({ page })
 
   await addExpense(page, 'Hotel', '100');
   await page.getByLabel('¿Quién pagó?').selectOption({ label: 'Beto' });
-  await page.getByRole('button', { name: 'Ana', pressed: true }).click();
+  await page.getByRole('button', { name: 'Beto', exact: true }).click();
+  await page.getByRole('button', { name: 'Caro', exact: true }).click();
   await addExpense(page, 'Taxi', '30');
 
   await expect(person(page, 'Caro')).toContainText('Debe S/ 48.33');

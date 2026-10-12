@@ -59,10 +59,13 @@ describe('group page', () => {
     expect(screen.getByText('Pagó Ana · Entre todos')).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('¿Quién pagó?'), { target: { value: group.value!.people[1].id } });
-    fireEvent.click(screen.getByRole('button', { name: 'Ana', pressed: true }));
+    expect(screen.getByRole('button', { name: 'Entre todos', pressed: true })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Beto' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Caro' }));
+    expect(screen.getByRole('button', { name: 'Entre todos', pressed: false })).toBeTruthy();
     addExpense('Taxi', '30,00');
     expect(screen.getByText('Pagó Beto · Entre Beto y Caro')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Ana', pressed: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Entre todos', pressed: true })).toBeTruthy();
 
     expect(within(personRow('Caro')).getByText('Debe S/ 48.33')).toBeTruthy();
     expect(screen.getByText('S/ 66.66', { selector: '.progress-hero' })).toBeTruthy();
@@ -86,8 +89,29 @@ describe('group page', () => {
     expect(screen.getByRole('alert').textContent).toBe('Pon en qué fue y un monto mayor a 0.');
     addExpense('Pan', '0');
     expect(screen.getByRole('alert')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Ana' }));
+    expect(screen.getByRole('button', { name: 'Entre todos', pressed: true })).toBeTruthy();
+  });
+
+  it('selects everyone in one tap and never leaves the split empty', async () => {
+    await openApp();
+    addPeople('Ana', 'Beto', 'Caro');
+    fireEvent.click(screen.getByRole('button', { name: 'Ana' }));
+    expect(screen.getByRole('button', { name: 'Ana', pressed: true })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Ana', pressed: true }));
     expect(screen.getByRole('button', { name: 'Ana', pressed: true })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Entre todos' }));
+    expect(screen.getByRole('button', { name: 'Entre todos', pressed: true })).toBeTruthy();
+  });
+
+  it('rotates a person emoji through neutral ones and keeps the currency fixed', async () => {
+    await openApp();
+    addPeople('Ana', 'Beto');
+    expect(group.value!.people.map((person) => person.emoji)).toEqual(['🤖', '👻']);
+    fireEvent.click(screen.getByRole('button', { name: 'Cambiar el emoji de Ana' }));
+    expect(group.value!.people[0].emoji).toBe('👽');
+    expect(screen.queryByLabelText('Moneda')).toBeNull();
+    expect(group.value!.currency).toBe('S/');
   });
 
   it('edits, cancels and deletes an expense', async () => {
@@ -129,8 +153,6 @@ describe('group page', () => {
     fireEvent.input(screen.getByLabelText('Otro emoji'), { target: { value: '🦙' } });
     expect(screen.getByLabelText('Emoji y colores de la cuenta').textContent).toBe('🦙');
     expect(document.querySelector('link[rel="icon"]')!.getAttribute('href')).toContain('🦙');
-    fireEvent.input(screen.getByLabelText('Moneda'), { target: { value: '$' } });
-    expect(group.value!.currency).toBe('$');
   });
 
   it('picks a palette and closes the menu with Escape or a click outside', async () => {

@@ -134,3 +134,28 @@ describe('getStore', () => {
     expect(() => getStore()).toThrow(/Upstash/);
   });
 });
+
+describe('link lifetime', () => {
+  it('reports the seconds left in every store', async () => {
+    vi.useFakeTimers();
+    const memory = new MemoryStore();
+    await memory.create('life', record);
+    vi.advanceTimersByTime(1000 * 60 * 60 * 24);
+    expect(await memory.ttl('life')).toBe(TTL_SECONDS - 60 * 60 * 24);
+    expect(await memory.ttl('missing')).toBeNull();
+
+    const redis = { ttl: vi.fn(async () => 120) };
+    expect(await new RedisStore(redis as never).ttl('id')).toBe(120);
+    redis.ttl.mockResolvedValueOnce(-2);
+    expect(await new RedisStore(redis as never).ttl('id')).toBeNull();
+    expect(redis.ttl).toHaveBeenCalledWith('bp:share:id');
+  });
+
+  it('reads the lifetime from the development file', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bp-ttl-'));
+    const store = new FileStore(join(dir, 'shares.json'));
+    await store.create('abc', record);
+    expect(await new FileStore(join(dir, 'shares.json')).ttl('abc')).toBe(TTL_SECONDS);
+    rmSync(dir, { recursive: true });
+  });
+});
