@@ -2,6 +2,7 @@ import { render } from 'preact';
 import { useEffect } from 'preact/hooks';
 import { es } from '../../i18n/es';
 import { setPageIdentity } from '../../scripts/group/page';
+import { applyPalette } from '../../scripts/palettes';
 import { ExpensesCard } from './Expenses';
 import { GroupHeader } from './GroupHeader';
 import { GroupList } from './GroupList';
@@ -35,6 +36,10 @@ export function GroupApp() {
   useEffect(() => {
     if (current) setPageIdentity(current.emoji, current.title);
   }, [current?.emoji, current?.title]);
+
+  useEffect(() => {
+    if (current) applyPalette(current.palette);
+  }, [current?.palette]);
 
   useEffect(() => {
     void syncNow();

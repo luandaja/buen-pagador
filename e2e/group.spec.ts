@@ -21,7 +21,7 @@ const person = (page: Page, name: string) => page.locator('.person', { hasText: 
 test('splits a trip, marks who paid and keeps it after reload', async ({ page }) => {
   await page.goto('/cuenta');
   await page.getByLabel('Nombre de la cuenta').fill('Viaje a Cusco');
-  await page.getByLabel('Emoji de la cuenta').click();
+  await page.getByLabel('Emoji y colores de la cuenta').click();
   await page.getByRole('button', { name: 'Usar ✈️' }).click();
   await addPeople(page, 'Ana', 'Beto', 'Caro');
 
@@ -54,7 +54,7 @@ test('splits a trip, marks who paid and keeps it after reload', async ({ page })
   });
   await page.reload();
   await expect(person(page, 'Caro')).toContainText('Pagó S/ 48.33');
-  await expect(page.getByLabel('Emoji de la cuenta')).toHaveText('✈️');
+  await expect(page.getByLabel('Emoji y colores de la cuenta')).toHaveText('✈️');
 });
 
 test('keeps a note and a receipt photo with an expense', async ({ page }) => {

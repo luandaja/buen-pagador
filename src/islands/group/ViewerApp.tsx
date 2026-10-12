@@ -4,6 +4,7 @@ import { es } from '../../i18n/es';
 import { fromPlain, type Plain } from '../../scripts/group/codec';
 import { newGroup } from '../../scripts/group/model';
 import { setPageIdentity } from '../../scripts/group/page';
+import { applyPalette } from '../../scripts/palettes';
 import { pullRemote } from '../../scripts/group/remote';
 import { parsePublicHash, ShareError } from '../../scripts/share';
 import { ExpensesCard } from './Expenses';
@@ -21,6 +22,7 @@ const problemOf = (error: unknown): Problem => (error instanceof ShareError && e
 function showPlain(plain: Plain) {
   group.value = fromPlain(plain, group.value ?? newGroup());
   setPageIdentity(group.value.emoji, group.value.title);
+  applyPalette(group.value.palette);
 }
 
 function ViewerState({ problem }: { problem: Problem }) {

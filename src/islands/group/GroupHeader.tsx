@@ -24,7 +24,12 @@ export function GroupHeader() {
   if (readOnly.value) return <ReadOnlyHeader />;
   return (
     <section class="group-head">
-      <EmojiPicker value={current.emoji} onPick={(emoji) => edit((draft) => ({ ...draft, emoji }))} />
+      <EmojiPicker
+        value={current.emoji}
+        palette={current.palette}
+        onPick={(emoji) => edit((draft) => ({ ...draft, emoji }))}
+        onPalette={(palette) => edit((draft) => ({ ...draft, palette }))}
+      />
       <div class="field grow">
         <label for="groupTitle">{t.titleLabel}</label>
         <input

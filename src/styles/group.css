@@ -523,3 +523,39 @@ span.emoji-current {
   white-space: nowrap;
   font-style: italic;
 }
+
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.palette-grid legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--board-dim);
+}
+
+.swatch {
+  aspect-ratio: 1;
+  min-width: 36px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: conic-gradient(var(--swatch-bg) 0 50%, var(--swatch-accent) 0 75%, var(--swatch-ink) 0);
+  cursor: pointer;
+}
+
+.swatch[aria-pressed='true'] {
+  border-color: var(--chalk);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.swatch span {
+  display: block;
+}
