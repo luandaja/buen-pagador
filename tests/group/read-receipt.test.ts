@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ocrOnDevice, prefersLocalOcr, readReceipt, setPrefersLocalOcr } from '../../src/scripts/group/read-receipt';
+import { loadTesseract, ocrOnDevice, prefersLocalOcr, readReceipt, setPrefersLocalOcr, TESSERACT_URL } from '../../src/scripts/group/read-receipt';
 
 vi.mock('../../src/scripts/image', () => ({
   receiptFromFile: vi.fn(async () => 'data:image/jpeg;base64,FOTO'),
@@ -10,7 +10,8 @@ vi.mock('../../src/scripts/image', () => ({
 
 const recognize = vi.fn(async () => ({ data: { text: 'Pan con pollo 2 5.50\n' } }));
 const terminate = vi.fn(async () => {});
-vi.mock('tesseract.js', () => ({ createWorker: vi.fn(async () => ({ recognize, terminate })) }));
+const createWorker = vi.fn(async () => ({ recognize, terminate }));
+const load = async () => ({ createWorker });
 
 const aiReply = JSON.parse(readFileSync(resolve('tests/fixtures/receipt-ai.json'), 'utf8'));
 const file = new File(['x'], 'boleta.jpg', { type: 'image/jpeg' });
@@ -67,12 +68,16 @@ describe('readReceipt', () => {
     vi.restoreAllMocks();
   });
 
+  it('loads a pinned Tesseract build from the CDN only when needed', () => {
+    expect(TESSERACT_URL).toMatch(/tesseract\.js@\d+\.\d+\.\d+\/dist\/tesseract\.esm\.min\.js$/);
+    expect(typeof loadTesseract).toBe('function');
+  });
+
   it('runs Tesseract in Spanish and always frees the worker', async () => {
-    expect(await ocrOnDevice('data:x')).toBe('Pan con pollo 2 5.50\n');
-    const { createWorker } = await import('tesseract.js');
+    expect(await ocrOnDevice('data:x', load)).toBe('Pan con pollo 2 5.50\n');
     expect(createWorker).toHaveBeenCalledWith('spa');
     recognize.mockRejectedValueOnce(new Error('bad image'));
-    await expect(ocrOnDevice('data:x')).rejects.toThrow('bad image');
+    await expect(ocrOnDevice('data:x', load)).rejects.toThrow('bad image');
     expect(terminate).toHaveBeenCalledTimes(2);
   });
 });

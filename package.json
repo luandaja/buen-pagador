@@ -29,8 +29,7 @@
     "@vladmandic/face-api": "^1.7.15",
     "astro": "^7.3.5",
     "idb": "^8.0.3",
-    "preact": "^11.0.1",
-    "tesseract.js": "^7.0.0"
+    "preact": "^11.0.1"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",

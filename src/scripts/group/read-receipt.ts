@@ -9,8 +9,17 @@ export interface ReadReceipt {
   photo: string;
 }
 
-export async function ocrOnDevice(image: string): Promise<string> {
-  const { createWorker } = await import('tesseract.js');
+export const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.esm.min.js';
+
+type Tesseract = { createWorker: (lang: string) => Promise<{ recognize: (image: string) => Promise<{ data: { text: string } }>; terminate: () => Promise<unknown> }> };
+
+export async function loadTesseract(): Promise<Tesseract> {
+  const module = await import(/* @vite-ignore */ TESSERACT_URL);
+  return module.default ?? module;
+}
+
+export async function ocrOnDevice(image: string, load: () => Promise<Tesseract> = loadTesseract): Promise<string> {
+  const { createWorker } = await load();
   const worker = await createWorker('spa');
   try {
     return (await worker.recognize(image)).data.text;
