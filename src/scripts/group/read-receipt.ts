@@ -11,7 +11,7 @@ export interface ReadReceipt {
 
 export const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.esm.min.js';
 
-type Box = { y0: number; y1: number };
+type Box = { x0?: number; x1?: number; y0: number; y1: number };
 type TesseractLine = { text: string; bbox: Box };
 type TesseractData = { text: string; blocks?: { paragraphs: { lines: TesseractLine[] }[] }[] | null };
 type Worker = { recognize: (image: string, options?: object, output?: object) => Promise<{ data: TesseractData }>; terminate: () => Promise<unknown> };
@@ -22,10 +22,11 @@ export async function loadTesseract(): Promise<Tesseract> {
   return module.default ?? module;
 }
 
-export function linesOf(data: TesseractData, height: number): OcrLine[] {
+export function linesOf(data: TesseractData, height: number, width = 0): OcrLine[] {
   const lines = (data.blocks ?? []).flatMap((block) => block.paragraphs.flatMap((paragraph) => paragraph.lines));
   if (!lines.length) return data.text.split('\n').map((text) => ({ text }));
-  return lines.map((line) => ({ text: line.text.trim(), band: toBand(line.bbox.y0 / height, line.bbox.y1 / height) }));
+  const across = (x: number | undefined) => (width && x != null ? x / width : undefined);
+  return lines.map(({ text, bbox }) => ({ text: text.trim(), band: toBand(bbox.y0 / height, bbox.y1 / height, across(bbox.x0), across(bbox.x1)) }));
 }
 
 export async function ocrOnDevice(image: string, load: () => Promise<Tesseract> = loadTesseract): Promise<OcrLine[]> {
@@ -33,7 +34,7 @@ export async function ocrOnDevice(image: string, load: () => Promise<Tesseract> 
   const worker = await createWorker('spa');
   try {
     const { data } = await worker.recognize(image, {}, { text: true, blocks: true });
-    return linesOf(data, picture.naturalHeight || 1);
+    return linesOf(data, picture.naturalHeight || 1, picture.naturalWidth);
   } finally {
     await worker.terminate();
   }

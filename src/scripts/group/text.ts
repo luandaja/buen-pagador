@@ -1,6 +1,6 @@
 import { es } from '../../i18n/es';
 import { money } from '../state';
-import { beneficiaries, computeBalances, computeGroupTotals, type Balance, type Expense, type Group, type Person } from './model';
+import { beneficiaries, computeBalances, computeGroupTotals, unassignedItems, type Balance, type Expense, type Group, type Person } from './model';
 
 const t = es.group;
 
@@ -35,7 +35,11 @@ export function toggleLabel(balance: Balance): string {
 }
 
 export function amongText(expense: Expense, people: Person[]): string {
-  if (expense.items?.length) return t.itemsSummary(expense.items.length, !!expense.tip);
+  if (expense.items?.length) {
+    const pending = unassignedItems(expense);
+    const summary = t.itemsSummary(expense.items.length, !!expense.tip);
+    return pending ? `${summary} · ${t.unassigned(pending)}` : summary;
+  }
   const among = beneficiaries(expense, people);
   if (among.length === people.length) return t.everyone;
   const names = among.map((id) => people.find((person) => person.id === id)!.name);

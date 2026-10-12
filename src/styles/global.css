@@ -1770,14 +1770,34 @@ html:has(.drawer[open]) {
   font-variant-numeric: tabular-nums;
 }
 
-.section-nav {
-  position: relative;
-  z-index: 1;
+.masthead-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
-  max-width: 1240px;
-  margin: 0 auto;
-  padding: 8px 16px 0;
+}
+
+.section-nav {
+  display: flex;
+  gap: 6px;
+}
+
+@media (max-width: 520px) {
+  .masthead {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .masthead > :first-child {
+    flex: 1 1 100%;
+  }
+
+  .masthead-actions {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+  }
 }
 
 .section-nav a {

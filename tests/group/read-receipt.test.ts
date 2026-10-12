@@ -6,12 +6,12 @@ import { linesOf, loadTesseract, ocrOnDevice, prefersLocalOcr, readReceipt, setP
 vi.mock('../../src/scripts/image', () => ({
   receiptFromFile: vi.fn(async () => 'data:image/jpeg;base64,FOTO'),
   receiptForAi: vi.fn(async () => 'data:image/jpeg;base64,GRANDE'),
-  loadImage: vi.fn(async () => ({ naturalHeight: 200 })),
+  loadImage: vi.fn(async () => ({ naturalHeight: 200, naturalWidth: 100 })),
 }));
 
-const tesseractLine = (text: string, y0: number, y1: number) => ({ text, bbox: { y0, y1 } });
+const tesseractLine = (text: string, y0: number, y1: number, x0?: number, x1?: number) => ({ text, bbox: { y0, y1, x0, x1 } });
 const recognize = vi.fn(async () => ({
-  data: { text: 'Pan con pollo 2 5.50\n', blocks: [{ paragraphs: [{ lines: [tesseractLine('Pan con pollo 2 5.50\n', 40, 60)] }] }] },
+  data: { text: 'Pan con pollo 2 5.50\n', blocks: [{ paragraphs: [{ lines: [tesseractLine('Pan con pollo 2 5.50\n', 40, 60, 10, 90)] }] }] },
 }));
 const terminate = vi.fn(async () => {});
 const createWorker = vi.fn(async () => ({ recognize, terminate }));
@@ -84,7 +84,7 @@ describe('readReceipt', () => {
   });
 
   it('runs Tesseract in Spanish and always frees the worker', async () => {
-    expect(await ocrOnDevice('data:x', load)).toEqual([{ text: 'Pan con pollo 2 5.50', band: { top: 0.2, bottom: 0.3 } }]);
+    expect(await ocrOnDevice('data:x', load)).toEqual([{ text: 'Pan con pollo 2 5.50', band: { top: 0.2, bottom: 0.3, left: 0.1, right: 0.9 } }]);
     expect(recognize).toHaveBeenCalledWith('data:x', {}, { text: true, blocks: true });
     expect(createWorker).toHaveBeenCalledWith('spa');
     recognize.mockRejectedValueOnce(new Error('bad image'));

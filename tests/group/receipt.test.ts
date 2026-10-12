@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { addPerson, type Band, computeBalances, computeGroupTotals, itemizedShares, newGroup, saveExpense, splitByWeight, toCents, type Group } from '../../src/scripts/group/model';
+import { addPerson, type Band, computeBalances, computeGroupTotals, itemizedShares, unassignedItems, newGroup, saveExpense, splitByWeight, toCents, type Group } from '../../src/scripts/group/model';
 import { checkReceipt, draftFromExpense, draftItems, expenseFromDraft, locateDraft, locateItems, normalizeParsed, parseJsonReply, parseReceiptLines, parseReceiptText, splitUnits, toAmount, toBand, type DraftItem } from '../../src/scripts/group/receipt';
 
 const aiReply = JSON.parse(readFileSync(resolve('tests/fixtures/receipt-ai.json'), 'utf8'));
@@ -49,6 +49,11 @@ describe('reading a receipt with AI', () => {
   it('ignores charges the prices already include when items and tip match the total', () => {
     const parsed = normalizeParsed({ items: [{ name: 'Menú', amount: 30 }], charges: 5.4, tip: 3, total: 33 });
     expect(parsed).toMatchObject({ tip: 3, total: 33 });
+  });
+
+  it('keeps the horizontal extent of a line when known', () => {
+    expect(toBand(0.1, 0.2, 0.15, 0.8)).toEqual({ top: 0.1, bottom: 0.2, left: 0.15, right: 0.8 });
+    expect(toBand(0.1, 0.2, 0.8, 0.15)).toEqual({ top: 0.1, bottom: 0.2 });
   });
 
   it('keeps where each line sits in the photo, in fractions or per mille', () => {
@@ -152,9 +157,9 @@ describe('splitting a receipt', () => {
     expect(water.quantity).toBe(1);
   });
 
-  it('blocks saving while an item has no owner or the sum does not match the photo', () => {
+  it('allows saving with items still unassigned, but never when the sum differs from the photo', () => {
     const items = draftItems(normalizeParsed(aiReply));
-    expect(checkReceipt(items, '45.19', '497.09')).toEqual({ orphans: 14, sum: 497.09, difference: 0, ready: false });
+    expect(checkReceipt(items, '45.19', '497.09')).toEqual({ orphans: 14, sum: 497.09, difference: 0, ready: true });
     const assigned = assignedDraft(friends());
     expect(checkReceipt(assigned, '45.19', '497.09')).toEqual({ orphans: 0, sum: 497.09, difference: 0, ready: true });
     expect(checkReceipt(assigned, '40', '497.09')).toMatchObject({ difference: 5.19, ready: false });
@@ -177,6 +182,15 @@ describe('splitting a receipt', () => {
     expect(balances.every((balance) => balance.share > 0)).toBe(true);
   });
 
+  it('charges unassigned items to whoever paid until they are assigned', () => {
+    const group = friends();
+    const [ana, beto] = group.people.map((person) => person.id);
+    const expense = { id: 'x', what: 'Cena', amount: 30, by: beto, items: [{ id: 'a', what: 'Pan', amount: 10, for: [ana] }, { id: 'b', what: 'Vino', amount: 20, for: [] }] };
+    expect(Object.fromEntries(itemizedShares(expense, group.people))).toMatchObject({ [ana]: 1000, [beto]: 2000 });
+    expect(unassignedItems(expense)).toBe(1);
+    expect(itemizedShares({ ...expense, by: 'gone' }, group.people).get(ana)).toBe(1500);
+  });
+
   it('spreads the tip by what each one ate, and evenly when nobody ate anything', () => {
     expect(splitByWeight(100, [3, 1])).toEqual([75, 25]);
     expect(splitByWeight(100, [1, 1, 1])).toEqual([34, 33, 33]);
@@ -190,5 +204,19 @@ describe('splitting a receipt', () => {
     const group = friends();
     const expense = { id: 'x', what: 'X', amount: 8, by: group.people[0].id, items: [{ id: 'i', what: 'Pan', amount: 8, for: ['gone'] }] };
     expect([...itemizedShares(expense, group.people).values()]).toEqual([200, 200, 200, 200]);
+  });
+});
+
+describe('framing the photo', () => {
+  it('centers the line vertically and the receipt horizontally, without leaving the image', async () => {
+    const { lensOffset, receiptCenter } = await import('../../src/islands/group/ReceiptPhoto');
+    const lens = { width: 300, height: 200 };
+    const image = { width: 600, height: 800 };
+    expect(lensOffset(lens, image, { top: 0.5, bottom: 0.5 }, 0.5)).toEqual({ x: -150, y: -300 });
+    expect(lensOffset(lens, image, { top: 0, bottom: 0.01 }, 0)).toEqual({ x: 0, y: 0 });
+    expect(lensOffset(lens, image, { top: 0.99, bottom: 1 }, 1)).toEqual({ x: -300, y: -600 });
+    expect(lensOffset(lens, { width: 200, height: 100 }, undefined)).toEqual({ x: 50, y: 50 });
+    expect(receiptCenter([undefined, { top: 0, bottom: 1 }])).toBeUndefined();
+    expect(receiptCenter([{ top: 0, bottom: 1, left: 0.2, right: 0.6 }, { top: 0, bottom: 1, left: 0.3, right: 0.5 }, { top: 0, bottom: 1, left: 0.9, right: 1 }])).toBe(0.4);
   });
 });

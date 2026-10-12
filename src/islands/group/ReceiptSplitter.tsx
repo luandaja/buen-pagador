@@ -23,7 +23,7 @@ import { createId } from '../../scripts/state';
 import { ocrOnDevice } from '../../scripts/group/read-receipt';
 import { loadReceipt } from '../../scripts/group/receipts';
 import { AmongPicker, storeReceipt } from './ExpenseForm';
-import { ReceiptPhoto } from './ReceiptPhoto';
+import { ReceiptPhoto, receiptCenter } from './ReceiptPhoto';
 import { edit, group } from './store';
 
 const t = es.group;
@@ -40,6 +40,29 @@ type ItemProps = {
   onRemove: () => void;
   onLocate: () => void;
 };
+
+const MAX_QUANTITY = 99;
+
+function QuantityRow({ item, name, onChange, onSplit }: { item: DraftItem; name: string; onChange: (patch: Partial<DraftItem>) => void; onSplit: () => void }) {
+  const quantity = item.quantity;
+  return (
+    <div class="receipt-quantity">
+      <span class="field-label">{t.receiptQuantity}</span>
+      <button type="button" class="icon-btn small" aria-label={t.receiptQuantityLess(name)} disabled={quantity <= 1} onClick={() => onChange({ quantity: quantity - 1 })}>
+        −
+      </button>
+      <span class="quantity-value">×{quantity}</span>
+      <button type="button" class="icon-btn small" aria-label={t.receiptQuantityMore(name)} disabled={quantity >= MAX_QUANTITY} onClick={() => onChange({ quantity: quantity + 1 })}>
+        +
+      </button>
+      {quantity > 1 && (
+        <button type="button" class="link" onClick={onSplit}>
+          {t.receiptSplitUnits(quantity)}
+        </button>
+      )}
+    </div>
+  );
+}
 
 const itemClass = (item: DraftItem, active: boolean) => `receipt-item${item.for.length ? '' : ' is-orphan'}${active ? ' is-active' : ''}`;
 
@@ -59,11 +82,7 @@ function ItemRow({ item, people, active, canLocate, onChange, onSplit, onRemove,
           ×
         </button>
       </div>
-      {item.quantity > 1 && (
-        <button type="button" class="link" onClick={onSplit}>
-          {t.receiptSplitUnits(item.quantity)}
-        </button>
-      )}
+      <QuantityRow item={item} name={name} onChange={onChange} onSplit={onSplit} />
       <AmongPicker people={people} among={item.for} onChange={(ids) => onChange({ for: ids })} legend={t.receiptWhose(name)} />
     </li>
   );
@@ -88,6 +107,39 @@ function Difference({ check, draft, onDraft }: { check: ReceiptCheck; draft: Rec
         {t.receiptToTip}
       </button>
     </div>
+  );
+}
+
+function ReceiptHead({ draft, people, onDraft }: { draft: ReceiptDraft; people: Person[]; onDraft: (draft: ReceiptDraft) => void }) {
+  return (
+    <>
+      <div class="field">
+        <label for="receiptWhat">{t.what}</label>
+        <input id="receiptWhat" value={draft.what} maxLength={60} onInput={(event) => onDraft({ ...draft, what: event.currentTarget.value })} />
+      </div>
+      <div class="field">
+        <label for="receiptBy">{t.receiptPayer}</label>
+        <select id="receiptBy" value={draft.by} onChange={(event) => onDraft({ ...draft, by: event.currentTarget.value })}>
+          {people.map((person) => (
+            <option key={person.id} value={person.id}>
+              {person.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    </>
+  );
+}
+
+function Progress({ draft, orphans }: { draft: ReceiptDraft; orphans: number }) {
+  return (
+    <>
+      <p class="receipt-progress">
+        {t.receiptAssigned(draft.items.length - orphans, draft.items.length)}
+        {orphans > 0 && <span class="receipt-orphans"> · {t.receiptOrphans(orphans)}</span>}
+      </p>
+      {orphans > 0 && <p class="help">{t.receiptOrphansHelp}</p>}
+    </>
   );
 }
 
@@ -170,7 +222,7 @@ export function ReceiptSplitter({ splitting, onDone }: { splitting: Splitting; o
 
   return (
     <section class={`receipt-splitter${photo ? ' has-photo' : ''}`} aria-labelledby="receiptTitle">
-      {photo && <ReceiptPhoto photo={photo} band={activeBand} />}
+      {photo && <ReceiptPhoto photo={photo} band={activeBand} center={receiptCenter(draft.items.map((item) => item.band))} />}
       {locating && (
         <p class="help" role="status">
           {t.receiptLocating}
@@ -180,24 +232,8 @@ export function ReceiptSplitter({ splitting, onDone }: { splitting: Splitting; o
         <h3 id="receiptTitle">{t.receiptTitle}</h3>
       </div>
       {sourceText(splitting) && <p class="help">{sourceText(splitting)}</p>}
-      <div class="field">
-        <label for="receiptWhat">{t.what}</label>
-        <input id="receiptWhat" value={draft.what} maxLength={60} onInput={(event) => setDraft({ ...draft, what: event.currentTarget.value })} />
-      </div>
-      <div class="field">
-        <label for="receiptBy">{t.receiptPayer}</label>
-        <select id="receiptBy" value={draft.by} onChange={(event) => setDraft({ ...draft, by: event.currentTarget.value })}>
-          {people.map((person) => (
-            <option key={person.id} value={person.id}>
-              {person.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <p class="receipt-progress">
-        {t.receiptAssigned(draft.items.length - check.orphans, draft.items.length)}
-        {check.orphans > 0 && <span class="receipt-orphans"> · {t.receiptOrphans(check.orphans)}</span>}
-      </p>
+      <ReceiptHead draft={draft} people={people} onDraft={setDraft} />
+      <Progress draft={draft} orphans={check.orphans} />
       <ul class="receipt-items">
         {draft.items.map((item) => (
           <ItemRow

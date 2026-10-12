@@ -61,11 +61,25 @@ const toFraction = (value: unknown) => {
   return number > 1 ? number / 1000 : number;
 };
 
-export function toBand(top: unknown, bottom: unknown): Band | undefined {
+const round3 = (value: number) => Math.round(value * 1000) / 1000;
+
+function horizontal(left: unknown, right: unknown): Pick<Band, 'left' | 'right'> {
+  const start = toFraction(left);
+  const end = toFraction(right);
+  return start != null && end != null && end > start && end <= 1 ? { left: round3(start), right: round3(end) } : {};
+}
+
+export function toBand(top: unknown, bottom: unknown, left?: unknown, right?: unknown): Band | undefined {
   const start = toFraction(top);
   const end = toFraction(bottom);
   if (start == null || end == null || end <= start || end > 1) return undefined;
-  return { top: Math.round(start * 1000) / 1000, bottom: Math.round(end * 1000) / 1000 };
+  return { top: round3(start), bottom: round3(end), ...horizontal(left, right) };
+}
+
+function joinBands(first: Band, second: Band): Band {
+  const left = Math.min(first.left ?? 1, second.left ?? 1);
+  const right = Math.max(first.right ?? 0, second.right ?? 0);
+  return { top: first.top, bottom: second.bottom, ...(right > left ? { left, right } : {}) };
 }
 
 function normalizeItem(raw: unknown): ParsedItem | null {
@@ -162,7 +176,7 @@ export function checkReceipt(items: DraftItem[], tip: string, total: string): Re
   const cents = items.reduce((acc, item) => acc + toCents(toAmount(item.amount) ?? 0), 0) + toCents(toAmount(tip) ?? 0);
   const expected = toAmount(total);
   const difference = expected ? fromCents(toCents(expected) - cents) : null;
-  return { orphans, sum: fromCents(cents), difference, ready: items.length > 0 && orphans === 0 && difference === 0 };
+  return { orphans, sum: fromCents(cents), difference, ready: items.length > 0 && difference === 0 };
 }
 
 export interface ReceiptDraft {
@@ -229,9 +243,9 @@ function bandAt(lines: OcrLine[], index: number, amount: number): Band | undefin
   const { band, text } = lines[index];
   const above = lines[index - 1]?.band;
   if (!band) return undefined;
-  if (above && isAmountOnly(text)) return { top: above.top, bottom: band.bottom };
+  if (above && isAmountOnly(text)) return joinBands(above, band);
   const below = lines[index + 1];
-  return amountLineBelow(below, amount) ? { top: band.top, bottom: below!.band!.bottom } : band;
+  return amountLineBelow(below, amount) ? joinBands(band, below!.band!) : band;
 }
 
 function fillGaps<T extends { band?: Band }>(items: T[]): T[] {
@@ -239,7 +253,7 @@ function fillGaps<T extends { band?: Band }>(items: T[]): T[] {
     const before = items[index - 1]?.band;
     const after = items[index + 1]?.band;
     if (item.band || !before || !after || after.top <= before.bottom) return item;
-    return { ...item, band: { top: before.bottom, bottom: after.top } };
+    return { ...item, band: joinBands({ ...before, top: before.bottom }, { ...after, bottom: after.top }) };
   });
 }
 
