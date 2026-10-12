@@ -1,14 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { loadTesseract, ocrOnDevice, prefersLocalOcr, readReceipt, setPrefersLocalOcr, TESSERACT_URL } from '../../src/scripts/group/read-receipt';
+import { linesOf, loadTesseract, ocrOnDevice, prefersLocalOcr, readReceipt, setPrefersLocalOcr, TESSERACT_URL } from '../../src/scripts/group/read-receipt';
 
 vi.mock('../../src/scripts/image', () => ({
   receiptFromFile: vi.fn(async () => 'data:image/jpeg;base64,FOTO'),
   receiptForAi: vi.fn(async () => 'data:image/jpeg;base64,GRANDE'),
+  loadImage: vi.fn(async () => ({ naturalHeight: 200 })),
 }));
 
-const recognize = vi.fn(async () => ({ data: { text: 'Pan con pollo 2 5.50\n' } }));
+const tesseractLine = (text: string, y0: number, y1: number) => ({ text, bbox: { y0, y1 } });
+const recognize = vi.fn(async () => ({
+  data: { text: 'Pan con pollo 2 5.50\n', blocks: [{ paragraphs: [{ lines: [tesseractLine('Pan con pollo 2 5.50\n', 40, 60)] }] }] },
+}));
 const terminate = vi.fn(async () => {});
 const createWorker = vi.fn(async () => ({ recognize, terminate }));
 const load = async () => ({ createWorker });
@@ -30,7 +34,7 @@ describe('readReceipt', () => {
   });
 
   it('falls back to the device when the AI fails, is offline or reads nothing', async () => {
-    const ocr = vi.fn(async () => 'Pan con pollo 2 5.50\n');
+    const ocr = vi.fn(async () => [{ text: 'Pan con pollo 2 5.50' }]);
     for (const fetcher of [
       async () => new Response('{"error":"quota"}', { status: 503 }),
       async () => {
@@ -46,7 +50,8 @@ describe('readReceipt', () => {
   it('never calls the AI when the person prefers reading on the device', async () => {
     const fetcher = vi.fn();
     vi.stubGlobal('fetch', fetcher);
-    const read = await readReceipt(file, true, async () => 'Pan con pollo 2 5.50\n');
+    const read = await readReceipt(file, true, async () => [{ text: 'Pan con pollo 2 5.50', band: { top: 0.2, bottom: 0.3 } }]);
+    expect(read.parsed.items[0].band).toEqual({ top: 0.2, bottom: 0.3 });
     expect(read.source).toBe('device');
     expect(fetcher).not.toHaveBeenCalled();
   });
@@ -68,13 +73,19 @@ describe('readReceipt', () => {
     vi.restoreAllMocks();
   });
 
+  it('falls back to plain text lines when Tesseract gives no layout', () => {
+    expect(linesOf({ text: 'a\nb', blocks: null }, 100)).toEqual([{ text: 'a' }, { text: 'b' }]);
+    expect(linesOf({ text: '', blocks: [{ paragraphs: [{ lines: [tesseractLine(' x ', 10, 5)] }] }] }, 100)).toEqual([{ text: 'x', band: undefined }]);
+  });
+
   it('loads a pinned Tesseract build from the CDN only when needed', () => {
     expect(TESSERACT_URL).toMatch(/tesseract\.js@\d+\.\d+\.\d+\/dist\/tesseract\.esm\.min\.js$/);
     expect(typeof loadTesseract).toBe('function');
   });
 
   it('runs Tesseract in Spanish and always frees the worker', async () => {
-    expect(await ocrOnDevice('data:x', load)).toBe('Pan con pollo 2 5.50\n');
+    expect(await ocrOnDevice('data:x', load)).toEqual([{ text: 'Pan con pollo 2 5.50', band: { top: 0.2, bottom: 0.3 } }]);
+    expect(recognize).toHaveBeenCalledWith('data:x', {}, { text: true, blocks: true });
     expect(createWorker).toHaveBeenCalledWith('spa');
     recognize.mockRejectedValueOnce(new Error('bad image'));
     await expect(ocrOnDevice('data:x', load)).rejects.toThrow('bad image');

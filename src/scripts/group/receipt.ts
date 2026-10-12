@@ -1,10 +1,16 @@
 import { createId } from '../state';
-import { fromCents, splitCents, toCents, type Expense } from './model';
+import { fromCents, splitCents, toCents, type Band, type Expense } from './model';
 
 export interface ParsedItem {
   what: string;
   quantity: number;
   amount: number;
+  band?: Band;
+}
+
+export interface OcrLine {
+  text: string;
+  band?: Band;
 }
 
 export interface ParsedReceipt {
@@ -20,6 +26,7 @@ export interface DraftItem {
   amount: string;
   quantity: number;
   for: string[];
+  band?: Band;
 }
 
 const MAX_ITEMS = 100;
@@ -48,12 +55,27 @@ function lineAmount(amount: number | null, unitPrice: number | null, quantity: n
   return Math.round(unitPrice * quantity * 100) / 100;
 }
 
+const toFraction = (value: unknown) => {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return null;
+  return number > 1 ? number / 1000 : number;
+};
+
+export function toBand(top: unknown, bottom: unknown): Band | undefined {
+  const start = toFraction(top);
+  const end = toFraction(bottom);
+  if (start == null || end == null || end <= start || end > 1) return undefined;
+  return { top: Math.round(start * 1000) / 1000, bottom: Math.round(end * 1000) / 1000 };
+}
+
 function normalizeItem(raw: unknown): ParsedItem | null {
   const item = (raw ?? {}) as Record<string, unknown>;
   const what = cleanName(item.name ?? item.what);
   const quantity = toQuantity(item.quantity);
   const amount = lineAmount(toAmount(item.amount), toAmount(item.unitPrice), quantity);
-  return what && amount ? { what, quantity, amount } : null;
+  if (!what || !amount) return null;
+  const band = toBand(item.top, item.bottom);
+  return band ? { what, quantity, amount, band } : { what, quantity, amount };
 }
 
 const centsOf = (value: number) => Math.round(value * 100);
@@ -102,23 +124,25 @@ function amountBelow(unit: number, quantity: number, next: string | undefined): 
   return quantity > 1 && below && Math.abs(below - multiplied) < 1 ? below : multiplied;
 }
 
-function lineItem(line: string, next: string | undefined): ParsedItem | null {
-  const match = ITEM_LINE.exec(line.trim());
+function lineItem(line: OcrLine, next: OcrLine | undefined): ParsedItem | null {
+  const match = ITEM_LINE.exec(line.text.trim());
   if (!match) return null;
   const quantity = toQuantity(match[2]);
-  const amount = amountBelow(toAmount(match[3])!, quantity, next);
+  const amount = amountBelow(toAmount(match[3])!, quantity, next?.text);
   const what = capitalize(cleanName(match[1]));
-  return what && amount && !TOTALS_WORD.test(what) ? { what, quantity, amount } : null;
+  if (!what || !amount || TOTALS_WORD.test(what)) return null;
+  return line.band ? { what, quantity, amount, band: line.band } : { what, quantity, amount };
 }
 
-export function parseReceiptText(text: string): ParsedReceipt {
-  const lines = text.split('\n');
+export function parseReceiptLines(lines: OcrLine[]): ParsedReceipt {
   const items = lines.map((line, index) => lineItem(line, lines[index + 1])).filter((item): item is ParsedItem => item !== null);
   return { merchant: '', items: items.slice(0, MAX_ITEMS), tip: 0, total: null };
 }
 
+export const parseReceiptText = (text: string) => parseReceiptLines(text.split('\n').map((line) => ({ text: line })));
+
 export function draftItems(parsed: ParsedReceipt): DraftItem[] {
-  return parsed.items.map((item) => ({ id: createId(), what: item.what, amount: item.amount.toFixed(2), quantity: item.quantity, for: [] }));
+  return parsed.items.map((item) => ({ id: createId(), what: item.what, amount: item.amount.toFixed(2), quantity: item.quantity, for: [], ...(item.band ? { band: item.band } : {}) }));
 }
 
 export function splitUnits(item: DraftItem): DraftItem[] {
@@ -164,13 +188,74 @@ export function draftFromParsed(parsed: ParsedReceipt, by: string, fallbackWhat:
 }
 
 export function draftFromExpense(expense: Expense): ReceiptDraft {
-  const items = (expense.items ?? []).map((item) => ({ id: item.id, what: item.what, amount: item.amount.toFixed(2), quantity: 1, for: item.for }));
+  const items = (expense.items ?? []).map((item) => ({ id: item.id, what: item.what, amount: item.amount.toFixed(2), quantity: 1, for: item.for, ...(item.band ? { band: item.band } : {}) }));
   return { what: expense.what, by: expense.by, items, tip: formatAmount(expense.tip ?? null), total: expense.amount.toFixed(2) };
 }
 
 export function expenseFromDraft(draft: ReceiptDraft, base: { id: string; note?: string; at?: number }): Expense {
-  const items = draft.items.map((item) => ({ id: item.id, what: item.what.trim() || 'Ítem', amount: toAmount(item.amount) ?? 0, for: item.for }));
+  const items = draft.items.map((item) => ({ id: item.id, what: item.what.trim() || 'Ítem', amount: toAmount(item.amount) ?? 0, for: item.for, ...(item.band ? { band: item.band } : {}) }));
   const tip = toAmount(draft.tip) ?? 0;
   const amount = fromCents(items.reduce((sum, item) => sum + toCents(item.amount), 0) + toCents(tip));
   return { ...base, what: draft.what.trim() || 'Boleta', by: draft.by, amount, items, tip: tip || undefined };
+}
+
+const MIN_SCORE = 0.5;
+const DISTANCE_PENALTY = 0.01;
+const words = (text: string): string[] => [...(text.toLocaleLowerCase('es').normalize('NFD').replace(/\p{Diacritic}/gu, '').match(/[\p{L}\p{N}]{3,}/gu) ?? [])];
+const amountPattern = (amount: number) => new RegExp(`(^|[^\\d])${Math.floor(amount)}[.,]${amount.toFixed(2).slice(-2)}(?!\\d)`);
+const isAmountOnly = (text: string) => /^\D{0,3}\d{1,5}[.,]\d{2}\D{0,3}$/.test(text.trim());
+
+function lineScore(item: { what: string; amount: number }, line: OcrLine): number {
+  const named = words(item.what);
+  const found = words(line.text);
+  const overlap = named.length ? named.filter((word) => found.includes(word)).length / named.length : 0;
+  return (amountPattern(item.amount).test(line.text) ? 1 : 0) + overlap;
+}
+
+function bestLine(item: { what: string; amount: number }, lines: OcrLine[], from: number): number {
+  let best = -1;
+  let bestRank = -Infinity;
+  for (let index = from; index < lines.length; index++) {
+    const score = lineScore(item, lines[index]);
+    const rank = score - DISTANCE_PENALTY * (index - from);
+    if (score > MIN_SCORE && rank > bestRank) [best, bestRank] = [index, rank];
+  }
+  return best;
+}
+
+const amountLineBelow = (line: OcrLine | undefined, amount: number) => !!line?.band && isAmountOnly(line.text) && amountPattern(amount).test(line.text);
+
+function bandAt(lines: OcrLine[], index: number, amount: number): Band | undefined {
+  const { band, text } = lines[index];
+  const above = lines[index - 1]?.band;
+  if (!band) return undefined;
+  if (above && isAmountOnly(text)) return { top: above.top, bottom: band.bottom };
+  const below = lines[index + 1];
+  return amountLineBelow(below, amount) ? { top: band.top, bottom: below!.band!.bottom } : band;
+}
+
+function fillGaps<T extends { band?: Band }>(items: T[]): T[] {
+  return items.map((item, index) => {
+    const before = items[index - 1]?.band;
+    const after = items[index + 1]?.band;
+    if (item.band || !before || !after || after.top <= before.bottom) return item;
+    return { ...item, band: { top: before.bottom, bottom: after.top } };
+  });
+}
+
+export function locateItems<T extends { what: string; amount: number; band?: Band }>(items: T[], lines: OcrLine[]): T[] {
+  let cursor = 0;
+  const located = items.map((item) => {
+    const index = bestLine(item, lines, cursor);
+    if (index < 0) return item;
+    cursor = index + 1;
+    const band = bandAt(lines, index, item.amount);
+    return band ? { ...item, band } : item;
+  });
+  return fillGaps(located);
+}
+
+export function locateDraft(items: DraftItem[], lines: OcrLine[]): DraftItem[] {
+  const located = locateItems(items.map((item) => ({ ...item, amount: toAmount(item.amount) ?? 0 })), lines);
+  return items.map((item, index) => (item.band || !located[index].band ? item : { ...item, band: located[index].band }));
 }

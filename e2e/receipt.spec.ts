@@ -28,12 +28,14 @@ async function photo(page: Page, width = 300, height = 500): Promise<Buffer> {
 
 test('splits a restaurant receipt by item so every cent, tip included, is charged to someone', async ({ page }) => {
   await page.route('**/api/receipt', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: aiReply }));
+  await page.route('https://cdn.jsdelivr.net/**', (route) => route.abort());
   await page.goto('/cuenta');
   await page.getByLabel('Nombre de la cuenta').fill('Punta Hermosa');
   await addPeople(page, 'Ana', 'Beto', 'Caro', 'Dani');
 
   await page.locator('.receipt-upload input[type=file]').setInputFiles({ name: 'boleta.jpg', mimeType: 'image/jpeg', buffer: await photo(page) });
   await expect(page.getByText('Leída con IA. Revisa los montos.')).toBeVisible();
+  await expect(page.getByAltText('Foto de la boleta')).toBeVisible();
   await expect(page.getByText('Cuadra con la boleta: S/ 497.09 ✓')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Guardar boleta' })).toBeDisabled();
 

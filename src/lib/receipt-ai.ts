@@ -4,9 +4,10 @@ import { readEnv } from './store';
 export const DEFAULT_GROQ_MODEL = 'qwen/qwen3.8-27b';
 export const DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-lite';
 export const PROVIDER_TIMEOUT_MS = 25_000;
-const MAX_OUTPUT_TOKENS = 900;
+const GROQ_MAX_TOKENS = 1000;
+const GEMINI_MAX_TOKENS = 2048;
 
-export const RECEIPT_PROMPT = `Lee esta boleta o cuenta de restaurante y responde SOLO con JSON válido, sin texto extra, con esta forma:
+export const RECEIPT_PROMPT = `Lee esta boleta o cuenta de restaurante y responde SOLO con JSON válido y compacto en una sola línea (sin saltos de línea ni sangría), sin texto extra, con esta forma:
 {"merchant": string, "items": [{"name": string, "quantity": number, "unitPrice": number, "amount": number}], "charges": number, "discount": number, "tip": number, "total": number}
 Reglas:
 - "amount" es el importe total de la línea (cantidad × precio unitario), no el precio unitario.
@@ -47,7 +48,7 @@ const groq: Provider = {
       body: JSON.stringify({
         model: readEnv('GROQ_RECEIPT_MODEL') || DEFAULT_GROQ_MODEL,
         temperature: 0,
-        max_tokens: MAX_OUTPUT_TOKENS,
+        max_tokens: GROQ_MAX_TOKENS,
         reasoning_effort: 'none',
         response_format: { type: 'json_object' },
         messages: [{ role: 'user', content: [{ type: 'text', text: RECEIPT_PROMPT }, { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${image}` } }] }],
@@ -66,7 +67,7 @@ const gemini: Provider = {
       headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify({
         contents: [{ role: 'user', parts: [{ text: RECEIPT_PROMPT }, { inline_data: { mime_type: 'image/jpeg', data: image } }] }],
-        generationConfig: { temperature: 0, maxOutputTokens: MAX_OUTPUT_TOKENS, responseMimeType: 'application/json' },
+        generationConfig: { temperature: 0, maxOutputTokens: GEMINI_MAX_TOKENS, responseMimeType: 'application/json' },
       }),
     },
   }),
@@ -89,7 +90,8 @@ async function readWith(provider: Provider, key: string, image: string, fetcher:
   }
   if (response.status === 429) throw new ReceiptAiError('quota');
   if (!response.ok) throw new ReceiptAiError('failed');
-  const parsed = normalizeParsed(parseJsonReply(provider.text(await response.json())));
+  const raw = provider.text(await response.json());
+  const parsed = normalizeParsed(parseJsonReply(raw));
   if (!parsed.items.length) throw new ReceiptAiError('failed');
   return parsed;
 }

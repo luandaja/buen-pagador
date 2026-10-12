@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { addPerson, computeBalances, computeGroupTotals, itemizedShares, newGroup, saveExpense, splitByWeight, toCents, type Group } from '../../src/scripts/group/model';
-import { checkReceipt, draftItems, normalizeParsed, parseJsonReply, parseReceiptText, splitUnits, toAmount, type DraftItem } from '../../src/scripts/group/receipt';
+import { addPerson, type Band, computeBalances, computeGroupTotals, itemizedShares, newGroup, saveExpense, splitByWeight, toCents, type Group } from '../../src/scripts/group/model';
+import { checkReceipt, draftFromExpense, draftItems, expenseFromDraft, locateDraft, locateItems, normalizeParsed, parseJsonReply, parseReceiptLines, parseReceiptText, splitUnits, toAmount, toBand, type DraftItem } from '../../src/scripts/group/receipt';
 
 const aiReply = JSON.parse(readFileSync(resolve('tests/fixtures/receipt-ai.json'), 'utf8'));
 const ocrText = readFileSync(resolve('tests/fixtures/receipt-ocr.txt'), 'utf8');
@@ -51,6 +51,13 @@ describe('reading a receipt with AI', () => {
     expect(parsed).toMatchObject({ tip: 3, total: 33 });
   });
 
+  it('keeps where each line sits in the photo, in fractions or per mille', () => {
+    const parsed = normalizeParsed({ items: [{ name: 'Pan', amount: 2, top: 0.1, bottom: 0.15 }, { name: 'Té', amount: 3, top: 400, bottom: 450 }, { name: 'Mal', amount: 1, top: 0.5, bottom: 0.4 }, { name: 'Sin', amount: 1 }] });
+    expect(parsed.items.map((item) => item.band)).toEqual([{ top: 0.1, bottom: 0.15 }, { top: 0.4, bottom: 0.45 }, undefined, undefined]);
+    expect(toBand(-1, 0.2)).toBeUndefined();
+    expect(toBand(0.2, 2000)).toBeUndefined();
+  });
+
   it('finds the JSON inside a chatty reply', () => {
     expect(parseJsonReply('Claro:\n```json\n{"total": 10}\n```')).toEqual({ total: 10 });
     expect(parseJsonReply('no json')).toBeNull();
@@ -70,6 +77,12 @@ describe('reading a receipt on the device', () => {
     expect(parsed).toMatchObject({ tip: 0, total: null });
   });
 
+  it('locates items read on the device by their OCR line', () => {
+    const parsed = parseReceiptLines([{ text: 'Pan 2 1.50', band: { top: 0.3, bottom: 0.32 } }, { text: '3.00' }]);
+    expect(parsed.items).toEqual([{ what: 'Pan', quantity: 2, amount: 3, band: { top: 0.3, bottom: 0.32 } }]);
+    expect(draftItems(parsed)[0].band).toEqual({ top: 0.3, bottom: 0.32 });
+  });
+
   it('multiplies the unit price when the line total is missing or unreadable', () => {
     expect(parseReceiptText('pan con pollo 2 5.50\nzzz\nTotal 1 11.00').items).toEqual([{ what: 'Pan con pollo', quantity: 2, amount: 11 }]);
     expect(parseReceiptText('Agua 3 6.00\n99.00').items[0].amount).toBe(18);
@@ -85,7 +98,54 @@ function assignedDraft(group: Group) {
   return all.map((item, index) => ({ ...item, for: owners[index] }));
 }
 
+describe('locating items in the photo', () => {
+  const line = (text: string, top: number) => ({ text, band: { top, bottom: top + 0.02 } });
+  const ocr = [
+    line('TIENDA EJEMPLO', 0.02),
+    line('RUC 123', 0.05),
+    line('Fecha 01/01', 0.08),
+    line('Lomo saltado', 0.3),
+    line('42.00', 0.32),
+    line('Chicha morada 1 9.50', 0.36),
+    line('xx garbled xx', 0.4),
+    line('Café americano 1 7.00', 0.44),
+    line('TOTAL 58.50', 0.5),
+  ];
+
+  it('finds each item past the header, joins a name with its amount line below, and fills gaps between neighbours', () => {
+    const items: { what: string; amount: number; band?: Band }[] = [
+      { what: 'Lomo saltado', amount: 42 },
+      { what: 'Chicha morada', amount: 9.5 },
+      { what: 'Pisco sour', amount: 18 },
+      { what: 'Café americano', amount: 7 },
+    ];
+    expect(locateItems(items, ocr).map((item) => item.band)).toEqual([
+      { top: 0.3, bottom: 0.34 },
+      { top: 0.36, bottom: 0.38 },
+      { top: 0.38, bottom: 0.44 },
+      { top: 0.44, bottom: 0.46 },
+    ]);
+  });
+
+  it('leaves items it cannot place and keeps bands already known', () => {
+    expect(locateItems<{ what: string; amount: number; band?: Band }>([{ what: 'Nada parecido', amount: 99 }], ocr)[0].band).toBeUndefined();
+    expect(locateItems([{ what: 'Zzz', amount: 1 }, { what: 'Zzz', amount: 2 }], [])).toEqual([{ what: 'Zzz', amount: 1 }, { what: 'Zzz', amount: 2 }]);
+    const known = { id: 'k', what: 'Lomo saltado', amount: '42.00', quantity: 1, for: [], band: { top: 0.9, bottom: 0.95 } };
+    const fresh = { id: 'f', what: 'Café americano', amount: '7.00', quantity: 1, for: [] };
+    expect(locateDraft([known, fresh], ocr).map((item) => item.band)).toEqual([{ top: 0.9, bottom: 0.95 }, { top: 0.44, bottom: 0.46 }]);
+  });
+});
+
 describe('splitting a receipt', () => {
+  it('keeps the photo band when splitting units and when saving and reopening', () => {
+    const band = { top: 0.5, bottom: 0.55 };
+    const units = splitUnits({ id: 'w', what: 'Agua', amount: '6.00', quantity: 2, for: [], band });
+    expect(units.map((item) => item.band)).toEqual([band, band]);
+    const expense = expenseFromDraft({ what: 'Cena', by: 'a', items: [{ ...units[0], for: ['a'] }], tip: '', total: '3' }, { id: 'e' });
+    expect(expense.items![0].band).toEqual(band);
+    expect(draftFromExpense(expense).items[0].band).toEqual(band);
+  });
+
   it('splits units of the same line to the cent', () => {
     const [water] = splitUnits({ id: 'w', what: 'Agua', amount: '10.00', quantity: 3, for: [] });
     expect(splitUnits({ id: 'w', what: 'Agua', amount: '10.00', quantity: 3, for: [] }).map((item) => item.amount)).toEqual(['3.34', '3.33', '3.33']);
