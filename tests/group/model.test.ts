@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+afterEach(() => vi.restoreAllMocks());
 import {
   addPerson,
   beneficiaries,
@@ -41,6 +43,13 @@ describe('splitCents', () => {
 });
 
 describe('people', () => {
+  it('orders people and expenses by creation even within the same millisecond', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1000);
+    const group = saveExpense(saveExpense(trip(), { id: 'b', what: 'B', amount: 1, by: 'x' }), { id: 'a', what: 'A', amount: 1, by: 'x' });
+    expect(group.people.map((person) => person.at)).toEqual([1000, 1001, 1002]);
+    expect(group.expenses.map((expense) => expense.at)).toEqual([1000, 1001]);
+  });
+
   it('adds trimmed names with distinct emojis and ignores blanks', () => {
     const group = addPerson(trip(), '   ');
     expect(group.people.map((person) => person.name)).toEqual(['Ana', 'Beto', 'Caro']);
@@ -70,6 +79,7 @@ describe('expenses', () => {
     const added = saveExpense(group, { id: 'e1', what: 'Hotel', amount: 300, by: ana });
     const edited = saveExpense(added, { id: 'e1', what: 'Hotel', amount: 330, by: ana });
     expect(edited.expenses).toEqual([{ id: 'e1', what: 'Hotel', amount: 330, by: ana }]);
+    expect(added.expenses[0].at).toBeGreaterThan(0);
     expect(removeExpense(edited, 'e1').expenses).toEqual([]);
   });
 

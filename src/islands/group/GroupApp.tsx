@@ -6,24 +6,38 @@ import { ExpensesCard } from './Expenses';
 import { GroupHeader } from './GroupHeader';
 import { GroupList } from './GroupList';
 import { People } from './People';
+import { ShareBox } from './ShareBox';
 import { flush, group, start } from './store';
+import { joinFromHash, syncNow, syncWhenVisible } from './sync';
 import { Totals } from './Totals';
 
-function saveWhenHidden() {
+function onVisibility() {
   if (document.visibilityState === 'hidden') void flush();
+  else syncWhenVisible();
+}
+
+async function boot() {
+  const { hash } = location;
+  if (hash) history.replaceState(null, '', location.pathname);
+  await start();
+  await joinFromHash(hash);
 }
 
 export function GroupApp() {
   useEffect(() => {
-    void start();
-    document.addEventListener('visibilitychange', saveWhenHidden);
-    return () => document.removeEventListener('visibilitychange', saveWhenHidden);
+    void boot();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
   const current = group.value;
   useEffect(() => {
     if (current) setPageIdentity(current.emoji, current.title);
   }, [current?.emoji, current?.title]);
+
+  useEffect(() => {
+    void syncNow();
+  }, [current?.id]);
 
   if (!current) return <p class="group-loading">{es.group.loading}</p>;
   return (
@@ -35,6 +49,7 @@ export function GroupApp() {
         <GroupHeader />
         <People />
         <Totals />
+        <ShareBox />
         <GroupList />
       </aside>
     </>

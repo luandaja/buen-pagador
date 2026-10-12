@@ -2,10 +2,35 @@ import { useState } from 'preact/hooks';
 import { es } from '../../i18n/es';
 import { addPerson, isReferenced, removePerson, toggleSettled, type Balance } from '../../scripts/group/model';
 import { statusText, toggleLabel } from '../../scripts/group/text';
-import { balances, edit, group } from './store';
+import { balances, edit, group, readOnly } from './store';
 
 const t = es.group;
 const TOGGLEABLE = new Set(['owes', 'owed', 'settled']);
+
+function PersonActions({ balance }: { balance: Balance }) {
+  const { person, status } = balance;
+  return (
+    <>
+      {TOGGLEABLE.has(status) && (
+        <button
+          type="button"
+          class="pay-toggle"
+          aria-pressed={status === 'settled'}
+          aria-label={toggleLabel(balance)}
+          title={toggleLabel(balance)}
+          onClick={() => edit((draft) => toggleSettled(draft, person.id))}
+        >
+          ✓
+        </button>
+      )}
+      {!isReferenced(group.value!, person.id) && (
+        <button type="button" class="person-remove" aria-label={t.removePerson(person.name)} onClick={() => edit((draft) => removePerson(draft, person.id))}>
+          ×
+        </button>
+      )}
+    </>
+  );
+}
 
 function PersonRow({ balance }: { balance: Balance }) {
   const { person, status } = balance;
@@ -19,23 +44,7 @@ function PersonRow({ balance }: { balance: Balance }) {
         <strong>{person.name}</strong>
         <span>{statusText(balance, current.currency)}</span>
       </span>
-      {TOGGLEABLE.has(status) && (
-        <button
-          type="button"
-          class="pay-toggle"
-          aria-pressed={status === 'settled'}
-          aria-label={toggleLabel(balance)}
-          title={toggleLabel(balance)}
-          onClick={() => edit((draft) => toggleSettled(draft, person.id))}
-        >
-          ✓
-        </button>
-      )}
-      {!isReferenced(current, person.id) && (
-        <button type="button" class="person-remove" aria-label={t.removePerson(person.name)} onClick={() => edit((draft) => removePerson(draft, person.id))}>
-          ×
-        </button>
-      )}
+      {!readOnly.value && <PersonActions balance={balance} />}
     </li>
   );
 }
@@ -74,13 +83,13 @@ export function People() {
       <div class="section-head">
         <h3 id="peopleTitle">{t.people}</h3>
       </div>
-      {count > 0 && <p class="help">{t.peopleHelp}</p>}
+      {count > 0 && !readOnly.value && <p class="help">{t.peopleHelp}</p>}
       <ul class="person-list">
         {balances.value.map((balance) => (
           <PersonRow key={balance.person.id} balance={balance} />
         ))}
       </ul>
-      <AddPerson first={count === 0} />
+      {!readOnly.value && <AddPerson first={count === 0} />}
     </section>
   );
 }

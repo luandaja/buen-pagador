@@ -4,12 +4,16 @@ import { computeBalances, computeGroupTotals, newGroup, type Group } from '../..
 
 export const group = signal<Group | null>(null);
 export const savedGroups = signal<Group[]>([]);
+export const readOnly = signal(false);
 
 export const balances = computed(() => (group.value ? computeBalances(group.value) : []));
 export const totals = computed(() => (group.value ? computeGroupTotals(group.value) : null));
 
 const SAVE_DEBOUNCE_MS = 200;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+const editListeners = new Set<() => void>();
+
+export const onEdit = (listener: () => void) => editListeners.add(listener);
 
 export const isBlank = (current: Group) => !current.title.trim() && current.people.length === 0 && current.expenses.length === 0;
 
@@ -20,6 +24,7 @@ export function edit(change: (current: Group) => Group) {
   group.value = next;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(flush, SAVE_DEBOUNCE_MS);
+  editListeners.forEach((listener) => listener());
 }
 
 export async function flush() {

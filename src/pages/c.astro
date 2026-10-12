@@ -1,0 +1,17 @@
+---
+import Layout from '../components/Layout.astro';
+import { es } from '../i18n/es';
+import '../styles/group.css';
+---
+
+<Layout title={es.group.metaTitle} description={es.group.metaDescription} icon="🧾">
+  <main class="layout group-layout" id="app">
+    <p class="group-loading">{es.group.viewerOpening}</p>
+  </main>
+
+  <script>
+    import { mountViewerApp } from '../islands/group/ViewerApp';
+
+    mountViewerApp(document.getElementById('app')!);
+  </script>
+</Layout>

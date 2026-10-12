@@ -7,6 +7,7 @@ export interface Person {
   name: string;
   emoji: string;
   settled: number;
+  at?: number;
 }
 
 export interface Expense {
@@ -16,6 +17,19 @@ export interface Expense {
   by: string;
   for?: string[];
   note?: string;
+  at?: number;
+}
+
+export interface GroupLink {
+  id: string;
+  key: string;
+  token: string;
+  owner?: boolean;
+}
+
+export interface SyncState {
+  v: number;
+  fields: Record<string, string>;
 }
 
 export interface Group {
@@ -28,6 +42,8 @@ export interface Group {
   palette: string;
   people: Person[];
   expenses: Expense[];
+  share?: GroupLink | null;
+  sync?: SyncState | null;
 }
 
 export type Status = 'collector' | 'even' | 'settled' | 'owes' | 'owed';
@@ -137,11 +153,13 @@ export function computeGroupTotals(group: Pick<Group, 'people' | 'expenses'>): G
 
 const touch = (group: Group, patch: Partial<Group>): Group => ({ ...group, ...patch, updatedAt: Date.now() });
 
+export const nextAt = (items: { at?: number }[]) => Math.max(Date.now(), ...items.map((item) => (item.at ?? 0) + 1));
+
 export function addPerson(group: Group, name: string, blocked: string[] = []): Group {
   const trimmed = name.trim();
   if (!trimmed) return group;
   const [emoji] = pickEmojis(1, group.people.map((person) => person.emoji), blocked);
-  return touch(group, { people: [...group.people, { id: createId(), name: trimmed, emoji, settled: 0 }] });
+  return touch(group, { people: [...group.people, { id: createId(), name: trimmed, emoji, settled: 0, at: nextAt(group.people) }] });
 }
 
 export const isReferenced = (group: Pick<Group, 'expenses'>, personId: string) =>
@@ -162,7 +180,7 @@ export function saveExpense(group: Group, expense: Expense): Group {
   const exists = group.expenses.some((current) => current.id === expense.id);
   const expenses = exists
     ? group.expenses.map((current) => (current.id === expense.id ? expense : current))
-    : [...group.expenses, expense];
+    : [...group.expenses, { ...expense, at: expense.at ?? nextAt(group.expenses) }];
   return touch(group, { expenses });
 }
 

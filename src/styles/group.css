@@ -465,3 +465,20 @@
   min-height: 32px;
   font-size: 13px;
 }
+
+.group-share .secondary,
+.group-share .link {
+  justify-self: stretch;
+}
+
+.group-share .link.danger {
+  justify-self: start;
+}
+
+.group-viewer-state {
+  grid-column: 1 / -1;
+}
+
+span.emoji-current {
+  cursor: default;
+}
