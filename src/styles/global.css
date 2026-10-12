@@ -1761,3 +1761,11 @@ html:has(.drawer[open]) {
   text-align: center;
   color: var(--board-dim);
 }
+
+.app-footer {
+  padding: 24px 16px 32px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--chalk-dim);
+  font-variant-numeric: tabular-nums;
+}

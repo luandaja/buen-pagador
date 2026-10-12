@@ -18,7 +18,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "crap": "crap4ts",
-    "test:crap": "vitest run --coverage && crap4ts"
+    "test:crap": "vitest run --coverage && crap4ts",
+    "js-budget": "node scripts/js-budget.mjs"
   },
   "dependencies": {
     "@astrojs/vercel": "^11.0.11",

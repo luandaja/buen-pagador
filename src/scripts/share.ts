@@ -10,7 +10,10 @@ export interface ShareLink {
   token: string;
 }
 
+export const SCHEMA_VERSION = 1;
+
 export interface SharedState {
+  schemaVersion: number;
   title: string;
   cost: number | null;
   currency: string;
@@ -64,6 +67,7 @@ const roundCoordinate = (value: number) => Math.round(value * COORDINATE_PRECISI
 
 export function toShared(state: State): SharedState {
   return {
+    schemaVersion: SCHEMA_VERSION,
     title: state.title,
     cost: state.cost,
     currency: state.currency,
@@ -136,7 +140,7 @@ export interface Loaded {
 type RawShare = { state: string; v: number; pv?: number; img?: string; pay?: string; canEdit?: boolean };
 
 async function decryptShare(key: CryptoKey, encrypted: RawShare): Promise<Loaded> {
-  const state = await decryptJson<SharedState>(key, encrypted.state);
+  const state = { schemaVersion: 1, ...(await decryptJson<Partial<SharedState>>(key, encrypted.state)) } as SharedState;
   const image = encrypted.img ? await bytesToDataUrl(await decrypt(key, encrypted.img)) : undefined;
   const pay = encrypted.pay ? await decryptJson<PayInfo>(key, encrypted.pay) : undefined;
   return { state, v: encrypted.v, pv: encrypted.pv ?? 0, image, pay, canEdit: encrypted.canEdit };
