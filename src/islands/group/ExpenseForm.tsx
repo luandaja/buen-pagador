@@ -1,12 +1,16 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { es } from '../../i18n/es';
+import { receiptFromFile } from '../../scripts/image';
 import { createId } from '../../scripts/state';
 import { beneficiaries, removeExpense, saveExpense, type Expense, type Person } from '../../scripts/group/model';
+import { deleteReceipt, loadReceipt, saveReceipt } from '../../scripts/group/receipts';
+import { refreshReceipts } from './receipts';
 import { edit, group } from './store';
 
 const t = es.group;
 
 type Props = { editing?: Expense; onDone: () => void };
+type Receipt = string | null | undefined;
 
 export function parseAmount(text: string): number | null {
   const amount = Number(text.replace(',', '.'));
@@ -19,13 +23,22 @@ function toggleId(ids: string[], id: string): string[] {
 }
 
 function initialDraft(editing: Expense | undefined, people: Person[]) {
-  if (!editing) return { what: '', amount: '', by: people[0].id, among: people.map((person) => person.id) };
-  return { what: editing.what, amount: String(editing.amount), by: editing.by, among: beneficiaries(editing, people) };
+  if (!editing) return { what: '', amount: '', by: people[0].id, among: people.map((person) => person.id), note: '' };
+  return { what: editing.what, amount: String(editing.amount), by: editing.by, among: beneficiaries(editing, people), note: editing.note ?? '' };
+}
+
+async function storeReceipt(groupId: string, expenseId: string, receipt: Receipt) {
+  if (receipt === undefined) return;
+  if (receipt) await saveReceipt(groupId, expenseId, receipt);
+  else await deleteReceipt(groupId, expenseId);
+  await refreshReceipts();
 }
 
 function EditActions({ editing, onDone }: { editing: Expense; onDone: () => void }) {
   const remove = () => {
+    const groupId = group.value!.id;
     edit((draft) => removeExpense(draft, editing.id));
+    void storeReceipt(groupId, editing.id, null);
     onDone();
   };
   return (
@@ -40,6 +53,68 @@ function EditActions({ editing, onDone }: { editing: Expense; onDone: () => void
   );
 }
 
+function ReceiptField({ receipt, what, onChange }: { receipt: Receipt; what: string; onChange: (receipt: string | null) => void }) {
+  const [error, setError] = useState('');
+  const pick = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      onChange(await receiptFromFile(file));
+      setError('');
+    } catch {
+      setError(t.receiptError);
+    }
+  };
+  return (
+    <div class="field receipt-field">
+      <span class="field-label">{t.receipt}</span>
+      {receipt && <img class="receipt-preview" src={receipt} alt={t.receiptAlt(what || t.expenses)} />}
+      <div class="receipt-actions">
+        <label class="secondary small file-btn">
+          <input type="file" accept="image/*" class="sr-only" onChange={(event) => pick(event.currentTarget.files?.[0])} />
+          <span>{receipt ? t.receiptChange : t.receiptAdd}</span>
+        </label>
+        {receipt && (
+          <button type="button" class="link danger" onClick={() => onChange(null)}>
+            {t.receiptRemove}
+          </button>
+        )}
+      </div>
+      <p class="help">{t.receiptHelp}</p>
+      {error && (
+        <p class="form-error" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+type DetailsProps = { note: string; receipt: Receipt; what: string; onNote: (note: string) => void; onReceipt: (receipt: string | null) => void };
+
+function Details({ note, receipt, what, onNote, onReceipt }: DetailsProps) {
+  const filled = !!(note || receipt);
+  return (
+    <details class="more expense-details" open={filled}>
+      <summary>{filled ? t.detailsFilled : t.details}</summary>
+      <div class="more-body">
+        <div class="field">
+          <label for="expenseNote">{t.note}</label>
+          <textarea id="expenseNote" rows={2} maxLength={200} value={note} placeholder={t.notePlaceholder} onInput={(event) => onNote(event.currentTarget.value)} />
+        </div>
+        <ReceiptField receipt={receipt} what={what} onChange={onReceipt} />
+      </div>
+    </details>
+  );
+}
+
+function useReceipt(editing: Expense | undefined) {
+  const [receipt, setReceipt] = useState<Receipt>(editing ? undefined : null);
+  useEffect(() => {
+    if (editing) void loadReceipt(group.value!.id, editing.id).then(setReceipt);
+  }, [editing?.id]);
+  return [receipt, setReceipt] as const;
+}
+
 export function ExpenseForm({ editing, onDone }: Props) {
   const people = group.value!.people;
   const initial = initialDraft(editing, people);
@@ -47,6 +122,8 @@ export function ExpenseForm({ editing, onDone }: Props) {
   const [amount, setAmount] = useState(initial.amount);
   const [by, setBy] = useState(initial.by);
   const [among, setAmong] = useState(initial.among);
+  const [note, setNote] = useState(initial.note);
+  const [receipt, setReceipt] = useReceipt(editing);
   const [error, setError] = useState('');
 
   const submit = (event: Event) => {
@@ -54,10 +131,14 @@ export function ExpenseForm({ editing, onDone }: Props) {
     const value = parseAmount(amount);
     if (!what.trim() || value == null) return setError(t.invalidExpense);
     const ordered = people.map((person) => person.id).filter((id) => among.includes(id));
-    edit((draft) => saveExpense(draft, { ...editing, id: editing?.id ?? createId(), what: what.trim(), amount: value, by, for: ordered }));
+    const id = editing?.id ?? createId();
+    edit((draft) => saveExpense(draft, { ...editing, id, what: what.trim(), amount: value, by, for: ordered, note: note.trim() || undefined }));
+    void storeReceipt(group.value!.id, id, receipt);
     setWhat('');
     setAmount('');
     setAmong(people.map((person) => person.id));
+    setNote('');
+    setReceipt(null);
     setError('');
     onDone();
   };
@@ -92,6 +173,7 @@ export function ExpenseForm({ editing, onDone }: Props) {
           </button>
         ))}
       </fieldset>
+      <Details note={note} receipt={receipt} what={what} onNote={setNote} onReceipt={setReceipt} />
       {error && (
         <p class="form-error" role="alert">
           {error}

@@ -4,6 +4,7 @@ import { money } from '../../scripts/state';
 import { amongText, payerName } from '../../scripts/group/text';
 import { ExpenseForm } from './ExpenseForm';
 import type { Expense, Person } from '../../scripts/group/model';
+import { receiptSet } from './receipts';
 import { group, readOnly, totals } from './store';
 
 const t = es.group;
@@ -12,10 +13,18 @@ function ExpenseContent({ expense, people, currency }: { expense: Expense; peopl
   return (
     <>
       <span class="expense-text">
-        <strong>{expense.what}</strong>
+        <strong>
+          {expense.what}
+          {receiptSet.value.has(expense.id) && (
+            <span class="receipt-mark" role="img" aria-label={t.hasReceipt} title={t.hasReceipt}>
+              📎
+            </span>
+          )}
+        </strong>
         <span>
           {t.paidBy(payerName(expense, people))} · {amongText(expense, people)}
         </span>
+        {expense.note && <span class="expense-note">{expense.note}</span>}
       </span>
       <span class="expense-amount">{money(expense.amount, currency)}</span>
     </>

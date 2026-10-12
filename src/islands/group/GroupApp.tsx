@@ -6,6 +6,7 @@ import { ExpensesCard } from './Expenses';
 import { GroupHeader } from './GroupHeader';
 import { GroupList } from './GroupList';
 import { People } from './People';
+import { refreshReceipts } from './receipts';
 import { ShareBox } from './ShareBox';
 import { flush, group, start } from './store';
 import { joinFromHash, syncNow, syncWhenVisible } from './sync';
@@ -37,6 +38,7 @@ export function GroupApp() {
 
   useEffect(() => {
     void syncNow();
+    void refreshReceipts();
   }, [current?.id]);
 
   if (!current) return <p class="group-loading">{es.group.loading}</p>;
