@@ -15,7 +15,7 @@ import { useApiFetch } from '../helpers/api';
 const writeText = vi.fn(async () => {});
 
 function trip() {
-  let current = addPerson(addPerson(newGroup({ title: 'Cusco', emoji: '✈️' }), 'Ana'), 'Beto');
+  let current = addPerson(addPerson(newGroup({ title: 'Cusco', emoji: '✈️', palette: 'atardecer' }), 'Ana'), 'Beto');
   current = saveExpense(current, { id: 'hotel', what: 'Hotel', amount: 100, by: current.people[0].id });
   return current;
 }
@@ -125,6 +125,7 @@ describe('public viewer', () => {
     expect(screen.queryByRole('button')).toBeNull();
     expect(screen.queryByLabelText('¿En qué?')).toBeNull();
     expect(document.title).toBe('✈️ Cusco · El Buen Pagador');
+    expect(document.documentElement.dataset.palette).toBe('atardecer');
   });
 
   it('polls for changes', async () => {

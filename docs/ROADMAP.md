@@ -6,7 +6,7 @@ De "¿quién pagó la cancha?" a dividir cualquier cuenta (un viaje, una cena, u
 
 - Pocos campos. Lo opcional se esconde hasta que se necesita.
 - Local-first y cifrado de punta a punta: el servidor solo guarda ciphertext.
-- Mientras menos JS, mejor. Nada de face-api fuera de la pantalla de la foto.
+- Mientras menos JS, mejor: CI exige menos de 40 KB gz de JS inicial por página. Nada de face-api fuera de la pantalla de la foto.
 - Lógica en funciones puras con tests; componentes delgados. CI exige tests y CRAP < 10.
 
 ## Decisiones técnicas
@@ -16,34 +16,34 @@ De "¿quién pagó la cancha?" a dividir cualquier cuenta (un viaje, una cena, u
 | UI nueva | Preact 11 + signals, montado con `render()` desde un `<script>` (sin `@astrojs/preact`) | ~8 KB gz, el stack más AI-friendly, JSX nativo de Vite, sin Babel. Con E2E no hay nada que renderizar en el servidor. |
 | UI existente (cancha) | Se queda en TS vanilla; se migra solo si se toca | Migración incremental |
 | Descartados | htmx, Datastar (server-driven, incompatibles con E2E), Alpine (lógica fuera de TS y del gate CRAP), Svelte, Lit | Dictamen del comité técnico |
-| Edición concurrente | Un campo cifrado por ítem en un HASH de Redis + `PATCH` | Dos personas agregando gastos no se pisan, sin CRDT ni websockets |
+| Edición concurrente | Un campo cifrado por ítem en un HASH de Redis + `PATCH`; merge de tres vías por campo en el cliente; polling con `?since=` | Dos personas agregando gastos no se pisan, sin CRDT ni websockets |
 | Evidencia | v1: nota de texto compartida + foto solo local. v2: Vercel Blob cifrado | Nada de binarios en Redis |
 | Dependencias | Última versión mayor de las dependencias principales | Si una integración se atrasa, se usa la librería directo |
 
 ## Modelo de datos
 
 ```ts
-interface Person  { id: string; name: string; emoji: string; settled: number } // monto ya pagado
-interface Expense { id: string; what: string; amount: number; by?: string; for?: string[]; note?: string }
-interface Trip    { title: string; emoji: string; currency: string; rounding: number }
+interface Person  { id: string; name: string; emoji: string; settled: number; at?: number }
+interface Expense { id: string; what: string; amount: number; by: string; for?: string[]; note?: string; at?: number }
+interface Group   { title: string; emoji: string; currency: string; palette: string; people: Person[]; expenses: Expense[] }
 ```
 
-Lo que debe cada persona = su parte de cada gasto − lo que adelantó (`by`). "Pagó" guarda `settled`; si luego entra un gasto, se muestra "pagó S/120, debe S/30 más". La foto con caras es solo una forma rápida de crear `Person[]`.
+La primera persona cobra y reparte. Lo que debe cada persona = su parte de cada gasto − lo que adelantó (`by`); los montos se calculan en céntimos. "Pagó" guarda `settled`; si luego entra un gasto, se muestra "pagó S/120, debe S/30 más". La foto con caras es solo una forma rápida de crear `Person[]`.
 
 **No hacer:** pagó por gasto × persona, optimización de transferencias, cuentas de usuario, CRDT/websockets, binarios en Redis.
 
 ## Versiones
 
-| Versión | Contenido |
-|---|---|
-| v0.1.0 | Cancha: foto, caras, pagó / no pagó, link compartido |
-| v0.2.0 | Fundaciones: Preact 11, release-please + CHANGELOG, versión en el footer, `schemaVersion` en datos locales y compartidos, presupuesto de JS en CI |
-| v0.3.0 | Gastos (local): página de viaje, personas, gastos, saldos, toggle pagó, **emoji del grupo personalizable** (🏀 por defecto en Cancha) |
-| v0.4.0 | Colaborativo: ítems cifrados por gasto, cualquiera con el link de edición agrega gastos |
-| v0.5.0 | Evidencia: nota compartida, foto de boleta local |
-| v1.0.0 | Pulido, copy generalista, exportar resumen |
-| v1.1.0 | Paletas de color curadas (5–6, contraste AA) vía `data-palette` sobre los tokens CSS |
-| v2.0.0 | Multimoneda, boletas compartidas en Vercel Blob cifrado |
+| Versión | Estado | Contenido |
+|---|---|---|
+| v0.1.0 | ✅ | Cancha: foto, caras, pagó / no pagó, link compartido |
+| v0.2.0 | ✅ | Fundaciones: Preact 11, release-please + CHANGELOG, versión en el footer, `schemaVersion`, presupuesto de JS, E2E con Playwright |
+| v0.3.0 | ✅ | Cuentas (`/cuenta`): personas, gastos, saldos, toggle pagó, emoji del grupo personalizable, IndexedDB v2 |
+| v0.4.0 | ✅ | Colaborativo: link para editar (cualquiera agrega gastos) y link para ver (`/c`), sync cifrado por ítem |
+| v0.5.0 | ✅ | Evidencia: nota compartida, foto de boleta solo en el dispositivo |
+| v1.0.0 | ✅ | Resumen para WhatsApp, copy generalista |
+| v1.1.0 | ✅ | 6 paletas curadas con contraste AA validado en tests, por cuenta y visibles en el link público |
+| v2.0.0 | Pendiente | Multimoneda, boletas compartidas en Vercel Blob cifrado |
 
 ## Versionamiento
 

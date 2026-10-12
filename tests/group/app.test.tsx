@@ -123,14 +123,33 @@ describe('group page', () => {
   it('picks a listed or typed emoji for the group', async () => {
     await openApp();
     fireEvent.click(screen.getByRole('button', { name: 'Usar ✈️' }));
-    expect(screen.getByLabelText('Emoji de la cuenta').textContent).toBe('✈️');
+    expect(screen.getByLabelText('Emoji y colores de la cuenta').textContent).toBe('✈️');
     fireEvent.input(screen.getByLabelText('Otro emoji'), { target: { value: 'ab' } });
-    expect(screen.getByLabelText('Emoji de la cuenta').textContent).toBe('✈️');
+    expect(screen.getByLabelText('Emoji y colores de la cuenta').textContent).toBe('✈️');
     fireEvent.input(screen.getByLabelText('Otro emoji'), { target: { value: '🦙' } });
-    expect(screen.getByLabelText('Emoji de la cuenta').textContent).toBe('🦙');
+    expect(screen.getByLabelText('Emoji y colores de la cuenta').textContent).toBe('🦙');
     expect(document.querySelector('link[rel="icon"]')!.getAttribute('href')).toContain('🦙');
     fireEvent.input(screen.getByLabelText('Moneda'), { target: { value: '$' } });
     expect(group.value!.currency).toBe('$');
+  });
+
+  it('picks a palette and closes the menu with Escape or a click outside', async () => {
+    await openApp();
+    const picker = document.querySelector<HTMLDetailsElement>('.emoji-picker')!;
+    picker.open = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Colores Selva' }));
+    expect(group.value!.palette).toBe('selva');
+    await waitFor(() => expect(document.documentElement.dataset.palette).toBe('selva'));
+    expect(screen.getByRole('button', { name: 'Colores Selva' }).getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.pointerDown(screen.getByLabelText('Otro emoji'));
+    fireEvent.keyDown(document, { key: 'Enter' });
+    expect(picker.open).toBe(true);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(picker.open).toBe(false);
+    picker.open = true;
+    fireEvent.pointerDown(document.body);
+    expect(picker.open).toBe(false);
   });
 
   it('switches, creates and deletes saved groups', async () => {

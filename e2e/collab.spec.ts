@@ -32,6 +32,9 @@ test('two phones add expenses to the same trip and a friend follows read-only', 
   const owner = await device(browser);
   await owner.goto('/cuenta');
   await owner.getByLabel('Nombre de la cuenta').fill('Playa');
+  await owner.getByLabel('Emoji y colores de la cuenta').click();
+  await owner.getByRole('button', { name: 'Colores Playa' }).click();
+  await owner.keyboard.press('Escape');
   await addPeople(owner, 'Ana', 'Beto', 'Caro');
   await owner.getByText('Agregar detalle').click();
   await owner.getByLabel('Nota').fill('Airbnb frente al mar');
@@ -67,6 +70,8 @@ test('two phones add expenses to the same trip and a friend follows read-only', 
   const friend = await device(browser);
   await friend.goto(viewUrl);
   await expect(friend.getByText('Solo lectura · se actualiza solo')).toBeVisible();
+  await expect(friend.locator('html')).toHaveAttribute('data-palette', 'playa');
+  await expect(friend.locator('body')).toHaveCSS('background-color', 'rgb(14, 107, 115)');
   await expect(friend.locator('.person', { hasText: 'Caro' })).toContainText('Pagó S/ 150');
   await expect(friend.locator('#app').getByRole('button')).toHaveCount(0);
   await expect(friend.locator('.expense-row', { hasText: 'Casa' })).toContainText('Airbnb frente al mar');
