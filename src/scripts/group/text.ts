@@ -1,6 +1,6 @@
 import { es } from '../../i18n/es';
 import { money } from '../state';
-import { beneficiaries, type Balance, type Expense, type Person } from './model';
+import { beneficiaries, computeBalances, computeGroupTotals, type Balance, type Expense, type Group, type Person } from './model';
 
 const t = es.group;
 
@@ -43,4 +43,21 @@ export function amongText(expense: Expense, people: Person[]): string {
 
 export function payerName(expense: Expense, people: Person[]): string {
   return people.find((person) => person.id === expense.by)?.name ?? '—';
+}
+
+const SUMMARY_MARK: Record<Balance['status'], string> = { collector: '💰', even: '•', settled: '✓', owes: '•', owed: '•' };
+
+function summaryLine(balance: Balance, currency: string): string {
+  return `${SUMMARY_MARK[balance.status]} ${balance.person.name}: ${statusText(balance, currency)}`;
+}
+
+export function summaryText(group: Group, publicUrl?: string): string {
+  const totals = computeGroupTotals(group);
+  const format = (value: number) => money(value, group.currency);
+  const done = totals.peopleToSettle > 0 && totals.settledPeople === totals.peopleToSettle;
+  const status = done ? t.summaryDone : t.summaryMissing(format(totals.pending), totals.settledPeople, totals.peopleToSettle);
+  const people = computeBalances(group).map((balance) => summaryLine(balance, group.currency));
+  const lines = [`${group.emoji} ${group.title.trim() || t.unnamed}`, t.summarySpent(format(totals.spent)), status, '', ...people];
+  if (publicUrl) lines.push('', t.summaryLink(publicUrl));
+  return lines.join('\n');
 }

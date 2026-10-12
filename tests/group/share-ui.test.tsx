@@ -85,6 +85,35 @@ describe('share box', () => {
   });
 });
 
+describe('summary', () => {
+  it('copies the summary when the browser cannot share, and uses the share sheet when it can', async () => {
+    const current = trip();
+    await saveGroup(current);
+    rememberGroup(current.id);
+    render(<GroupApp />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Compartir resumen' }));
+    await screen.findByRole('button', { name: 'Copiado ✓' });
+    expect(writeText).toHaveBeenLastCalledWith(expect.stringContaining('✈️ Cusco'));
+
+    const share = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'share', { value: share, configurable: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Crear links' }));
+    await screen.findByRole('button', { name: 'Copiar link para ver' });
+    fireEvent.click(screen.getByRole('button', { name: /Compartir resumen|Copiado/ }));
+    await waitFor(() => expect(share).toHaveBeenCalledWith({ title: 'Resumen de Cusco', text: expect.stringContaining('Detalle: ') }));
+    share.mockRejectedValueOnce(new Error('AbortError'));
+    fireEvent.click(screen.getByRole('button', { name: /Compartir resumen|Copiado/ }));
+    await waitFor(() => expect(share).toHaveBeenCalledTimes(2));
+    Reflect.deleteProperty(navigator, 'share');
+  });
+
+  it('is hidden until there are expenses', async () => {
+    render(<GroupApp />);
+    await screen.findByLabelText('Nombre de la cuenta');
+    expect(screen.queryByRole('button', { name: 'Compartir resumen' })).toBeNull();
+  });
+});
+
 describe('public viewer', () => {
   it('shows the group read-only', async () => {
     const link = await sharedLink();

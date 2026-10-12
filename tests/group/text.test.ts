@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addPerson, computeBalances, newGroup, saveExpense, toggleSettled, type Group } from '../../src/scripts/group/model';
-import { amongText, listNames, payerName, statusText, toggleLabel } from '../../src/scripts/group/text';
+import { amongText, listNames, payerName, statusText, summaryText, toggleLabel } from '../../src/scripts/group/text';
 
 function group(): Group {
   let current = newGroup();
@@ -65,5 +65,33 @@ describe('expense text', () => {
     expect(listNames([])).toBe('');
     expect(listNames(['Ana'])).toBe('Ana');
     expect(listNames(['Ana', 'Beto', 'Caro'])).toBe('Ana, Beto y Caro');
+  });
+});
+
+describe('summary text', () => {
+  it('lists totals and each person, with the view link when shared', () => {
+    const current = { ...group(), title: 'Cena', emoji: '🍕' };
+    expect(summaryText(current, 'https://x/c#id.key')).toBe(
+      [
+        '🍕 Cena',
+        'Gastado: S/ 110',
+        'Falta cobrar: S/ 40 (0/2 pagaron)',
+        '',
+        '💰 Ana: Cobra y reparte',
+        '• Beto: Le deben S/ 60',
+        '• Caro: Debe S/ 40',
+        '',
+        'Detalle: https://x/c#id.key',
+      ].join('\n').replace(/S\/ /g, 'S/ '),
+    );
+  });
+
+  it('celebrates when everyone paid and names untitled groups', () => {
+    let current = { ...group(), title: ' ' };
+    for (const person of current.people.slice(1)) current = toggleSettled(current, person.id);
+    const text = summaryText(current);
+    expect(text.split('\n').slice(0, 3)).toEqual(['🧾 Cuenta sin nombre', 'Gastado: S/ 110', '¡Cuentas claras! Todos pagaron.']);
+    expect(text).toContain('✓ Caro: Pagó S/ 40');
+    expect(text).not.toContain('Detalle');
   });
 });

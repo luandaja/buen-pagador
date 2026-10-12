@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { es } from '../../i18n/es';
 import { groupEditUrl, groupPublicUrl } from '../../scripts/group/remote';
 import type { GroupLink } from '../../scripts/group/model';
+import { summaryText } from '../../scripts/group/text';
 import { group } from './store';
 import { startSharing, stopSharing, syncStatus } from './sync';
 
@@ -18,6 +19,37 @@ function CopyButton({ label, text }: { label: string; text: string }) {
   return (
     <button type="button" class="secondary small" onClick={copy}>
       {copied ? t.copied : label}
+    </button>
+  );
+}
+
+async function shareOrCopy(title: string, text: string): Promise<boolean> {
+  if (!navigator.share) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  try {
+    await navigator.share({ title, text });
+  } catch {
+    return false;
+  }
+  return false;
+}
+
+function SummaryButton() {
+  const current = group.value!;
+  const [copied, setCopied] = useState(false);
+  if (!current.expenses.length) return null;
+  const send = async () => {
+    const title = current.title.trim() || t.unnamed;
+    const text = summaryText(current, current.share ? groupPublicUrl(current.share) : undefined);
+    if (!(await shareOrCopy(t.summaryShareTitle(title), text))) return;
+    setCopied(true);
+    setTimeout(() => setCopied(false), COPIED_MS);
+  };
+  return (
+    <button type="button" class="secondary small" onClick={send}>
+      {copied ? t.copied : t.summary}
     </button>
   );
 }
@@ -49,6 +81,7 @@ export function ShareBox() {
         </span>
       </div>
       <p class="help">{t.shareHelp}</p>
+      <SummaryButton />
       {link ? (
         <Links link={link} />
       ) : (
