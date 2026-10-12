@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/luandaja/buen-pagador/compare/v1.2.0...v1.3.0) (2026-10-12)
+
+
+### Features
+
+* foto de la boleta con la línea de cada ítem marcada ([d3a0b79](https://github.com/luandaja/buen-pagador/commit/d3a0b79355b8c49825c1dfc577ecd62a15899bab))
+* show the receipt photo and highlight each item's line ([17e7e91](https://github.com/luandaja/buen-pagador/commit/17e7e910c1675eda2c3282907f33f8960d742dad))
+
 ## [1.2.0](https://github.com/luandaja/buen-pagador/compare/v0.1.0...v1.2.0) (2026-10-12)
 
 
