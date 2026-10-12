@@ -5,7 +5,7 @@ const people = (n: number) => (n === 1 ? '1 persona' : `${n} personas`);
 export const es = {
   meta: {
     title: 'El Buen Pagador',
-    description: 'Quién ya pagó la cancha y quién sigue debiendo.',
+    description: 'Divide la cancha, el viaje o la cena, y marca quién ya pagó.',
     viewerTitle: 'El Buen Pagador · ¿Quién ya pagó?',
     pageTitle: (title: string) => `${title} · El Buen Pagador`,
   },
@@ -294,6 +294,12 @@ export const es = {
     receiptAlt: (what: string) => `Boleta de ${what}`,
     receiptError: 'No pudimos abrir esa imagen.',
     hasReceipt: 'Tiene foto de la boleta',
+    summary: 'Compartir resumen',
+    summaryShareTitle: (title: string) => `Resumen de ${title}`,
+    summarySpent: (amount: string) => `Gastado: ${amount}`,
+    summaryMissing: (amount: string, settled: number, total: number) => `Falta cobrar: ${amount} (${settled}/${total} pagaron)`,
+    summaryDone: '¡Cuentas claras! Todos pagaron.',
+    summaryLink: (url: string) => `Detalle: ${url}`,
   },
   errors: {
     network: 'No se pudo conectar.',

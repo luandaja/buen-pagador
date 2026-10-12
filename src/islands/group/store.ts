@@ -9,7 +9,7 @@ export const readOnly = signal(false);
 export const balances = computed(() => (group.value ? computeBalances(group.value) : []));
 export const totals = computed(() => (group.value ? computeGroupTotals(group.value) : null));
 
-const SAVE_DEBOUNCE_MS = 200;
+const SAVE_DEBOUNCE_MS = 0;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 const editListeners = new Set<() => void>();
 

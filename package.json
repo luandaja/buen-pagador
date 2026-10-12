@@ -1,6 +1,6 @@
 {
   "name": "buen-pagador",
-  "description": "Marca quién ya pagó la cancha: detecta caras, pone emojis y exporta o comparte el avance.",
+  "description": "Divide la cancha, el viaje o la cena y marca quién ya pagó. Local-first y cifrado de punta a punta.",
   "type": "module",
   "version": "0.1.0",
   "private": true,
