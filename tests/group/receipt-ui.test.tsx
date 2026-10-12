@@ -17,6 +17,10 @@ import { normalizeParsed } from '../../src/scripts/group/receipt';
 vi.mock('../../src/scripts/group/read-receipt', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../src/scripts/group/read-receipt')>()),
   readReceipt: vi.fn(),
+  ocrOnDevice: vi.fn(async () => [
+    { text: 'Duo Carretillero 1 47.90', band: { top: 0.2, bottom: 0.22 } },
+    { text: 'Pollo Saltado 1 37.90', band: { top: 0.25, bottom: 0.27 } },
+  ]),
 }));
 
 const parsed = normalizeParsed(JSON.parse(readFileSync(resolve('tests/fixtures/receipt-ai.json'), 'utf8')));
@@ -29,6 +33,7 @@ beforeEach(() => {
   group.value = null;
   savedGroups.value = [];
   vi.mocked(readReceipt).mockReset();
+  Element.prototype.scrollTo = vi.fn();
   vi.mocked(readReceipt).mockResolvedValue({ parsed, source: 'ai', photo: 'data:image/jpeg;base64,FOTO' });
 });
 
@@ -55,6 +60,40 @@ const save = () => screen.getByRole('button', { name: 'Guardar boleta' }) as HTM
 function assign(index: number, name: string) {
   fireEvent.click(within(items()[index]).getByRole('button', { name }));
 }
+
+describe('receipt photo', () => {
+  it('shows the photo, finds lines on the device and highlights the chosen item', async () => {
+    await openFriends();
+    uploadReceipt();
+    await screen.findByAltText('Foto de la boleta');
+    const locate = await screen.findByRole('button', { name: 'Ver Pollo Saltado en la boleta' });
+    expect(screen.queryByRole('button', { name: 'Ver Filete Light en la boleta' })).toBeNull();
+    fireEvent.click(locate);
+    const band = document.querySelector<HTMLElement>('.receipt-band')!;
+    expect(band.style.top).toBe('25.0%');
+    expect(band.style.height).toBe('2.0%');
+    expect(locate.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.focusIn(within(items()[0]).getByLabelText('Ítem'));
+    expect(document.querySelector<HTMLElement>('.receipt-band')!.style.top).toBe('20.0%');
+    fireEvent.click(screen.getByRole('button', { name: 'Ampliar' }));
+    expect(screen.getByRole('button', { name: 'Reducir' }).getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelector('.receipt-photo-frame')!.classList.contains('is-zoomed')).toBe(true);
+  });
+
+  it('brings back the saved photo and its marks when reopening the receipt', async () => {
+    const friends = await openFriends();
+    uploadReceipt();
+    await screen.findByRole('button', { name: 'Ver Pollo Saltado en la boleta' });
+    items().forEach((_, index) => assign(index, 'Entre todos'));
+    fireEvent.click(save());
+    await screen.findByText(/14 ítems \+ propina/);
+    fireEvent.click(screen.getByRole('button', { name: 'Editar TP Punta Hermosa' }));
+    expect(await screen.findByAltText('Foto de la boleta')).toHaveProperty('src', 'data:image/jpeg;base64,FOTO');
+    expect(screen.getByRole('button', { name: 'Ver Pollo Saltado en la boleta' })).toBeTruthy();
+    expect(group.value!.expenses[0].items![1].band).toEqual({ top: 0.25, bottom: 0.27 });
+    expect(friends.id).toBe(group.value!.id);
+  });
+});
 
 describe('receipt splitter', () => {
   it('reads the receipt, refuses orphans and saves a split that matches the photo', async () => {

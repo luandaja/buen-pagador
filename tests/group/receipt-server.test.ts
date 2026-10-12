@@ -31,7 +31,7 @@ describe('reading receipts with AI', () => {
     expect(url).toBe('https://api.groq.com/openai/v1/chat/completions');
     expect((init.headers as Record<string, string>).authorization).toBe('Bearer groq-key');
     const body = JSON.parse(init.body as string);
-    expect(body).toMatchObject({ model: DEFAULT_GROQ_MODEL, max_tokens: 900, response_format: { type: 'json_object' } });
+    expect(body).toMatchObject({ model: DEFAULT_GROQ_MODEL, max_tokens: 1000, response_format: { type: 'json_object' } });
     expect(body.messages[0].content[1].image_url.url).toBe('data:image/jpeg;base64,QUJD');
   });
 

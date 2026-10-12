@@ -10,11 +10,17 @@ export interface Person {
   at?: number;
 }
 
+export interface Band {
+  top: number;
+  bottom: number;
+}
+
 export interface ReceiptItem {
   id: string;
   what: string;
   amount: number;
   for: string[];
+  band?: Band;
 }
 
 export interface Expense {

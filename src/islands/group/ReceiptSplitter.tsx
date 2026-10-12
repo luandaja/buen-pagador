@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { es } from '../../i18n/es';
 import { money } from '../../scripts/state';
 import { removeExpense, saveExpense, type Expense, type Person } from '../../scripts/group/model';
@@ -9,6 +9,7 @@ import {
   draftFromParsed,
   expenseFromDraft,
   formatAmount,
+  locateDraft,
   newDraftItem,
   removeItem,
   splitItem,
@@ -19,20 +20,39 @@ import {
   type ReceiptDraft,
 } from '../../scripts/group/receipt';
 import { createId } from '../../scripts/state';
+import { ocrOnDevice } from '../../scripts/group/read-receipt';
+import { loadReceipt } from '../../scripts/group/receipts';
 import { AmongPicker, storeReceipt } from './ExpenseForm';
+import { ReceiptPhoto } from './ReceiptPhoto';
 import { edit, group } from './store';
 
 const t = es.group;
 
 export type Splitting = { expense?: Expense; read?: ReadReceipt; failed?: boolean };
 
-type ItemProps = { item: DraftItem; people: Person[]; onChange: (patch: Partial<DraftItem>) => void; onSplit: () => void; onRemove: () => void };
+type ItemProps = {
+  item: DraftItem;
+  people: Person[];
+  active: boolean;
+  canLocate: boolean;
+  onChange: (patch: Partial<DraftItem>) => void;
+  onSplit: () => void;
+  onRemove: () => void;
+  onLocate: () => void;
+};
 
-function ItemRow({ item, people, onChange, onSplit, onRemove }: ItemProps) {
+const itemClass = (item: DraftItem, active: boolean) => `receipt-item${item.for.length ? '' : ' is-orphan'}${active ? ' is-active' : ''}`;
+
+function ItemRow({ item, people, active, canLocate, onChange, onSplit, onRemove, onLocate }: ItemProps) {
   const name = item.what || t.receiptNewItem;
   return (
-    <li class={`receipt-item${item.for.length ? '' : ' is-orphan'}`}>
+    <li class={itemClass(item, active)} onFocusIn={onLocate}>
       <div class="receipt-item-head">
+        {canLocate && (
+          <button type="button" class="receipt-locate" aria-label={t.receiptLocate(name)} aria-pressed={active} title={t.receiptLocate(name)} onClick={onLocate}>
+            📍
+          </button>
+        )}
         <input class="receipt-item-name" aria-label={t.receiptItemName} value={item.what} maxLength={60} onInput={(event) => onChange({ what: event.currentTarget.value })} />
         <input class="receipt-item-amount" aria-label={`${t.receiptItemAmount} ${name}`} inputMode="decimal" value={item.amount} onInput={(event) => onChange({ amount: event.currentTarget.value })} />
         <button type="button" class="person-remove" aria-label={t.receiptRemoveItem(name)} onClick={onRemove}>
@@ -98,10 +118,39 @@ function Totals({ draft, onDraft }: { draft: ReceiptDraft; onDraft: (draft: Rece
   );
 }
 
+function usePhoto(splitting: Splitting, groupId: string): string | null {
+  const [photo, setPhoto] = useState<string | null>(splitting.read?.photo ?? null);
+  useEffect(() => {
+    if (splitting.expense) void loadReceipt(groupId, splitting.expense.id).then(setPhoto);
+  }, [splitting.expense?.id]);
+  return photo;
+}
+
+function useLocate(photo: string | null, needed: boolean, setDraft: (update: (draft: ReceiptDraft) => ReceiptDraft) => void) {
+  const [locating, setLocating] = useState(false);
+  useEffect(() => {
+    if (!photo || !needed) return;
+    let active = true;
+    setLocating(true);
+    ocrOnDevice(photo)
+      .then((lines) => active && setDraft((draft) => ({ ...draft, items: locateDraft(draft.items, lines) })))
+      .catch(() => undefined)
+      .finally(() => active && setLocating(false));
+    return () => {
+      active = false;
+    };
+  }, [photo]);
+  return locating;
+}
+
 export function ReceiptSplitter({ splitting, onDone }: { splitting: Splitting; onDone: () => void }) {
   const current = group.value!;
   const people = current.people;
   const [draft, setDraft] = useState(() => initialDraft(splitting, people));
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const photo = usePhoto(splitting, current.id);
+  const locating = useLocate(photo, draft.items.some((item) => !item.band), setDraft);
+  const activeBand = draft.items.find((item) => item.id === activeId)?.band;
   const check = checkReceipt(draft.items, draft.tip, draft.total);
   const setItems = (items: DraftItem[]) => setDraft({ ...draft, items });
 
@@ -120,7 +169,13 @@ export function ReceiptSplitter({ splitting, onDone }: { splitting: Splitting; o
   };
 
   return (
-    <section class="receipt-splitter" aria-labelledby="receiptTitle">
+    <section class={`receipt-splitter${photo ? ' has-photo' : ''}`} aria-labelledby="receiptTitle">
+      {photo && <ReceiptPhoto photo={photo} band={activeBand} />}
+      {locating && (
+        <p class="help" role="status">
+          {t.receiptLocating}
+        </p>
+      )}
       <div class="section-head">
         <h3 id="receiptTitle">{t.receiptTitle}</h3>
       </div>
@@ -149,6 +204,9 @@ export function ReceiptSplitter({ splitting, onDone }: { splitting: Splitting; o
             key={item.id}
             item={item}
             people={people}
+            active={item.id === activeId}
+            canLocate={!!(photo && item.band)}
+            onLocate={() => setActiveId(item.id)}
             onChange={(patch) => setItems(updateItem(draft.items, item.id, patch))}
             onSplit={() => setItems(splitItem(draft.items, item.id))}
             onRemove={() => setItems(removeItem(draft.items, item.id))}
