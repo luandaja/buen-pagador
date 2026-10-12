@@ -1,21 +1,43 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { gzipSync } from 'node:zlib';
 
-const DIR = '.vercel/output/static/_astro';
-const BUDGET_KB = Number(process.argv[2] ?? 50);
-const FACE_DETECTION = /^(face-api|detect\.worker)/;
+const STATIC = '.vercel/output/static';
+const ASSETS = join(STATIC, '_astro');
+const BUDGET_KB = Number(process.argv[2] ?? 40);
+const STATIC_IMPORT = /(?:\bfrom|\bimport)\s*["']\.\/([^"']+\.js)["']/g;
+const SCRIPT_SRC = /<script[^>]+src="\/_astro\/([^"]+\.js)"/g;
 
-const chunks = readdirSync(DIR)
-  .filter((file) => file.endsWith('.js') && !FACE_DETECTION.test(file))
-  .map((file) => ({ file, kb: gzipSync(readFileSync(join(DIR, file))).length / 1024 }))
-  .sort((first, second) => second.kb - first.kb);
+const htmlFiles = (dir) =>
+  readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) return name === '_astro' ? [] : htmlFiles(path);
+    return name.endsWith('.html') ? [path] : [];
+  });
 
-const total = chunks.reduce((sum, chunk) => sum + chunk.kb, 0);
-console.log('| chunk | KB gz |\n|---|---:|');
-for (const chunk of chunks) console.log(`| ${chunk.file} | ${chunk.kb.toFixed(1)} |`);
-console.log(`| **total (sin face-api)** | **${total.toFixed(1)} / ${BUDGET_KB}** |`);
-if (total > BUDGET_KB) {
-  console.error(`JS budget exceeded: ${total.toFixed(1)} KB gz > ${BUDGET_KB} KB gz`);
+const kb = (file) => gzipSync(readFileSync(join(ASSETS, file))).length / 1024;
+
+function closure(entries) {
+  const seen = new Set();
+  const visit = (file) => {
+    if (seen.has(file)) return;
+    seen.add(file);
+    for (const [, imported] of readFileSync(join(ASSETS, file), 'utf8').matchAll(STATIC_IMPORT)) visit(imported);
+  };
+  entries.forEach(visit);
+  return seen;
+}
+
+const pages = htmlFiles(STATIC).map((html) => {
+  const entries = [...readFileSync(html, 'utf8').matchAll(SCRIPT_SRC)].map(([, file]) => file);
+  const total = [...closure(entries)].reduce((sum, file) => sum + kb(file), 0);
+  return { page: '/' + relative(STATIC, html).replace(/index\.html$/, '').replace(/\.html$/, ''), total };
+});
+
+console.log('| página | KB gz (carga inicial) |\n|---|---:|');
+for (const { page, total } of pages) console.log(`| ${page} | ${total.toFixed(1)} / ${BUDGET_KB} |`);
+const over = pages.filter(({ total }) => total > BUDGET_KB);
+if (over.length) {
+  console.error(`JS budget exceeded on ${over.map(({ page }) => page).join(', ')} (${BUDGET_KB} KB gz per page)`);
   process.exit(1);
 }
