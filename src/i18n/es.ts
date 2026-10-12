@@ -237,6 +237,8 @@ export const es = {
     personPlaceholder: 'Nombre de alguien más',
     removePerson: (name: string) => `Quitar a ${name}`,
     rotateEmoji: (name: string) => `Cambiar el emoji de ${name}`,
+    shuffleEmojis: 'Otros emojis',
+    shuffleEmojisTitle: 'Cambiar los emojis de todos',
     receiptUpload: 'Subir boleta',
     receiptReading: 'Leyendo la boleta…',
     receiptReadAi: 'Leída con IA. Revisa los montos.',

@@ -104,12 +104,16 @@ describe('group page', () => {
     expect(screen.getByRole('button', { name: 'Entre todos', pressed: true })).toBeTruthy();
   });
 
-  it('rotates a person emoji through neutral ones and keeps the currency fixed', async () => {
+  it('changes one person emoji or everyone at random and keeps the currency fixed', async () => {
     await openApp();
     addPeople('Ana', 'Beto');
     expect(group.value!.people.map((person) => person.emoji)).toEqual(['🤖', '👻']);
     fireEvent.click(screen.getByRole('button', { name: 'Cambiar el emoji de Ana' }));
-    expect(group.value!.people[0].emoji).toBe('👽');
+    expect(group.value!.people[0].emoji).not.toMatch(/🤖|👻/u);
+    expect(group.value!.people[1].emoji).toBe('👻');
+    const before = group.value!.people.map((person) => person.emoji);
+    fireEvent.click(screen.getByRole('button', { name: /Otros emojis/ }));
+    group.value!.people.forEach((person, index) => expect(person.emoji).not.toBe(before[index]));
     expect(screen.queryByLabelText('Moneda')).toBeNull();
     expect(group.value!.currency).toBe('S/');
   });

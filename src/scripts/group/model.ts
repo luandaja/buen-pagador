@@ -258,12 +258,33 @@ export function nextEmoji(current: string | null, taken: string[]): string {
   return ordered.find((emoji) => !taken.includes(emoji) && emoji !== current) ?? ordered[0];
 }
 
-export function rotateEmoji(group: Group, personId: string): Group {
+function pickRandom<T>(items: T[], random: () => number): T {
+  return items[Math.floor(random() * items.length)];
+}
+
+export function randomEmoji(current: string | null, taken: string[], random: () => number = Math.random): string {
+  const others = PERSON_EMOJIS.filter((emoji) => emoji !== current);
+  const unused = others.filter((emoji) => !taken.includes(emoji));
+  return pickRandom(unused.length ? unused : others, random);
+}
+
+export function rotateEmoji(group: Group, personId: string, random: () => number = Math.random): Group {
   const person = group.people.find((current) => current.id === personId);
   if (!person) return group;
   const taken = group.people.filter((other) => other.id !== personId).map((other) => other.emoji);
-  const emoji = nextEmoji(person.emoji, taken);
+  const emoji = randomEmoji(person.emoji, taken, random);
   return touch(group, { people: group.people.map((current) => (current.id === personId ? { ...current, emoji } : current)) });
+}
+
+export function shuffleEmojis(group: Group, random: () => number = Math.random): Group {
+  if (group.people.length === 0) return group;
+  const taken: string[] = [];
+  const people = group.people.map((person) => {
+    const emoji = randomEmoji(person.emoji, taken, random);
+    taken.push(emoji);
+    return { ...person, emoji };
+  });
+  return touch(group, { people });
 }
 
 export const GROUP_EMOJIS = ['🧾', '✈️', '🏖️', '🏕️', '🍕', '🍻', '🎂', '🎁', '🏠', '🚗', '🎉', '🛒', '⚽', '🏀', '🎮', '🍣'];
