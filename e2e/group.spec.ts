@@ -78,7 +78,6 @@ test('keeps a note and a receipt photo with an expense', async ({ page }) => {
   const row = page.locator('.expense-row', { hasText: 'Hotel' });
   await expect(row).toContainText('Hab. 204');
   await expect(row.getByLabel('Tiene foto de la boleta')).toBeVisible();
-  await page.waitForFunction(() => localStorage.getItem('buen-pagador:current-group'));
   await page.reload();
   await expect(row.getByLabel('Tiene foto de la boleta')).toBeVisible();
   await row.click();
