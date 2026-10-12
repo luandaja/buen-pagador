@@ -26,3 +26,32 @@ jobs:
         shell: bash
         run: pnpm crap --threshold 10 --format markdown --top 20 | tee -a "$GITHUB_STEP_SUMMARY"
       - run: pnpm build
+      - name: JS must stay under 50 KB gz (face-api excluded)
+        shell: bash
+        run: pnpm js-budget 50 | tee -a "$GITHUB_STEP_SUMMARY"
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - run: pnpm exec playwright install --with-deps --only-shell chromium
+      - name: E2E must pass
+        run: pnpm e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results
+          retention-days: 7
