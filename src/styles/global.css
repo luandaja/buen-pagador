@@ -1643,6 +1643,7 @@ html:has(.drawer[open]) {
 }
 
 .field textarea {
+  field-sizing: content;
   resize: vertical;
   font: inherit;
   line-height: 1.4;
