@@ -1765,9 +1765,11 @@ html:has(.drawer[open]) {
 
 .app-footer {
   padding: 24px 16px 32px;
-  font-size: 12px;
+  font-size: 11px;
   text-align: center;
   color: var(--chalk-dim);
+  opacity: 0.6;
+  letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
 }
 

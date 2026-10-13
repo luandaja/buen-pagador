@@ -54,5 +54,5 @@ test('editor shares an encrypted link the viewer can read and follow', async ({ 
 test('footer shows the app version and the court keeps its colors', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(35, 64, 200)');
-  await expect(page.locator('.app-footer')).toHaveText(/^v\d+\.\d+\.\d+$/);
+  await expect(page.locator('.app-footer')).toHaveText(/^© 2026 luandaja · v\d+\.\d+\.\d+$/);
 });
