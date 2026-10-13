@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.0](https://github.com/luandaja/buen-pagador/compare/v1.4.0...v1.5.0) (2026-10-13)
+
+
+### Features
+
+* arrastrar la boleta ampliada y total precalculado ([a77c342](https://github.com/luandaja/buen-pagador/commit/a77c342fa038c7159115d16fa350caa749f9f2e0))
+* drag the receipt lens and precompute the receipt total ([ed4703d](https://github.com/luandaja/buen-pagador/commit/ed4703d25625826b74989d7812bdb750e27510bf))
+
+
+### Bug Fixes
+
+* shared group links return 404 right after creation ([#22](https://github.com/luandaja/buen-pagador/issues/22)) ([38d6193](https://github.com/luandaja/buen-pagador/commit/38d61931b397e230f919301c4796ffd77c3c418f))
+
 ## [1.4.0](https://github.com/luandaja/buen-pagador/compare/v1.3.0...v1.4.0) (2026-10-12)
 
 
