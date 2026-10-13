@@ -46,9 +46,9 @@ function initialDraft(editing: Expense | undefined, people: Person[]) {
 
 export async function storeReceipt(groupId: string, expenseId: string, receipt: Receipt) {
   if (receipt === undefined) return;
-  shareReceipt(groupId, expenseId, receipt);
   if (receipt) await saveReceipt(groupId, expenseId, receipt);
   else await deleteReceipt(groupId, expenseId);
+  shareReceipt(groupId, expenseId, receipt);
   await refreshReceipts();
 }
 

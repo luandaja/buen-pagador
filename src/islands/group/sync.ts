@@ -4,7 +4,7 @@ import { listGroups } from '../../scripts/group/groups';
 import { newGroup, type Group, type GroupLink } from '../../scripts/group/model';
 import { createRemote, deleteRemote, pullRemote, pushRemote } from '../../scripts/group/remote';
 import { ShareError, parseMasterHash } from '../../scripts/share';
-import { shareAllReceipts } from './receipts';
+import { resetReceiptUploads, uploadPendingReceipts } from './receipts';
 import { flush, group, onEdit, openGroup } from './store';
 
 export type SyncStatus = 'off' | 'busy' | 'ok' | 'offline' | 'gone';
@@ -92,6 +92,7 @@ export async function syncNow() {
   try {
     await cycle(start, start.share);
     syncStatus.value = 'ok';
+    void uploadPendingReceipts(start.id, start.share);
     scheduleSync(SYNC_POLL_MS);
   } catch (error) {
     await onSyncError(error, start.id);
@@ -115,7 +116,7 @@ export async function startSharing() {
     await flush();
     syncStatus.value = 'ok';
     scheduleSync(group.value === start ? SYNC_POLL_MS : SYNC_DEBOUNCE_MS);
-    void shareAllReceipts(start.id, link);
+    void uploadPendingReceipts(start.id, link);
   } catch {
     syncStatus.value = 'offline';
   }
@@ -160,4 +161,5 @@ export function resetSync() {
   running = false;
   again = false;
   syncStatus.value = 'off';
+  resetReceiptUploads();
 }
