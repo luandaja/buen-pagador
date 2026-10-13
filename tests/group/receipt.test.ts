@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { addPerson, type Band, computeBalances, computeGroupTotals, itemizedShares, unassignedItems, newGroup, saveExpense, splitByWeight, toCents, type Group } from '../../src/scripts/group/model';
-import { checkReceipt, draftFromExpense, draftItems, expenseFromDraft, locateDraft, locateItems, normalizeParsed, parseJsonReply, parseReceiptLines, parseReceiptText, splitUnits, toAmount, toBand, type DraftItem } from '../../src/scripts/group/receipt';
+import { checkReceipt, draftFromExpense, draftFromParsed, draftItems, draftSum, syncTotal, withSumTotal, expenseFromDraft, locateDraft, locateItems, normalizeParsed, parseJsonReply, parseReceiptLines, parseReceiptText, splitUnits, toAmount, toBand, type DraftItem } from '../../src/scripts/group/receipt';
 
 const aiReply = JSON.parse(readFileSync(resolve('tests/fixtures/receipt-ai.json'), 'utf8'));
 const ocrText = readFileSync(resolve('tests/fixtures/receipt-ocr.txt'), 'utf8');
@@ -218,5 +218,42 @@ describe('framing the photo', () => {
     expect(lensOffset(lens, { width: 200, height: 100 }, undefined)).toEqual({ x: 50, y: 50 });
     expect(receiptCenter([undefined, { top: 0, bottom: 1 }])).toBeUndefined();
     expect(receiptCenter([{ top: 0, bottom: 1, left: 0.2, right: 0.6 }, { top: 0, bottom: 1, left: 0.3, right: 0.5 }, { top: 0, bottom: 1, left: 0.9, right: 1 }])).toBe(0.4);
+  });
+});
+
+describe('receipt total', () => {
+  const item = (amount: string) => ({ id: amount, what: 'x', amount, quantity: 1, for: [] });
+
+  it('starts from the sum of items and tip when the receipt total was not read, and keeps it in sync', () => {
+    const draft = draftFromParsed({ merchant: '', items: [{ what: 'Pan', quantity: 1, amount: 10 }], tip: 1.5, total: null }, 'a', 'Boleta');
+    expect(draft).toMatchObject({ total: '11.50', totalAuto: true });
+    expect(syncTotal({ ...draft, items: [...draft.items, item('3.25')] }).total).toBe('14.75');
+    expect(syncTotal({ ...draft, total: '20', totalAuto: false }).total).toBe('20');
+    expect(draftSum({ items: [item('1.10'), item('x')], tip: '' })).toBe(1.1);
+  });
+
+  it('keeps the total read from the photo until asked to use the sum', () => {
+    const draft = draftFromParsed({ merchant: '', items: [{ what: 'Pan', quantity: 1, amount: 10 }], tip: 0, total: 12 }, 'a', 'Boleta');
+    expect(draft).toMatchObject({ total: '12.00' });
+    expect(draft.totalAuto).toBeUndefined();
+    expect(withSumTotal(draft)).toMatchObject({ total: '10.00', totalAuto: true });
+  });
+
+  it('keeps a dragged view inside the image', async () => {
+    const { clampOffset } = await import('../../src/islands/group/ReceiptPhoto');
+    const lens = { width: 300, height: 200 };
+    expect(clampOffset(lens, { width: 600, height: 800 }, { x: 50, y: -900 })).toEqual({ x: 0, y: -600 });
+    expect(clampOffset(lens, { width: 600, height: 800 }, { x: -100, y: -100 })).toEqual({ x: -100, y: -100 });
+    expect(clampOffset(lens, { width: 200, height: 100 }, { x: -40, y: 30 })).toEqual({ x: 50, y: 50 });
+  });
+});
+
+describe('lens style', () => {
+  it('sizes, centers and pans the zoomed photo, or fills the lens before measuring', async () => {
+    const { lensStyle } = await import('../../src/islands/group/ReceiptPhoto');
+    const size = { width: 300, height: 200 };
+    expect(lensStyle({ size, ratio: 0, zoom: 2, pan: { x: 0, y: 0 } })).toBe('width:100%');
+    expect(lensStyle({ size: { width: 0, height: 0 }, ratio: 1, zoom: 2, pan: { x: 0, y: 0 } })).toBe('width:100%');
+    expect(lensStyle({ size, ratio: 1, zoom: 2, band: { top: 0.5, bottom: 0.5 }, center: 0.5, pan: { x: 20, y: -10 } })).toBe('width:600px;height:600px;transform:translate(-130px,-210px)');
   });
 });

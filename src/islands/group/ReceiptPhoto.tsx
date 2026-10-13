@@ -24,6 +24,33 @@ export function lensOffset(lens: Size, image: Size, band: Band | undefined, cent
   return { x: fit(lens.width, image.width, centerX), y: fit(lens.height, image.height, centerY) };
 }
 
+export function clampOffset(lens: Size, image: Size, offset: { x: number; y: number }) {
+  const clamp = (view: number, length: number, value: number) => (length <= view ? (view - length) / 2 : Math.min(0, Math.max(view - length, value)));
+  return { x: clamp(lens.width, image.width, offset.x), y: clamp(lens.height, image.height, offset.y) };
+}
+
+type Point = { x: number; y: number };
+
+function usePan(reset: unknown[]) {
+  const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
+  const start = useRef<{ pointer: Point; pan: Point } | null>(null);
+  useEffect(() => setPan({ x: 0, y: 0 }), reset);
+  const handlers = {
+    onPointerDown: (event: PointerEvent) => {
+      (event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId);
+      start.current = { pointer: { x: event.clientX, y: event.clientY }, pan };
+    },
+    onPointerMove: (event: PointerEvent) => {
+      const from = start.current;
+      if (from) setPan({ x: from.pan.x + event.clientX - from.pointer.x, y: from.pan.y + event.clientY - from.pointer.y });
+    },
+    onPointerUp: () => {
+      start.current = null;
+    },
+  };
+  return { pan, handlers };
+}
+
 function useSize(ref: { current: HTMLElement | null }): Size {
   const [size, setSize] = useState<Size>({ width: 0, height: 0 });
   useLayoutEffect(() => {
@@ -42,17 +69,25 @@ function BandMark({ band }: { band?: Band }) {
   return <div class="receipt-band" aria-hidden="true" style={style} />;
 }
 
+type LensView = { size: Size; ratio: number; zoom: number; band?: Band; center?: number; pan: Point };
+
+export function lensStyle({ size, ratio, zoom, band, center, pan }: LensView): string {
+  if (!ratio || !size.width) return 'width:100%';
+  const image = { width: size.width * zoom, height: size.width * zoom * ratio };
+  const base = lensOffset(size, image, band, center);
+  const offset = clampOffset(size, image, { x: base.x + pan.x, y: base.y + pan.y });
+  return `width:${image.width}px;height:${image.height}px;transform:translate(${offset.x}px,${offset.y}px)`;
+}
+
 function Lens({ photo, band, center, zoom }: { photo: string; band?: Band; center?: number; zoom: number }) {
   const lens = useRef<HTMLDivElement>(null);
   const size = useSize(lens);
   const [ratio, setRatio] = useState(0);
-  const image = { width: size.width * zoom, height: size.width * zoom * ratio };
-  const offset = ratio && size.width ? lensOffset(size, image, band, center) : { x: 0, y: 0 };
-  const style = ratio && size.width ? `width:${image.width}px;height:${image.height}px;transform:translate(${offset.x}px,${offset.y}px)` : 'width:100%';
+  const { pan, handlers } = usePan([band?.top, band?.bottom, zoom]);
   return (
-    <div class="receipt-lens" ref={lens}>
-      <div class="receipt-lens-image" style={style}>
-        <img src={photo} alt={t.receiptPhotoAlt} onLoad={(event) => setRatio(event.currentTarget.naturalHeight / event.currentTarget.naturalWidth || 0)} />
+    <div class="receipt-lens" ref={lens} onPointerDown={handlers.onPointerDown} onPointerMove={handlers.onPointerMove} onPointerUp={handlers.onPointerUp} onPointerCancel={handlers.onPointerUp}>
+      <div class="receipt-lens-image" style={lensStyle({ size, ratio, zoom, band, center, pan })}>
+        <img src={photo} alt={t.receiptPhotoAlt} draggable={false} onLoad={(event) => setRatio(event.currentTarget.naturalHeight / event.currentTarget.naturalWidth || 0)} />
         <BandMark band={band} />
       </div>
     </div>

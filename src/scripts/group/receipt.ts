@@ -185,7 +185,17 @@ export interface ReceiptDraft {
   items: DraftItem[];
   tip: string;
   total: string;
+  totalAuto?: boolean;
 }
+
+export function draftSum(draft: Pick<ReceiptDraft, 'items' | 'tip'>): number {
+  const cents = draft.items.reduce((acc, item) => acc + toCents(toAmount(item.amount) ?? 0), 0) + toCents(toAmount(draft.tip) ?? 0);
+  return fromCents(cents);
+}
+
+export const withSumTotal = (draft: ReceiptDraft): ReceiptDraft => ({ ...draft, total: formatAmount(draftSum(draft)), totalAuto: true });
+
+export const syncTotal = (draft: ReceiptDraft): ReceiptDraft => (draft.totalAuto ? withSumTotal(draft) : draft);
 
 export const newDraftItem = (what: string, amount = ''): DraftItem => ({ id: createId(), what, amount, quantity: 1, for: [] });
 
@@ -198,7 +208,8 @@ export const splitItem = (items: DraftItem[], id: string) => items.flatMap((item
 export const formatAmount = (value: number | null) => (value == null ? '' : value.toFixed(2));
 
 export function draftFromParsed(parsed: ParsedReceipt, by: string, fallbackWhat: string): ReceiptDraft {
-  return { what: parsed.merchant || fallbackWhat, by, items: draftItems(parsed), tip: formatAmount(parsed.tip || null), total: formatAmount(parsed.total) };
+  const draft = { what: parsed.merchant || fallbackWhat, by, items: draftItems(parsed), tip: formatAmount(parsed.tip || null), total: formatAmount(parsed.total) };
+  return parsed.total == null ? withSumTotal(draft) : draft;
 }
 
 export function draftFromExpense(expense: Expense): ReceiptDraft {

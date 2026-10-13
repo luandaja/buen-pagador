@@ -13,7 +13,9 @@ import {
   newDraftItem,
   removeItem,
   splitItem,
+  syncTotal,
   toAmount,
+  withSumTotal,
   updateItem,
   type DraftItem,
   type ReceiptCheck,
@@ -88,7 +90,8 @@ function ItemRow({ item, people, active, canLocate, onChange, onSplit, onRemove,
   );
 }
 
-function CheckLine({ check, currency }: { check: ReceiptCheck; currency: string }) {
+function CheckLine({ check, currency, computed }: { check: ReceiptCheck; currency: string; computed?: boolean }) {
+  if (computed) return <p class="receipt-check is-info">{t.receiptTotalComputed(money(check.sum, currency))}</p>;
   if (check.difference == null) return <p class="receipt-check is-warn">{t.receiptNeedsTotal}</p>;
   if (check.difference === 0) return <p class="receipt-check is-ok">{t.receiptMatches(money(check.sum, currency))}</p>;
   const amount = money(Math.abs(check.difference), currency);
@@ -164,7 +167,10 @@ function Totals({ draft, onDraft }: { draft: ReceiptDraft; onDraft: (draft: Rece
       </div>
       <div class="field grow">
         <label for="receiptTotal">{t.receiptTotal}</label>
-        <input id="receiptTotal" inputMode="decimal" value={draft.total} placeholder="0.00" onInput={(event) => onDraft({ ...draft, total: event.currentTarget.value })} />
+        <input id="receiptTotal" inputMode="decimal" value={draft.total} placeholder="0.00" onInput={(event) => onDraft({ ...draft, total: event.currentTarget.value, totalAuto: false })} />
+        <button type="button" class="link" onClick={() => onDraft(withSumTotal(draft))}>
+          {t.receiptSumTotal}
+        </button>
       </div>
     </div>
   );
@@ -198,7 +204,9 @@ function useLocate(photo: string | null, needed: boolean, setDraft: (update: (dr
 export function ReceiptSplitter({ splitting, onDone }: { splitting: Splitting; onDone: () => void }) {
   const current = group.value!;
   const people = current.people;
-  const [draft, setDraft] = useState(() => initialDraft(splitting, people));
+  const [draft, setRawDraft] = useState(() => initialDraft(splitting, people));
+  const setDraft = (next: ReceiptDraft | ((previous: ReceiptDraft) => ReceiptDraft)) =>
+    setRawDraft((previous) => syncTotal(typeof next === 'function' ? next(previous) : next));
   const [activeId, setActiveId] = useState<string | null>(null);
   const photo = usePhoto(splitting, current.id);
   const locating = useLocate(photo, draft.items.some((item) => !item.band), setDraft);
@@ -254,7 +262,7 @@ export function ReceiptSplitter({ splitting, onDone }: { splitting: Splitting; o
       </button>
       <Totals draft={draft} onDraft={setDraft} />
       <p class="help">{t.receiptTipHelp}</p>
-      <CheckLine check={check} currency={current.currency} />
+      <CheckLine check={check} currency={current.currency} computed={draft.totalAuto} />
       <Difference check={check} draft={draft} onDraft={setDraft} />
       <div class="form-actions">
         <button type="button" class="primary" disabled={!check.ready} onClick={save}>

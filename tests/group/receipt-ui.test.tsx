@@ -132,6 +132,34 @@ describe('receipt splitter', () => {
     expect(friends.id).toBe(group.value!.id);
   });
 
+  it('precomputes the total from the items, recomputes on demand and respects a typed total', async () => {
+    vi.mocked(readReceipt).mockResolvedValueOnce({ parsed: { ...parsed, total: null }, source: 'ai', photo: 'data:x' });
+    await openFriends();
+    uploadReceipt();
+    await screen.findByText('Total calculado con los ítems y la propina: S/ 497.09. Revisa que coincida con la boleta.');
+    const total = screen.getByLabelText('Total de la boleta (con propina)') as HTMLInputElement;
+    expect(total.value).toBe('497.09');
+    expect(save().disabled).toBe(false);
+    fireEvent.click(within(items()[0]).getByRole('button', { name: /Quitar/ }));
+    expect(total.value).toBe('449.19');
+    fireEvent.input(total, { target: { value: '497.09' } });
+    expect(screen.getByText('Faltan S/ 47.90 para llegar al total de la boleta.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Sumar ítems + propina' }));
+    expect(total.value).toBe('449.19');
+  });
+
+  it('lets you drag the zoomed photo', async () => {
+    await openFriends();
+    uploadReceipt();
+    await screen.findByAltText('Foto de la boleta');
+    const lens = document.querySelector('.receipt-lens')!;
+    fireEvent.pointerDown(lens, { clientX: 100, clientY: 100, pointerId: 1 });
+    fireEvent.pointerMove(lens, { clientX: 80, clientY: 60, pointerId: 1 });
+    fireEvent.pointerUp(lens, { pointerId: 1 });
+    fireEvent.pointerMove(lens, { clientX: 0, clientY: 0, pointerId: 1 });
+    expect(lens.querySelector('img')).toBeTruthy();
+  });
+
   it('corrects the quantity of a line and splits it into units', async () => {
     await openFriends();
     uploadReceipt();
@@ -226,7 +254,7 @@ describe('receipt splitter', () => {
     expect(readReceipt).not.toHaveBeenCalled();
     uploadReceipt();
     await screen.findByText('Leída en tu celular. Revisa los ítems y montos.');
-    expect(screen.getByText('Escribe el total de la boleta para comprobar que cuadre.')).toBeTruthy();
+    expect(screen.getByText(/Total calculado con los ítems/)).toBeTruthy();
   });
 
   it('lets you read on the device only, and remembers it', async () => {
