@@ -4,6 +4,7 @@ import { listGroups } from '../../scripts/group/groups';
 import { newGroup, type Group, type GroupLink } from '../../scripts/group/model';
 import { createRemote, deleteRemote, pullRemote, pushRemote } from '../../scripts/group/remote';
 import { ShareError, parseMasterHash } from '../../scripts/share';
+import { shareAllReceipts } from './receipts';
 import { flush, group, onEdit, openGroup } from './store';
 
 export type SyncStatus = 'off' | 'busy' | 'ok' | 'offline' | 'gone';
@@ -114,6 +115,7 @@ export async function startSharing() {
     await flush();
     syncStatus.value = 'ok';
     scheduleSync(group.value === start ? SYNC_POLL_MS : SYNC_DEBOUNCE_MS);
+    void shareAllReceipts(start.id, link);
   } catch {
     syncStatus.value = 'offline';
   }

@@ -23,9 +23,9 @@ import {
 } from '../../scripts/group/receipt';
 import { createId } from '../../scripts/state';
 import { ocrOnDevice } from '../../scripts/group/read-receipt';
-import { loadReceipt } from '../../scripts/group/receipts';
 import { AmongPicker, storeReceipt } from './ExpenseForm';
 import { ReceiptPhoto, receiptCenter } from './ReceiptPhoto';
+import { findReceipt } from './receipts';
 import { edit, group } from './store';
 
 const t = es.group;
@@ -179,7 +179,7 @@ function Totals({ draft, onDraft }: { draft: ReceiptDraft; onDraft: (draft: Rece
 function usePhoto(splitting: Splitting, groupId: string): string | null {
   const [photo, setPhoto] = useState<string | null>(splitting.read?.photo ?? null);
   useEffect(() => {
-    if (splitting.expense) void loadReceipt(groupId, splitting.expense.id).then(setPhoto);
+    if (splitting.expense) void findReceipt(groupId, splitting.expense.id).then(setPhoto);
   }, [splitting.expense?.id]);
   return photo;
 }

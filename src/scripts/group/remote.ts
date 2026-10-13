@@ -1,4 +1,4 @@
-import { importKey, newKey } from '../crypto';
+import { decryptJson, encryptJson, importKey, newKey } from '../crypto';
 import { expiresAtFrom } from '../links';
 import { request } from '../share';
 import { decryptFields, encryptFields, type Plain } from './codec';
@@ -37,4 +37,32 @@ export async function pullRemote(link: Pick<GroupLink, 'id' | 'key'> & { token?:
 
 export async function deleteRemote(link: GroupLink): Promise<void> {
   await request(`/api/group/${link.id}`, { method: 'DELETE' }, link.token);
+}
+
+type ReceiptLink = Pick<GroupLink, 'id' | 'key'> & { token?: string };
+
+const receiptUrl = (link: ReceiptLink, expenseId: string) => `/api/group/${link.id}/receipt/${expenseId}`;
+
+// Shared receipts are best effort: when Blob is out of quota or down, the photo just stays on this device.
+export async function pushReceipt(link: GroupLink, expenseId: string, photo: string): Promise<boolean> {
+  try {
+    const data = await encryptJson(await importKey(link.key), photo);
+    await request(receiptUrl(link, expenseId), { method: 'PUT', body: JSON.stringify({ data }) }, link.token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function pullReceipt(link: ReceiptLink, expenseId: string): Promise<string | null> {
+  try {
+    const { data } = await request<{ data: string }>(receiptUrl(link, expenseId));
+    return await decryptJson<string>(await importKey(link.key), data);
+  } catch {
+    return null;
+  }
+}
+
+export async function dropReceipt(link: GroupLink, expenseId: string): Promise<void> {
+  await request(receiptUrl(link, expenseId), { method: 'DELETE' }, link.token).catch(() => undefined);
 }

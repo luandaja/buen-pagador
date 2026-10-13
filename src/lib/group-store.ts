@@ -18,11 +18,18 @@ export interface GroupStore {
   patch(id: string, set: Fields, del: string[]): Promise<number>;
   remove(id: string): Promise<void>;
   ttl(id: string): Promise<number | null>;
+  trackReceipts(id: string, dueAt?: number): Promise<void>;
+  untrackReceipts(id: string): Promise<void>;
+  dueReceipts(now: number, limit: number): Promise<string[]>;
 }
 
 export const GROUP_TTL_SECONDS = 60 * 60 * 24 * 90;
 
 const PREFIX = 'bp:group:';
+// Groups with shared receipts, scored by when they expire. It outlives the groups so the cron can find their photos.
+const RECEIPTS_DUE = 'bp:receipts:due';
+
+const dueFromNow = () => Date.now() + GROUP_TTL_SECONDS * 1000;
 const EDIT = '_edit';
 const VERSION = '_v';
 
@@ -79,16 +86,30 @@ class RedisGroupStore implements GroupStore {
     const seconds = await this.redis.ttl(PREFIX + id);
     return seconds > 0 ? seconds : null;
   }
+
+  async trackReceipts(id: string, dueAt = dueFromNow()) {
+    await this.redis.zadd(RECEIPTS_DUE, { score: dueAt, member: id });
+  }
+
+  async untrackReceipts(id: string) {
+    await this.redis.zrem(RECEIPTS_DUE, id);
+  }
+
+  async dueReceipts(now: number, limit: number) {
+    return (await this.redis.zrange<string[]>(RECEIPTS_DUE, 0, now, { byScore: true, offset: 0, count: limit })).map(String);
+  }
 }
 
 type Entry = { record: GroupRecord; expires: number };
 
 class MemoryGroupStore implements GroupStore {
   protected data: Map<string, Entry>;
+  private due: Map<string, number>;
 
   constructor() {
-    const globalScope = globalThis as unknown as { __bpGroups?: Map<string, Entry> };
+    const globalScope = globalThis as unknown as { __bpGroups?: Map<string, Entry>; __bpReceiptsDue?: Map<string, number> };
     this.data = globalScope.__bpGroups ??= new Map();
+    this.due = globalScope.__bpReceiptsDue ??= new Map();
   }
 
   private live(id: string) {
@@ -127,6 +148,18 @@ class MemoryGroupStore implements GroupStore {
   async ttl(id: string) {
     const entry = this.live(id);
     return entry ? Math.ceil((entry.expires - Date.now()) / 1000) : null;
+  }
+
+  async trackReceipts(id: string, dueAt = dueFromNow()) {
+    this.due.set(id, dueAt);
+  }
+
+  async untrackReceipts(id: string) {
+    this.due.delete(id);
+  }
+
+  async dueReceipts(now: number, limit: number) {
+    return [...this.due].filter(([, dueAt]) => dueAt <= now).sort((first, second) => first[1] - second[1]).slice(0, limit).map(([id]) => id);
   }
 }
 
@@ -200,6 +233,7 @@ export function getGroupStore(): GroupStore {
 
 export function resetGroupStore() {
   store = null;
+  delete (globalThis as { __bpReceiptsDue?: unknown }).__bpReceiptsDue;
 }
 
 export { FileGroupStore, MemoryGroupStore, RedisGroupStore };

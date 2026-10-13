@@ -2,8 +2,8 @@ import { useEffect, useState } from 'preact/hooks';
 import { es } from '../../i18n/es';
 import { money } from '../../scripts/state';
 import { expenseShares, fromCents, type Expense, type Person, type ReceiptItem } from '../../scripts/group/model';
-import { loadReceipt } from '../../scripts/group/receipts';
 import { ReceiptPhoto, receiptCenter } from './ReceiptPhoto';
+import { findReceipt } from './receipts';
 import { group } from './store';
 
 const t = es.group;
@@ -18,9 +18,7 @@ function usePhoto(expenseId: string): string | null {
   const groupId = group.value!.id;
   const [photo, setPhoto] = useState<string | null>(null);
   useEffect(() => {
-    void loadReceipt(groupId, expenseId)
-      .then(setPhoto)
-      .catch(() => setPhoto(null));
+    void findReceipt(groupId, expenseId).then(setPhoto);
   }, [groupId, expenseId]);
   return photo;
 }

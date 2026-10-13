@@ -3,8 +3,8 @@ import { es } from '../../i18n/es';
 import { receiptFromFile } from '../../scripts/image';
 import { createId } from '../../scripts/state';
 import { beneficiaries, removeExpense, saveExpense, type Expense, type Person } from '../../scripts/group/model';
-import { deleteReceipt, loadReceipt, saveReceipt } from '../../scripts/group/receipts';
-import { refreshReceipts } from './receipts';
+import { deleteReceipt, saveReceipt } from '../../scripts/group/receipts';
+import { findReceipt, refreshReceipts, shareReceipt } from './receipts';
 import { edit, group } from './store';
 
 const t = es.group;
@@ -46,6 +46,7 @@ function initialDraft(editing: Expense | undefined, people: Person[]) {
 
 export async function storeReceipt(groupId: string, expenseId: string, receipt: Receipt) {
   if (receipt === undefined) return;
+  shareReceipt(groupId, expenseId, receipt);
   if (receipt) await saveReceipt(groupId, expenseId, receipt);
   else await deleteReceipt(groupId, expenseId);
   await refreshReceipts();
@@ -126,10 +127,16 @@ function Details({ note, receipt, what, onNote, onReceipt }: DetailsProps) {
 
 function useReceipt(editing: Expense | undefined) {
   const [receipt, setReceipt] = useState<Receipt>(editing ? undefined : null);
+  const [original, setOriginal] = useState<Receipt>(editing ? undefined : null);
   useEffect(() => {
-    if (editing) void loadReceipt(group.value!.id, editing.id).then(setReceipt);
+    if (!editing) return;
+    void findReceipt(group.value!.id, editing.id).then((found) => {
+      setOriginal(found);
+      setReceipt(found);
+    });
   }, [editing?.id]);
-  return [receipt, setReceipt] as const;
+  // Only a photo the person changed is stored again, so an edit doesn't re-upload it.
+  return [receipt, setReceipt, receipt === original ? undefined : receipt] as const;
 }
 
 export function ExpenseForm({ editing, onDone }: Props) {
@@ -140,7 +147,7 @@ export function ExpenseForm({ editing, onDone }: Props) {
   const [by, setBy] = useState(initial.by);
   const [among, setAmong] = useState(initial.among);
   const [note, setNote] = useState(initial.note);
-  const [receipt, setReceipt] = useReceipt(editing);
+  const [receipt, setReceipt, changedReceipt] = useReceipt(editing);
   const [error, setError] = useState('');
 
   const submit = (event: Event) => {
@@ -150,7 +157,7 @@ export function ExpenseForm({ editing, onDone }: Props) {
     const ordered = people.map((person) => person.id).filter((id) => among.includes(id));
     const id = editing?.id ?? createId();
     edit((draft) => saveExpense(draft, { ...editing, id, what: what.trim(), amount: value, by, for: ordered, note: note.trim() || undefined }));
-    void storeReceipt(group.value!.id, id, receipt);
+    void storeReceipt(group.value!.id, id, changedReceipt);
     setWhat('');
     setAmount('');
     setAmong(people.map((person) => person.id));

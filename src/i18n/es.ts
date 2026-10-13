@@ -353,7 +353,7 @@ export const es = {
     note: 'Nota',
     notePlaceholder: 'Hab. 204, incluye desayuno…',
     receipt: 'Foto de la boleta',
-    receiptHelp: 'Se guarda solo en este dispositivo.',
+    receiptHelp: 'Si compartes la cuenta, se sube cifrada y solo la ve quien tenga el link.',
     receiptAdd: 'Subir foto',
     receiptChange: 'Cambiar foto',
     receiptRemove: 'Quitar foto',
