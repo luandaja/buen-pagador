@@ -226,6 +226,21 @@ describe('pending receipt uploads', () => {
     expect(await pendingUploads('mine', link.id)).toEqual([]);
   });
 
+  it('marks photos that are only on this device until they are uploaded', async () => {
+    const link = await sharedWithLocalPhoto();
+    group.value = null;
+    rememberGroup('mine');
+    const put = vi.spyOn(MemoryReceiptStore.prototype, 'put').mockRejectedValueOnce(new Error('quota'));
+    render(<GroupApp />);
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Foto solo en este dispositivo')).toBeTruthy();
+
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + UPLOAD_RETRY_MS);
+    await syncNow();
+    await waitFor(() => expect(screen.queryByText('Foto solo en este dispositivo')).toBeNull());
+    expect(await sharedPhoto(link)).toBeTruthy();
+  });
+
   it('uploads everything again when the group is shared under a new link', async () => {
     const link = await sharedWithLocalPhoto();
     await markUploaded('mine', 'hotel', link.id);

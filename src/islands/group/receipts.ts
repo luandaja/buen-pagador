@@ -6,13 +6,20 @@ import { group } from './store';
 
 export const receiptSet = signal<Set<string>>(new Set());
 
+// Photos the group's shared link doesn't have yet; empty when the group isn't shared.
+export const pendingSet = signal<Set<string>>(new Set());
+
 // The read-only link the viewer was opened with; editors use the group's own share.
 export const viewerLink = signal<Pick<GroupLink, 'id' | 'key'> | null>(null);
 
 export async function refreshReceipts() {
   const groupId = group.value?.id;
+  const shareId = group.value?.share?.id;
   const ids = groupId ? await receiptIds(groupId) : new Set<string>();
-  if (group.value?.id === groupId) receiptSet.value = ids;
+  const pending = groupId && shareId ? new Set(await pendingUploads(groupId, shareId)) : new Set<string>();
+  if (group.value?.id !== groupId) return;
+  receiptSet.value = ids;
+  pendingSet.value = pending;
 }
 
 export async function findReceipt(groupId: string, expenseId: string): Promise<string | null> {
@@ -52,6 +59,7 @@ export function uploadPendingReceipts(groupId: string, link: GroupLink): Promise
       queued = null;
       await uploadPending(next.groupId, next.link).catch(() => undefined);
     }
+    await refreshReceipts().catch(() => undefined);
   })().finally(() => {
     running = null;
   });
