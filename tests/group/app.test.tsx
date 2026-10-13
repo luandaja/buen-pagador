@@ -134,6 +134,31 @@ describe('group page', () => {
     expect(screen.queryByText('Cena')).toBeNull();
   });
 
+  it('renames people, keeping the old name when cancelled or left blank', async () => {
+    await openApp();
+    addPeople('Ana', 'Beto');
+    addExpense('Cena', '80');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cambiar el nombre de Beto' }));
+    const input = screen.getByLabelText('Cambiar el nombre de Beto') as HTMLInputElement;
+    fireEvent.input(input, { target: { value: '  Roberto ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.blur(input);
+    expect(within(personRow('Roberto')).getByText('Debe S/ 40')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cambiar el nombre de Roberto' }));
+    const again = screen.getByLabelText('Cambiar el nombre de Roberto');
+    fireEvent.input(again, { target: { value: 'Rob' } });
+    fireEvent.keyDown(again, { key: 'Escape' });
+    fireEvent.blur(again);
+    expect(personRow('Roberto')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cambiar el nombre de Roberto' }));
+    fireEvent.input(screen.getByLabelText('Cambiar el nombre de Roberto'), { target: { value: ' ' } });
+    fireEvent.blur(screen.getByLabelText('Cambiar el nombre de Roberto'));
+    expect(personRow('Roberto')).toBeTruthy();
+  });
+
   it('removes people who are not in any expense', async () => {
     await openApp();
     addPeople('Ana', 'Beto');

@@ -1,6 +1,6 @@
-import { useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 import { es } from '../../i18n/es';
-import { addPerson, isReferenced, removePerson, rotateEmoji, toggleSettled, type Balance } from '../../scripts/group/model';
+import { addPerson, isReferenced, removePerson, renamePerson, rotateEmoji, toggleSettled, type Balance, type Person } from '../../scripts/group/model';
 import { statusText, toggleLabel } from '../../scripts/group/text';
 import { balances, edit, group, readOnly } from './store';
 
@@ -49,6 +49,50 @@ function PersonEmoji({ balance }: { balance: Balance }) {
   );
 }
 
+function PersonName({ person }: { person: Person }) {
+  const [editing, setEditing] = useState(false);
+  const cancelled = useRef(false);
+  if (readOnly.value) return <strong>{person.name}</strong>;
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        class="person-name"
+        aria-label={t.renamePerson(person.name)}
+        title={t.renamePerson(person.name)}
+        onClick={() => {
+          cancelled.current = false;
+          setEditing(true);
+        }}
+      >
+        <strong>{person.name}</strong>
+      </button>
+    );
+  }
+  const commit = (name: string) => {
+    if (!cancelled.current) edit((draft) => renamePerson(draft, person.id, name));
+    setEditing(false);
+  };
+  return (
+    <input
+      class="person-name-input"
+      aria-label={t.renamePerson(person.name)}
+      defaultValue={person.name}
+      maxLength={40}
+      autocomplete="off"
+      autoFocus
+      onBlur={(event) => commit(event.currentTarget.value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur();
+        if (event.key === 'Escape') {
+          cancelled.current = true;
+          setEditing(false);
+        }
+      }}
+    />
+  );
+}
+
 function PersonRow({ balance }: { balance: Balance }) {
   const { person, status } = balance;
   const current = group.value!;
@@ -56,7 +100,7 @@ function PersonRow({ balance }: { balance: Balance }) {
     <li class={`person is-${status}`}>
       <PersonEmoji balance={balance} />
       <span class="person-text">
-        <strong>{person.name}</strong>
+        <PersonName person={person} />
         <span>{statusText(balance, current.currency)}</span>
       </span>
       {!readOnly.value && <PersonActions balance={balance} />}
