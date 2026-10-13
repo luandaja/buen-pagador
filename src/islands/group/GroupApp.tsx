@@ -1,7 +1,8 @@
 import { render } from 'preact';
-import { useEffect } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
 import { es } from '../../i18n/es';
 import { setPageIdentity } from '../../scripts/group/page';
+import { followPage } from '../../scripts/group/sticky-panel';
 import { applyPalette } from '../../scripts/palettes';
 import { ExpensesCard } from './Expenses';
 import { GroupHeader } from './GroupHeader';
@@ -34,6 +35,8 @@ export function GroupApp() {
   }, []);
 
   const current = group.value;
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => (panel.current ? followPage(panel.current) : undefined), [!current]);
   useEffect(() => {
     if (current) setPageIdentity(current.emoji, current.title);
   }, [current?.emoji, current?.title]);
@@ -53,7 +56,7 @@ export function GroupApp() {
       <section class="group-main">
         <ExpensesCard />
       </section>
-      <aside class="panel group-panel" aria-label={current.title || es.group.unnamed}>
+      <aside ref={panel} class="panel group-panel" aria-label={current.title || es.group.unnamed}>
         <GroupHeader />
         <People />
         <Totals />
