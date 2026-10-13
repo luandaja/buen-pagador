@@ -26,6 +26,14 @@ const PREFIX = 'bp:group:';
 const EDIT = '_edit';
 const VERSION = '_v';
 
+// With automaticDeserialization off, Upstash returns HGETALL as a flat [field, value, ...] list.
+function pairsToObject(raw: unknown): Record<string, unknown> | null {
+  if (!Array.isArray(raw)) return raw as Record<string, unknown> | null;
+  const object: Record<string, unknown> = {};
+  for (let index = 0; index + 1 < raw.length; index += 2) object[String(raw[index])] = raw[index + 1];
+  return object;
+}
+
 function toRecord(raw: Record<string, unknown> | null): GroupRecord | null {
   if (!raw || raw[EDIT] == null) return null;
   const { [EDIT]: edit, [VERSION]: version, ...fields } = raw;
@@ -41,7 +49,7 @@ class RedisGroupStore implements GroupStore {
   }
 
   async get(id: string) {
-    return toRecord(await this.redis.hgetall(PREFIX + id));
+    return toRecord(pairsToObject(await this.redis.hgetall(PREFIX + id)));
   }
 
   async create(id: string, edit: string, fields: Fields) {

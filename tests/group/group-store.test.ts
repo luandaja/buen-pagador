@@ -75,6 +75,12 @@ describe('RedisGroupStore', () => {
     expect(await fakeRedis({}).store.version('g1')).toBeNull();
   });
 
+  it('reads the flat field/value list Upstash returns with deserialization off', async () => {
+    const flat = ['m', 'meta', '_edit', 'hash', '_v', '2'] as unknown as Record<string, string>;
+    expect(await fakeRedis(flat).store.get('g1')).toEqual({ edit: 'hash', v: 2, fields: { m: 'meta' } });
+    expect(await fakeRedis([] as unknown as Record<string, string>).store.get('g1')).toBeNull();
+  });
+
   it('creates with expiry and patches in one transaction', async () => {
     const { store, transaction, redis } = fakeRedis(null);
     await store.create('g1', 'hash', { m: 'meta' });
