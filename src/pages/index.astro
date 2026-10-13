@@ -6,7 +6,7 @@ import { es } from '../i18n/es';
 const { upload, toolbar, game, pay, steps, share, image, history } = es;
 ---
 
-<Layout>
+<Layout nav="court">
   <button slot="actions" type="button" class="history-btn" id="openHistory" aria-haspopup="dialog">
     <span>{history.open}</span>
     <span class="history-count" id="historyCount" aria-hidden="true" hidden></span>
@@ -128,6 +128,10 @@ const { upload, toolbar, game, pay, steps, share, image, history } = es;
           <span class="sr-only">{share.urlLabel}</span>
           <span id="publicUrl"></span>
         </p>
+        <p class="help link-expiry" id="linkExpiry"></p>
+        <a class="secondary small preview-link" href="/view#preview" target="_blank" rel="noopener" id="previewLink">
+          <span aria-hidden="true">👀</span>&nbsp;{es.preview.open}
+        </a>
         <details class="more">
           <summary>{share.more}</summary>
           <div class="more-body">

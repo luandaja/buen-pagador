@@ -1,8 +1,8 @@
 {
   "name": "buen-pagador",
-  "description": "Marca quién ya pagó la cancha: detecta caras, pone emojis y exporta o comparte el avance.",
+  "description": "Divide la cancha, el viaje o la cena y marca quién ya pagó. Local-first y cifrado de punta a punta.",
   "type": "module",
-  "version": "0.1.0",
+  "version": "1.5.0",
   "private": true,
   "license": "MIT",
   "packageManager": "pnpm@11.8.0",
@@ -18,18 +18,24 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "crap": "crap4ts",
-    "test:crap": "vitest run --coverage && crap4ts"
+    "test:crap": "vitest run --coverage && crap4ts",
+    "e2e": "playwright test",
+    "js-budget": "node scripts/js-budget.mjs"
   },
   "dependencies": {
     "@astrojs/vercel": "^11.0.11",
+    "@preact/signals": "^2.11.3",
     "@upstash/redis": "^1.39.0",
     "@vladmandic/face-api": "^1.7.15",
     "astro": "^7.3.5",
-    "idb": "^8.0.3"
+    "idb": "^8.0.3",
+    "preact": "^11.0.1"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "@happy-dom/global-registrator": "^20.14.5",
+    "@playwright/test": "^1.64.0",
+    "@testing-library/preact": "^3.2.4",
     "@types/node": "^26.6.4",
     "@vitest/coverage-istanbul": "^5.0.3",
     "crap4ts": "^1.0.1",

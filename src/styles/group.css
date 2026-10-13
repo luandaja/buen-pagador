@@ -1,0 +1,878 @@
+.group-layout {
+  align-items: start;
+}
+
+.group-loading {
+  grid-column: 1 / -1;
+  color: var(--chalk-dim);
+}
+
+@media (min-width: 901px) and (min-height: 640px) {
+  body:has(.group-layout) {
+    height: auto;
+    display: block;
+    overflow: visible;
+  }
+
+  .group-layout .panel {
+    position: sticky;
+    top: 16px;
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .group-panel {
+    order: -1;
+  }
+}
+
+.card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  padding: 20px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(247, 248, 252, 0.14);
+  background: color-mix(in srgb, var(--ink) 88%, transparent);
+  box-shadow: 0 24px 60px -24px rgba(5, 8, 40, 0.8);
+}
+
+.section-total {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.group-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.title-input {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 22px;
+  text-transform: uppercase;
+}
+
+.currency-field {
+  width: 64px;
+  flex: none;
+}
+
+.currency-field input {
+  text-align: center;
+  font-weight: 700;
+}
+
+.emoji-picker {
+  position: relative;
+  flex: none;
+}
+
+.emoji-current {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(247, 248, 252, 0.3);
+  background: var(--board-field);
+  font-size: 32px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.emoji-current::-webkit-details-marker {
+  display: none;
+}
+
+.emoji-current:hover {
+  border-color: var(--chalk);
+}
+
+.emoji-menu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  gap: 12px;
+  width: min(296px, calc(100vw - 48px));
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(247, 248, 252, 0.2);
+  background: var(--ink);
+  box-shadow: 0 24px 60px -16px rgba(5, 8, 40, 0.9);
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.emoji-grid button {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  border: 1.5px solid transparent;
+  background: var(--board-field);
+  font-size: 26px;
+  cursor: pointer;
+}
+
+.emoji-grid button:hover {
+  border-color: rgba(247, 248, 252, 0.4);
+}
+
+.emoji-grid button[aria-pressed='true'] {
+  border-color: var(--ball);
+}
+
+.people {
+  display: grid;
+  gap: 10px;
+  padding-top: 20px;
+  border-top: 1px solid var(--board-line);
+}
+
+.person-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 6px 6px 6px 8px;
+  border-radius: 12px;
+  background: var(--board-field);
+}
+
+.person-emoji {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 22px;
+}
+
+.person.is-settled .person-emoji {
+  background: var(--paid);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.person-text {
+  flex: 1;
+  display: grid;
+  min-width: 0;
+}
+
+.person-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.person-text span {
+  font-size: 13px;
+  color: var(--board-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.person.is-owes .person-text span {
+  color: var(--warn);
+}
+
+.person.is-settled .person-text span {
+  color: var(--paid);
+}
+
+.pay-toggle {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid rgba(247, 248, 252, 0.4);
+  background: transparent;
+  color: transparent;
+  font-weight: 900;
+  font-size: 20px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.pay-toggle:hover {
+  border-color: var(--paid);
+  color: var(--paid);
+}
+
+.pay-toggle[aria-pressed='true'] {
+  border-color: var(--paid);
+  background: var(--paid);
+  color: var(--ink);
+}
+
+.person-remove {
+  flex: none;
+  width: 32px;
+  height: 44px;
+  border: 0;
+  background: none;
+  color: var(--chalk-dim);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.person-remove:hover {
+  color: var(--warn);
+}
+
+.add-row {
+  display: flex;
+  gap: 8px;
+}
+
+.add-row input {
+  flex: 1;
+}
+
+.expense-form {
+  display: grid;
+  gap: 14px;
+}
+
+.amount-field {
+  width: 120px;
+  flex: none;
+}
+
+.amount-field input {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.among {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.among legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--board-dim);
+}
+
+.chip {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(247, 248, 252, 0.25);
+  background: transparent;
+  color: var(--chalk-dim);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chip[aria-pressed='true'] {
+  border-color: var(--chalk);
+  background: var(--chalk);
+  color: var(--ink);
+}
+
+.form-error {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--warn);
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.form-actions .primary {
+  flex: 1;
+  min-width: 160px;
+}
+
+.expense-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--board-line);
+  list-style: none;
+}
+
+.expense-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1.5px solid transparent;
+  background: var(--board-field);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.expense-row:hover {
+  border-color: rgba(247, 248, 252, 0.3);
+}
+
+.expense-row[aria-current='true'] {
+  border-color: var(--ball);
+}
+
+.expense-text {
+  flex: 1;
+  display: grid;
+  min-width: 0;
+}
+
+.expense-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expense-text span {
+  font-size: 13px;
+  color: var(--board-dim);
+}
+
+.expense-amount {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.group-progress {
+  padding-top: 20px;
+  border-top: 1px solid var(--board-line);
+}
+
+.group-progress .progress-fraction {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 22px;
+  color: var(--chalk);
+  font-variant-numeric: tabular-nums;
+}
+
+.group-progress .meter {
+  --ball-size: 14px;
+}
+
+.progress-sub {
+  margin: 0;
+  font-size: 14px;
+  color: var(--board-dim);
+}
+
+.progress-sub b {
+  color: var(--chalk);
+}
+
+.group-list {
+  padding-top: 8px;
+  border-top: 1px solid var(--board-line);
+}
+
+.group-list .secondary {
+  justify-self: start;
+}
+
+.saved-groups {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.saved-group {
+  display: grid;
+  gap: 2px;
+}
+
+.saved-open {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 1.5px solid transparent;
+  background: var(--board-field);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.saved-open[aria-current='true'] {
+  border-color: rgba(247, 248, 252, 0.7);
+}
+
+.saved-open strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-emoji {
+  font-size: 22px;
+}
+
+.saved-amount {
+  font-size: 13px;
+  color: var(--board-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.saved-group .link.danger {
+  min-height: 32px;
+  font-size: 13px;
+}
+
+.group-share .secondary,
+.group-share .link {
+  justify-self: stretch;
+}
+
+.group-share .link.danger {
+  justify-self: start;
+}
+
+.group-viewer-state {
+  grid-column: 1 / -1;
+}
+
+span.emoji-current {
+  cursor: default;
+}
+
+.expense-details summary {
+  min-height: 36px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--board-dim);
+}
+
+.receipt-field {
+  justify-items: start;
+}
+
+.receipt-preview {
+  max-width: 100%;
+  max-height: 260px;
+  border-radius: 10px;
+  object-fit: contain;
+  background: var(--board-field);
+}
+
+.receipt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.receipt-mark {
+  margin-left: 6px;
+  font-size: 14px;
+}
+
+.expense-text .expense-note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: italic;
+}
+
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.palette-grid legend {
+  margin-bottom: 6px;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--board-dim);
+}
+
+.swatch {
+  aspect-ratio: 1;
+  min-width: 36px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background: conic-gradient(var(--swatch-bg) 0 50%, var(--swatch-accent) 0 75%, var(--swatch-ink) 0);
+  cursor: pointer;
+}
+
+.swatch[aria-pressed='true'] {
+  border-color: var(--chalk);
+  box-shadow: 0 0 0 2px var(--ink);
+}
+
+.swatch span {
+  display: block;
+}
+
+button.person-emoji {
+  border: 1.5px dashed transparent;
+  background: none;
+  cursor: pointer;
+}
+
+button.person-emoji:hover {
+  border-color: rgba(247, 248, 252, 0.4);
+}
+
+.chip-all {
+  font-weight: 800;
+}
+
+.pay-details {
+  display: grid;
+  gap: 10px;
+  padding-top: 20px;
+  border-top: 1px solid var(--board-line);
+}
+
+.receipt-upload {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.receipt-upload .is-busy {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.receipt-splitter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.receipt-progress {
+  margin: 0;
+  font-weight: 700;
+}
+
+.receipt-orphans {
+  color: var(--warn);
+}
+
+.receipt-items {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.receipt-item {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1.5px solid transparent;
+  background: var(--board-field);
+}
+
+.receipt-item.is-orphan {
+  border-color: color-mix(in srgb, var(--warn) 70%, transparent);
+}
+
+.receipt-item-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.receipt-item-head input {
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1.5px solid rgba(247, 248, 252, 0.2);
+  border-radius: 10px;
+  background: var(--board-field);
+  color: var(--chalk);
+}
+
+.receipt-item-name {
+  flex: 1;
+  width: 0;
+}
+
+.receipt-item-amount {
+  width: 92px;
+  flex: none;
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.receipt-item .among legend {
+  font-size: 12px;
+}
+
+.receipt-item .chip {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.receipt-check {
+  margin: 0;
+  font-weight: 700;
+}
+
+.receipt-check.is-ok {
+  color: var(--paid);
+}
+
+.receipt-check.is-warn {
+  color: var(--warn);
+}
+
+.receipt-fix {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.receipt-photo {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 0;
+  background: color-mix(in srgb, var(--ink) 92%, transparent);
+}
+
+.receipt-lens {
+  position: relative;
+  height: 28vh;
+  min-height: 150px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #fff;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.receipt-lens:active {
+  cursor: grabbing;
+}
+
+.receipt-lens-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transition: width 0.2s ease, height 0.2s ease;
+}
+
+.receipt-lens-image img,
+.receipt-viewer-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.receipt-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  min-height: 10px;
+  border-block: 2px solid var(--ball);
+  background: color-mix(in srgb, var(--ball) 22%, transparent);
+  pointer-events: none;
+}
+
+.receipt-photo figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--board-dim);
+}
+
+.zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.zoom-level {
+  min-width: 34px;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--chalk);
+}
+
+.icon-btn.small {
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.receipt-viewer {
+  width: 100vw;
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #111;
+  color: var(--chalk);
+}
+
+.receipt-viewer[open] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.receipt-viewer::backdrop {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.receipt-viewer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-top, 0px));
+  background: var(--ink);
+}
+
+.receipt-viewer-scroll {
+  overflow: auto;
+  background: #fff;
+}
+
+.receipt-viewer-image {
+  position: relative;
+  margin: 0 auto;
+}
+
+.receipt-quantity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.quantity-value {
+  min-width: 34px;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.receipt-locate {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(247, 248, 252, 0.2);
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.receipt-locate[aria-pressed='true'] {
+  border-color: var(--ball);
+  background: color-mix(in srgb, var(--ball) 20%, transparent);
+}
+
+.receipt-item.is-active {
+  border-color: var(--ball);
+}
+
+@media (min-width: 901px) {
+  .receipt-splitter.has-photo {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    column-gap: 20px;
+    align-items: start;
+  }
+
+  .receipt-splitter.has-photo > * {
+    grid-column: 2;
+  }
+
+  .receipt-splitter.has-photo > .receipt-photo {
+    grid-column: 1;
+    grid-row: 1 / span 40;
+    top: 16px;
+    padding: 0;
+  }
+
+  .receipt-splitter.has-photo .receipt-lens {
+    height: calc(100dvh - 140px);
+  }
+}
+
+.receipt-check.is-info {
+  color: var(--chalk);
+  font-weight: 600;
+}
+
+#receiptTotal + .link {
+  justify-self: start;
+  font-size: 13px;
+}

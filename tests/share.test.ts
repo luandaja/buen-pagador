@@ -12,8 +12,10 @@ import {
   hasPay,
   payOf,
   ShareError,
+  SCHEMA_VERSION,
   toShared,
 } from '../src/scripts/share';
+import { encryptJson, importKey } from '../src/scripts/crypto';
 import { es } from '../src/i18n/es';
 import { defaultState, type State } from '../src/scripts/state';
 import { useApiFetch } from './helpers/api';
@@ -57,6 +59,10 @@ describe('links', () => {
     expect(shared).not.toHaveProperty('blocked');
     expect(shared.faces[0].x).toBe(0.1235);
   });
+
+  it('stamps the schema version', () => {
+    expect(toShared(state).schemaVersion).toBe(SCHEMA_VERSION);
+  });
 });
 
 describe('full cycle against the API', () => {
@@ -64,11 +70,13 @@ describe('full cycle against the API', () => {
     const link = await createShare(state);
     expect(link.key).toHaveLength(43);
 
+    expect(link.expiresAt).toBeGreaterThan(Date.now());
     const first = await loadShare(link, true);
+    expect(first.expiresAt).toBeGreaterThan(Date.now());
     expect(first).toMatchObject({ v: 1, canEdit: true, state: { title: 'Thursday', cost: 100 } });
     expect(first.image).toMatch(/^data:image\/jpeg;base64,/);
 
-    expect(await pushShare(link, { ...state, title: 'Friday' })).toBe(2);
+    expect(await pushShare(link, { ...state, title: 'Friday' })).toEqual({ v: 2, expiresAt: expect.any(Number) });
     const publicView = await loadShare({ id: link.id, key: link.key }, false);
     expect(publicView).toMatchObject({ v: 2, state: { title: 'Friday' } });
     expect(publicView.image).toBeUndefined();
@@ -76,6 +84,18 @@ describe('full cycle against the API', () => {
 
     await deleteShare(link);
     await expect(loadShare(link, false)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('reads links created before schemaVersion existed as version 1', async () => {
+    const link = await createShare(state);
+    const { schemaVersion, ...legacy } = toShared(state);
+    const response = await fetch(`/api/share/${link.id}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${link.token}` },
+      body: JSON.stringify({ state: await encryptJson(await importKey(link.key), legacy) }),
+    });
+    expect(response.ok).toBe(true);
+    expect((await loadShare(link, false)).state.schemaVersion).toBe(schemaVersion);
   });
 
   it('payment details travel encrypted and separately', async () => {

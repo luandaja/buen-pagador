@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "6e4e74fd33eee9e7642cf3c92b4b2319a829c6cc",
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "package-name": "buen-pagador",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": true
+    }
+  },
+  "include-component-in-tag": false
+}

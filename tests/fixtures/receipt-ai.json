@@ -1,0 +1,21 @@
+{
+  "merchant": "TP Punta Hermosa",
+  "items": [
+    { "name": "Duo Carretillero", "quantity": 1, "amount": 47.9 },
+    { "name": "Pollo Saltado", "quantity": 1, "amount": 37.9 },
+    { "name": "Filete Light", "quantity": 1, "amount": 39.9 },
+    { "name": "Ceviche De Pescado", "quantity": 1, "amount": 47.9 },
+    { "name": "Tortitas De Choclo", "quantity": 1, "amount": 29.9 },
+    { "name": "Duo Mi Causa", "quantity": 1, "amount": 46.9 },
+    { "name": "Duo Oriental", "quantity": 1, "amount": 46.9 },
+    { "name": "Ceviche Carretilero", "quantity": 1, "amount": 49.9 },
+    { "name": "Leche De Tigre Clasica", "quantity": 1, "amount": 24.9 },
+    { "name": "Almejas A La Chalaca", "quantity": 1, "amount": 29.9 },
+    { "name": "Inca Kola Zero 300 Ml", "quantity": 1, "amount": 6.5 },
+    { "name": "Agua San Luis Con Gas 350Ml", "quantity": 3, "amount": 18.0 },
+    { "name": "Chicha Morada - 1 Lt", "quantity": 1, "amount": 18.9 },
+    { "name": "Coca Cola Regular 300 Ml", "quantity": 1, "amount": 6.5 }
+  ],
+  "tip": 45.19,
+  "total": 497.09
+}

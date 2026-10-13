@@ -410,6 +410,7 @@ describe('group link', () => {
   it('creates the link, syncs payments and deactivates it', async () => {
     await startWithLink();
     const url = textOf('publicUrl')!;
+    expect(textOf('linkExpiry')).toBe('El link vence en 30 días si nadie lo cambia. Cada cambio lo renueva.');
     expect(url).toMatch(/\/view#[A-Za-z0-9]{10}\.[\w-]{43}$/);
     expect(textOf('linkAction')).toBe(es.share.copy);
     expect(byId('masterBox').hidden).toBe(false);

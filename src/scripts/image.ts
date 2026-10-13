@@ -57,3 +57,21 @@ export async function qrFromFile(file: File): Promise<string> {
     URL.revokeObjectURL(objectUrl);
   }
 }
+
+export async function receiptFromFile(file: File): Promise<string> {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    return resizeToCanvas(await loadImage(objectUrl), 1280).toDataURL('image/jpeg', 0.72);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+export async function receiptForAi(file: File): Promise<string> {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    return resizeToCanvas(await loadImage(objectUrl), 2000).toDataURL('image/jpeg', 0.85);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}

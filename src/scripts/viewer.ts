@@ -2,6 +2,7 @@ import { es, locale } from '../i18n/es';
 import { renderCard } from './export';
 import { canvasToBlob } from './image';
 import { loadShare, parsePublicHash, ShareError, type Loaded, type PayInfo, type SharedState } from './share';
+import { PREVIEW_HASH } from './routes';
 import { byId, fitStageToPhoto, progressElements, renderTotals, syncFaces } from './view';
 
 const elements = {
@@ -23,6 +24,8 @@ const elements = {
   payQr: byId<HTMLImageElement>('payQrOut'),
   payQrSave: byId<HTMLAnchorElement>('payQrSave'),
   exportMsg: byId<HTMLParagraphElement>('exportMsg'),
+  hint: byId<HTMLParagraphElement>('viewerHint'),
+  badge: byId<HTMLSpanElement>('viewerBadge'),
 };
 const progressOutputs = progressElements();
 const faceMarkers = new Map<string, HTMLElement>();
@@ -162,7 +165,25 @@ elements.download.addEventListener('click', async () => {
   }
 });
 
+async function startPreview() {
+  const { loadPreview } = await import('./preview');
+  const preview = await loadPreview();
+  if (!preview) return showMessage(es.preview.emptyTitle, es.preview.emptyText);
+  ({ shared, image, pay } = preview);
+  render();
+  elements.hint.textContent = es.preview.hint;
+  elements.badge.textContent = es.preview.badge;
+  elements.updated.textContent = es.preview.hint;
+}
+
+const isPreview = () => location.hash === PREVIEW_HASH;
+
+window.addEventListener('focus', () => {
+  if (isPreview()) startPreview();
+});
+
 async function start() {
+  if (isPreview()) return startPreview();
   link = parsePublicHash(location.hash);
   if (!link) {
     showMessage(es.viewer.brokenTitle, es.viewer.brokenText);

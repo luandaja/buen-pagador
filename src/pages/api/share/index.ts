@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { fail, isOptionalPayload, isPayload, json, MAX_IMG, MAX_PAY, MAX_STATE, randomId, randomToken, readJson, sha256 } from '../../../lib/http';
-import { getStore } from '../../../lib/store';
+import { getStore, TTL_SECONDS } from '../../../lib/store';
 
 export const prerender = false;
 
@@ -14,5 +14,5 @@ export const POST: APIRoute = async ({ request }) => {
   const id = randomId();
   const token = randomToken();
   await getStore().create(id, { img, state, edit: await sha256(token), v: 1, ...(pay ? { pay: pay as string, pv: 1 } : {}) });
-  return json({ id, token, v: 1 }, 201);
+  return json({ id, token, v: 1, ttl: TTL_SECONDS }, 201);
 };

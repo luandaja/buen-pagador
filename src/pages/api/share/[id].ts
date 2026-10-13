@@ -1,7 +1,6 @@
 import type { APIRoute } from 'astro';
 import { canEdit, fail, isId, isOptionalPayload, isPayload, json, MAX_PAY, MAX_STATE, readJson } from '../../../lib/http';
-import type { ShareRecord } from '../../../lib/store';
-import { getStore } from '../../../lib/store';
+import { getStore, TTL_SECONDS, type ShareRecord } from '../../../lib/store';
 
 export const prerender = false;
 
@@ -26,7 +25,8 @@ export const GET: APIRoute = async ({ params, request, url }) => {
   const record = await getStore().get(params.id, requested.fields);
   if (!record?.state) return fail(404, NOT_FOUND);
   const access = request.headers.has('authorization') ? { canEdit: await canEdit(request, record.edit) } : {};
-  return json({ ...publicFields(record, requested), ...access });
+  const ttl = await getStore().ttl(params.id);
+  return json({ ...publicFields(record, requested), ...access, ...(ttl ? { ttl } : {}) });
 };
 
 function publicFields(record: Partial<ShareRecord>, requested: Requested) {
@@ -49,7 +49,7 @@ export const PUT: APIRoute = async ({ params, request }) => {
   const body = await readJson(request, MAX_STATE + MAX_PAY + 1_000);
   if (!body || !isPayload(body.state, MAX_STATE) || !isOptionalPayload(body.pay, MAX_PAY)) return fail(400, 'invalid');
   const version = await store.updateState(params.id, body.state, body.pay as string | undefined);
-  return json({ v: version });
+  return json({ v: version, ttl: TTL_SECONDS });
 };
 
 export const DELETE: APIRoute = async ({ params, request }) => {

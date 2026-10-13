@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_IMG, MAX_PAY } from '../src/lib/http';
-import { resetStore } from '../src/lib/store';
+import { resetStore, TTL_SECONDS } from '../src/lib/store';
 import { callApi } from './helpers/api';
 
 beforeEach(() => {
@@ -36,8 +36,8 @@ describe('POST /api/share', () => {
 describe('GET /api/share/:id', () => {
   it('returns only the state by default and the photo with ?img=1', async () => {
     const { id, token } = await created();
-    expect(await (await callApi(`/api/share/${id}`)).json()).toEqual({ state: 'c3Q', v: 1, pv: 0 });
-    expect(await (await callApi(`/api/share/${id}?img=1`)).json()).toEqual({ state: 'c3Q', v: 1, pv: 0, img: 'aW1n' });
+    expect(await (await callApi(`/api/share/${id}`)).json()).toEqual({ state: 'c3Q', v: 1, pv: 0, ttl: TTL_SECONDS });
+    expect(await (await callApi(`/api/share/${id}?img=1`)).json()).toEqual({ state: 'c3Q', v: 1, pv: 0, img: 'aW1n', ttl: TTL_SECONDS });
     const withToken = await callApi(`/api/share/${id}`, { headers: auth(token) });
     expect(await withToken.json()).toMatchObject({ canEdit: true });
   });
@@ -58,8 +58,8 @@ describe('PUT /api/share/:id', () => {
     expect((await put(auth('falso'))).status).toBe(403);
     expect((await put(auth(token), { state: '!!' })).status).toBe(400);
     const updated = await put(auth(token));
-    expect(await updated.json()).toEqual({ v: 2 });
-    expect(await (await callApi(`/api/share/${id}`)).json()).toEqual({ state: 'bmV4dA', v: 2, pv: 0 });
+    expect(await updated.json()).toEqual({ v: 2, ttl: TTL_SECONDS });
+    expect(await (await callApi(`/api/share/${id}`)).json()).toEqual({ state: 'bmV4dA', v: 2, pv: 0, ttl: TTL_SECONDS });
   });
 
   it('404 when missing or the id is invalid', async () => {
@@ -72,21 +72,21 @@ describe('payment details', () => {
   it('are stored separately, versioned, and only sent on request', async () => {
     const response = await create({ img: 'aW1n', state: 'c3Q', pay: 'cGF5' });
     const { id, token } = (await response.json()) as { id: string; token: string };
-    expect(await (await callApi(`/api/share/${id}`)).json()).toEqual({ state: 'c3Q', v: 1, pv: 1 });
-    expect(await (await callApi(`/api/share/${id}?pay=1`)).json()).toEqual({ state: 'c3Q', v: 1, pv: 1, pay: 'cGF5' });
+    expect(await (await callApi(`/api/share/${id}`)).json()).toEqual({ state: 'c3Q', v: 1, pv: 1, ttl: TTL_SECONDS });
+    expect(await (await callApi(`/api/share/${id}?pay=1`)).json()).toEqual({ state: 'c3Q', v: 1, pv: 1, pay: 'cGF5', ttl: TTL_SECONDS });
     expect(await (await callApi(`/api/share/${id}?img=1`)).json()).toMatchObject({ img: 'aW1n', pay: 'cGF5' });
 
     const put = (body: unknown) => callApi(`/api/share/${id}`, { method: 'PUT', headers: auth(token), body: JSON.stringify(body) });
-    expect(await (await put({ state: 'MQ' })).json()).toEqual({ v: 2 });
+    expect(await (await put({ state: 'MQ' })).json()).toEqual({ v: 2, ttl: TTL_SECONDS });
     expect(await (await callApi(`/api/share/${id}`)).json()).toMatchObject({ v: 2, pv: 1 });
-    expect(await (await put({ state: 'Mg', pay: 'bmV4dA' })).json()).toEqual({ v: 3 });
+    expect(await (await put({ state: 'Mg', pay: 'bmV4dA' })).json()).toEqual({ v: 3, ttl: TTL_SECONDS });
     expect(await (await callApi(`/api/share/${id}?pay=1`)).json()).toMatchObject({ v: 3, pv: 2, pay: 'bmV4dA' });
     expect((await put({ state: 'Mg', pay: '!!' })).status).toBe(400);
   });
 
   it('without payment details the version is 0 and there is no pay field', async () => {
     const { id } = await created();
-    expect(await (await callApi(`/api/share/${id}?pay=1`)).json()).toEqual({ state: 'c3Q', v: 1, pv: 0 });
+    expect(await (await callApi(`/api/share/${id}?pay=1`)).json()).toEqual({ state: 'c3Q', v: 1, pv: 0, ttl: TTL_SECONDS });
     expect((await create({ img: 'aW1n', state: 'c3Q', pay: 'not valid!' })).status).toBe(400);
   });
 });

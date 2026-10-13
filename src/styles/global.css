@@ -188,14 +188,14 @@ select {
   text-align: center;
   border: 3px dashed rgba(247, 248, 252, 0.55);
   border-radius: var(--radius);
-  background: rgba(13, 18, 56, 0.18);
+  background: color-mix(in srgb, var(--ink) 18%, transparent);
   cursor: pointer;
   transition: background 0.2s, border-color 0.2s;
 }
 
 .dropzone:hover,
 .dropzone.is-over {
-  background: rgba(13, 18, 56, 0.32);
+  background: color-mix(in srgb, var(--ink) 32%, transparent);
   border-color: var(--chalk);
 }
 
@@ -502,7 +502,7 @@ select {
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(13, 18, 56, 0.45);
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
   backdrop-filter: blur(2px);
 }
 
@@ -520,7 +520,7 @@ select {
   right: 0;
   height: 3px;
   background: var(--ball);
-  box-shadow: 0 0 18px 4px rgba(255, 106, 19, 0.6);
+  box-shadow: 0 0 18px 4px color-mix(in srgb, var(--ball) 60%, transparent);
   animation: scan 1.6s ease-in-out infinite alternate;
 }
 
@@ -590,7 +590,7 @@ select {
   padding: 32px 24px;
   text-align: center;
   border-radius: var(--radius);
-  background: rgba(13, 18, 56, 0.18);
+  background: color-mix(in srgb, var(--ink) 18%, transparent);
 }
 
 .viewer-state strong {
@@ -664,7 +664,7 @@ select {
 }
 
 .primary:hover:not(:disabled) {
-  background: #ff8240;
+  background: color-mix(in srgb, var(--ball) 85%, white);
 }
 
 .primary:disabled {
@@ -754,7 +754,7 @@ select {
   padding: 0 16px;
   border-radius: 999px;
   border: 1.5px solid rgba(247, 248, 252, 0.6);
-  background: rgba(13, 18, 56, 0.25);
+  background: color-mix(in srgb, var(--ink) 25%, transparent);
   color: var(--chalk);
   font-weight: 700;
   font-size: 15px;
@@ -762,7 +762,7 @@ select {
 }
 
 .history-btn:hover {
-  background: rgba(13, 18, 56, 0.45);
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
   border-color: var(--chalk);
 }
 
@@ -897,7 +897,7 @@ select {
 .field textarea:focus {
   outline: none;
   border-color: var(--ball);
-  box-shadow: 0 0 0 3px rgba(255, 106, 19, 0.25);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ball) 25%, transparent);
 }
 
 .money-input {
@@ -1687,7 +1687,7 @@ html:has(.drawer[open]) {
   margin: 10px 0 0;
   padding: 8px 10px;
   border-radius: 10px;
-  background: rgba(255, 106, 19, 0.12);
+  background: color-mix(in srgb, var(--ball) 12%, transparent);
   font-size: 14px;
   overflow-wrap: anywhere;
 }
@@ -1711,8 +1711,8 @@ html:has(.drawer[open]) {
   gap: 10px;
   padding: 16px;
   border-radius: 12px;
-  border: 1.5px solid rgba(255, 106, 19, 0.5);
-  background: rgba(255, 106, 19, 0.08);
+  border: 1.5px solid color-mix(in srgb, var(--ball) 50%, transparent);
+  background: color-mix(in srgb, var(--ball) 8%, transparent);
 }
 
 .pay-box h3 {
@@ -1761,4 +1761,82 @@ html:has(.drawer[open]) {
   font-size: 13px;
   text-align: center;
   color: var(--board-dim);
+}
+
+.app-footer {
+  padding: 24px 16px 32px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--chalk-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.masthead-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.section-nav {
+  display: flex;
+  gap: 6px;
+}
+
+@media (max-width: 520px) {
+  .masthead {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .masthead > :first-child {
+    flex: 1 1 100%;
+  }
+
+  .masthead-actions {
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+  }
+}
+
+.section-nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  color: var(--chalk-dim);
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.section-nav a:hover {
+  border-color: var(--chalk);
+  color: var(--chalk);
+}
+
+.section-nav a[aria-current='page'] {
+  border-color: var(--chalk);
+  background: var(--chalk);
+  color: var(--ink);
+}
+
+.qr-download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.preview-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  text-decoration: none;
 }

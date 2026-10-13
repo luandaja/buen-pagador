@@ -1,26 +1,10 @@
-import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import { database, resetDatabase, type Schema } from './db';
 import type { Game } from './state';
 
 export type GameMeta = Omit<Game, 'image'>;
-type StoredGame = Omit<GameMeta, 'payNote' | 'payQr'> & Partial<Pick<GameMeta, 'payNote' | 'payQr'>>;
+type StoredGame = Schema['games']['value'];
 
-interface Schema extends DBSchema {
-  games: { key: string; value: StoredGame };
-  images: { key: string; value: string };
-}
-
-let dbPromise: Promise<IDBPDatabase<Schema>> | null = null;
 const savedImages = new Map<string, string>();
-
-function database() {
-  dbPromise ??= openDB<Schema>('buen-pagador', 1, {
-    upgrade(upgradingDatabase) {
-      upgradingDatabase.createObjectStore('games', { keyPath: 'id' });
-      upgradingDatabase.createObjectStore('images');
-    },
-  });
-  return dbPromise;
-}
 
 const withDefaults = (meta: StoredGame): GameMeta => ({ payNote: '', payQr: null, ...meta });
 
@@ -59,6 +43,6 @@ export async function findByShareId(shareId: string): Promise<GameMeta | undefin
 }
 
 export function resetGamesDb() {
-  dbPromise = null;
+  resetDatabase();
   savedImages.clear();
 }

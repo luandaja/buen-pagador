@@ -15,6 +15,7 @@ import {
 } from './faces';
 import { deleteGame, findByShareId, listGames, loadGame, saveGame } from './games';
 import { renderHistory } from './history';
+import { expiryText } from './links';
 import { canvasToBlob, fileToDataUrl, qrFromFile, thumbFrom } from './image';
 import {
   createShare,
@@ -88,6 +89,7 @@ const elements = {
   linkShare: byId<HTMLElement>('linkShare'),
   panelActions: document.querySelector<HTMLDivElement>('.panel-actions')!,
   linkAction: byId<HTMLButtonElement>('linkAction'),
+  linkExpiry: byId<HTMLParagraphElement>('linkExpiry'),
   linkReady: byId<HTMLDivElement>('linkReady'),
   publicUrl: byId<HTMLSpanElement>('publicUrl'),
   masterBox: byId<HTMLDivElement>('masterBox'),
@@ -256,6 +258,7 @@ function renderLink() {
   elements.linkReady.hidden = !link;
   elements.masterBox.hidden = !link;
   elements.publicUrl.textContent = link ? publicUrl(link) : '';
+  elements.linkExpiry.textContent = expiryText(link?.expiresAt);
 }
 
 function render() {
@@ -577,7 +580,8 @@ async function pushOnce(link: ShareLink) {
   const withPay = payNeedsSync;
   payNeedsSync = false;
   try {
-    await pushShare(link, state, withPay);
+    const { expiresAt } = await pushShare(link, state, withPay);
+    if (state.share?.id === link.id) update({ share: { ...state.share, expiresAt } }, false);
     if (!syncPending) setSync(LIVE_STATUS, 'ok');
   } catch (error) {
     console.error(error);
@@ -603,7 +607,7 @@ const payFields = (pay?: PayInfo): Partial<State> => (pay ? { payNote: pay.note,
 async function pullShared(link: ShareLink) {
   try {
     const loaded = await loadShare(link, false, true);
-    if (state.share?.id === link.id) update({ ...loaded.state, ...payFields(loaded.pay) }, false);
+    if (state.share?.id === link.id) update({ ...loaded.state, ...payFields(loaded.pay), share: { ...state.share, expiresAt: loaded.expiresAt } }, false);
     setSync(LIVE_STATUS, 'ok');
   } catch (error) {
     if (!dropLinkOnLoss(error)) setSync(es.share.offlineLocal, 'error');
