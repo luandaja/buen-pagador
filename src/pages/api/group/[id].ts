@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { getGroupStore, GROUP_TTL_SECONDS } from '../../../lib/group-store';
 import { MAX_GROUP_BODY, parsePatch } from '../../../lib/group-http';
 import { canEdit, fail, isId, json, readJson } from '../../../lib/http';
+import { getReceiptStore, receiptFolder } from '../../../lib/receipt-store';
 
 export const prerender = false;
 
@@ -38,5 +39,9 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   if (!record) return json({ ok: true });
   if (!(await canEdit(request, record.edit))) return fail(403, 'forbidden');
   await store.remove(params.id);
+  // If this fails, the cron removes the photos once the group's due date passes.
+  await getReceiptStore()
+    ?.removeFolder(receiptFolder(params.id))
+    .catch(() => undefined);
   return json({ ok: true });
 };

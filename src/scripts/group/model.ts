@@ -157,7 +157,7 @@ export function itemizedShares(expense: Expense, people: Person[]): Map<string, 
   return shares;
 }
 
-function expenseShares(expense: Expense, people: Person[]): Map<string, number> {
+export function expenseShares(expense: Expense, people: Person[]): Map<string, number> {
   if (expense.items?.length) return itemizedShares(expense, people);
   const among = beneficiaries(expense, people);
   const shares = new Map<string, number>();

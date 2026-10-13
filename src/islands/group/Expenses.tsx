@@ -3,6 +3,7 @@ import { es } from '../../i18n/es';
 import { money } from '../../scripts/state';
 import { amongText, payerName } from '../../scripts/group/text';
 import { prefersLocalOcr, readReceipt, setPrefersLocalOcr } from '../../scripts/group/read-receipt';
+import { ExpenseDetail } from './ExpenseDetail';
 import { ExpenseForm } from './ExpenseForm';
 import { ReceiptSplitter, type Splitting } from './ReceiptSplitter';
 import type { Expense, Person } from '../../scripts/group/model';
@@ -41,9 +42,19 @@ function ExpenseList({ editingId, onEdit }: { editingId: string | null; onEdit: 
       {[...current.expenses].reverse().map((expense) => (
         <li key={expense.id}>
           {readOnly.value ? (
-            <div class="expense-row">
-              <ExpenseContent expense={expense} people={current.people} currency={current.currency} />
-            </div>
+            <>
+              <button
+                type="button"
+                class="expense-row"
+                aria-expanded={expense.id === editingId}
+                aria-controls={`detail-${expense.id}`}
+                aria-label={t.viewDetail(expense.what)}
+                onClick={() => onEdit(expense.id)}
+              >
+                <ExpenseContent expense={expense} people={current.people} currency={current.currency} />
+              </button>
+              {expense.id === editingId && <ExpenseDetail expense={expense} />}
+            </>
           ) : (
             <button type="button" class="expense-row" aria-current={expense.id === editingId} aria-label={t.edit(expense.what)} onClick={() => onEdit(expense.id)}>
               <ExpenseContent expense={expense} people={current.people} currency={current.currency} />
@@ -102,6 +113,7 @@ export function ExpensesCard() {
   const [splitting, setSplitting] = useState<Splitting | null>(null);
   const editing = current.expenses.find((expense) => expense.id === editingId);
   const openExpense = (id: string) => {
+    if (readOnly.value) return setEditingId(id === editingId ? null : id);
     const expense = current.expenses.find((item) => item.id === id);
     if (expense?.items?.length) setSplitting({ expense });
     else setEditingId(id);

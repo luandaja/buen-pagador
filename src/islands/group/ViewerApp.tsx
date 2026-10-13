@@ -13,6 +13,7 @@ import { ExpensesCard } from './Expenses';
 import { GroupHeader } from './GroupHeader';
 import { PayBox } from './Pay';
 import { People } from './People';
+import { viewerLink } from './receipts';
 import { group, preview, readOnly } from './store';
 import { Totals } from './Totals';
 
@@ -56,6 +57,7 @@ function useRemote(hash: string): Problem {
   useEffect(() => {
     if (!link) return;
     readOnly.value = true;
+    viewerLink.value = link;
     let version = 0;
     const load = async () => {
       try {

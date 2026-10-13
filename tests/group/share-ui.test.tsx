@@ -7,8 +7,10 @@ import { group, readOnly, savedGroups } from '../../src/islands/group/store';
 import { resetSync, startSharing } from '../../src/islands/group/sync';
 import { mountViewerApp, ViewerApp } from '../../src/islands/group/ViewerApp';
 import { resetGroupStore } from '../../src/lib/group-store';
+import { MemoryReceiptStore, receiptPath, resetReceiptStore } from '../../src/lib/receipt-store';
 import { resetDatabase } from '../../src/scripts/db';
 import { listGroups, rememberGroup, saveGroup } from '../../src/scripts/group/groups';
+import { saveReceipt } from '../../src/scripts/group/receipts';
 import { addPerson, newGroup, saveExpense, type GroupLink } from '../../src/scripts/group/model';
 import { useApiFetch } from '../helpers/api';
 
@@ -32,6 +34,7 @@ beforeEach(() => {
   globalThis.indexedDB = new IDBFactory();
   resetDatabase();
   resetGroupStore();
+  resetReceiptStore();
   resetSync();
   localStorage.clear();
   group.value = null;
@@ -115,6 +118,75 @@ describe('summary', () => {
   });
 });
 
+const PHOTO = 'data:image/jpeg;base64,BOLETA';
+const sharedPhoto = (link: GroupLink, expenseId = 'hotel') => new MemoryReceiptStore().get(receiptPath(link.id, expenseId));
+
+async function sharedWithPhoto(): Promise<GroupLink> {
+  const current = trip();
+  await saveReceipt(current.id, 'hotel', PHOTO);
+  group.value = current;
+  await startSharing();
+  const link = group.value!.share!;
+  await waitFor(async () => expect(await sharedPhoto(link)).toBeTruthy());
+  return link;
+}
+
+function otherDevice() {
+  globalThis.indexedDB = new IDBFactory();
+  resetDatabase();
+  group.value = null;
+}
+
+describe('shared receipt photos', () => {
+  it('uploads the photo encrypted when sharing and shows it on the read-only link', async () => {
+    const link = await sharedWithPhoto();
+    expect(await sharedPhoto(link)).not.toContain('BOLETA');
+    otherDevice();
+    render(<ViewerApp hash={`#${link.id}.${link.key}`} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver detalle de Hotel' }));
+    expect((await screen.findByAltText('Foto de la boleta')).getAttribute('src')).toBe(PHOTO);
+  });
+
+  it('keeps working without the photo when it cannot be fetched', async () => {
+    const link = await sharedWithPhoto();
+    await new MemoryReceiptStore().remove(receiptPath(link.id, 'hotel'));
+    otherDevice();
+    render(<ViewerApp hash={`#${link.id}.${link.key}`} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver detalle de Hotel' }));
+    await screen.findByText('Le toca a cada uno');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByAltText('Foto de la boleta')).toBeNull();
+  });
+
+  it('lets an editor on another device see the photo and remove it for everyone', async () => {
+    const link = await sharedWithPhoto();
+    const shared = group.value!;
+    otherDevice();
+    await saveGroup(shared);
+    rememberGroup(shared.id);
+    render(<GroupApp />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar Hotel' }));
+    await screen.findByAltText('Boleta de Hotel');
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar foto' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(async () => expect(await sharedPhoto(link)).toBeNull());
+  });
+
+  it('does not upload the photo again when an edit leaves it alone', async () => {
+    const link = await sharedLink();
+    const shared = { ...trip(), id: 'mine', share: link };
+    await saveGroup(shared);
+    await saveReceipt(shared.id, 'hotel', PHOTO);
+    rememberGroup(shared.id);
+    render(<GroupApp />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Editar Hotel' }));
+    await screen.findByAltText('Boleta de Hotel');
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await sharedPhoto(link)).toBeNull();
+  });
+});
+
 describe('public viewer', () => {
   it('shows the group read-only', async () => {
     const link = await sharedLink();
@@ -123,7 +195,7 @@ describe('public viewer', () => {
     await screen.findByText('Cusco');
     expect(screen.getByText('Solo lectura · se actualiza solo')).toBeTruthy();
     expect(screen.getByText('Debe S/ 50')).toBeTruthy();
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual(['Ver detalle de Hotel']);
     expect(screen.queryByLabelText('¿En qué?')).toBeNull();
     expect(document.title).toBe('✈️ Cusco · El Buen Pagador');
     expect(document.documentElement.dataset.palette).toBe('atardecer');
