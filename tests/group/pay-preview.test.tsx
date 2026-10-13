@@ -8,6 +8,7 @@ import { resetSync } from '../../src/islands/group/sync';
 import { ViewerApp } from '../../src/islands/group/ViewerApp';
 import { resetDatabase } from '../../src/scripts/db';
 import { rememberGroup, saveGroup } from '../../src/scripts/group/groups';
+import { saveReceipt } from '../../src/scripts/group/receipts';
 import { addPerson, newGroup, saveExpense } from '../../src/scripts/group/model';
 import { qrFromFile } from '../../src/scripts/image';
 
@@ -85,6 +86,45 @@ describe('group preview', () => {
     window.dispatchEvent(new Event('focus'));
     await screen.findByText('Cena editada');
     expect(screen.queryByRole('heading', { name: /Cómo pagarle/ })).toBeNull();
+  });
+
+  it('opens an expense read-only with its note, items, shares and receipt photo', async () => {
+    let current = await dinner();
+    const [ana, beto] = current.people;
+    current = saveExpense(current, {
+      id: 'bar',
+      what: 'Bar',
+      amount: 33,
+      by: beto.id,
+      note: 'Mesa 4',
+      tip: 3,
+      items: [
+        { id: 'i1', what: 'Pisco', amount: 20, for: [ana.id], band: { top: 0.1, bottom: 0.2 } },
+        { id: 'i2', what: 'Agua', amount: 10, for: [] },
+      ],
+    });
+    await saveGroup(current);
+    await saveReceipt(current.id, 'bar', 'data:image/jpeg;base64,BOLETA');
+    render(<ViewerApp hash="#preview" />);
+
+    const row = await screen.findByRole('button', { name: 'Ver detalle de Bar' });
+    expect(row.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(row);
+    expect(row.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByText('Mesa 4', { selector: '.detail-note' })).toBeTruthy();
+    expect(screen.getByText('Pisco')).toBeTruthy();
+    expect(screen.getByText('Sin asignar · lo cubre quien pagó')).toBeTruthy();
+    expect(screen.getByText('Le toca a cada uno')).toBeTruthy();
+    expect(await screen.findByAltText('Foto de la boleta')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Ver Pisco en la boleta' }));
+    expect(screen.getByRole('button', { name: 'Ver Pisco en la boleta' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.queryByRole('textbox', { name: '¿En qué?' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Borrar gasto' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ver detalle de Pizza' }));
+    expect(screen.queryByText('Pisco')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Ver detalle de Pizza' }));
+    expect(screen.queryByText('Le toca a cada uno')).toBeNull();
   });
 
   it('explains there is nothing to preview yet', async () => {

@@ -123,7 +123,7 @@ describe('public viewer', () => {
     await screen.findByText('Cusco');
     expect(screen.getByText('Solo lectura · se actualiza solo')).toBeTruthy();
     expect(screen.getByText('Debe S/ 50')).toBeTruthy();
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual(['Ver detalle de Hotel']);
     expect(screen.queryByLabelText('¿En qué?')).toBeNull();
     expect(document.title).toBe('✈️ Cusco · El Buen Pagador');
     expect(document.documentElement.dataset.palette).toBe('atardecer');

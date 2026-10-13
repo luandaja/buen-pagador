@@ -73,6 +73,9 @@ test('two phones add expenses to the same trip and a friend follows read-only', 
   await expect(friend.locator('html')).toHaveAttribute('data-palette', 'playa');
   await expect(friend.locator('body')).toHaveCSS('background-color', 'rgb(14, 107, 115)');
   await expect(friend.locator('.person', { hasText: 'Caro' })).toContainText('Pagó S/ 150');
-  await expect(friend.locator('#app').getByRole('button')).toHaveCount(0);
+  await expect(friend.locator('#app').getByRole('button', { name: /^(?!Ver detalle de )/ })).toHaveCount(0);
   await expect(friend.locator('.expense-row', { hasText: 'Casa' })).toContainText('Airbnb frente al mar');
+  await friend.getByRole('button', { name: 'Ver detalle de Casa' }).click();
+  await expect(friend.locator('.expense-detail')).toContainText('Le toca a cada uno');
+  await expect(friend.getByRole('textbox')).toHaveCount(0);
 });
