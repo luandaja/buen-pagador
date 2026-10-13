@@ -7,7 +7,7 @@ import { ExpenseDetail } from './ExpenseDetail';
 import { ExpenseForm } from './ExpenseForm';
 import { ReceiptSplitter, type Splitting } from './ReceiptSplitter';
 import type { Expense, Person } from '../../scripts/group/model';
-import { receiptSet } from './receipts';
+import { pendingSet, receiptSet } from './receipts';
 import { group, readOnly, totals } from './store';
 
 const t = es.group;
@@ -21,6 +21,11 @@ function ExpenseContent({ expense, people, currency }: { expense: Expense; peopl
           {receiptSet.value.has(expense.id) && (
             <span class="receipt-mark" role="img" aria-label={t.hasReceipt} title={t.hasReceipt}>
               📎
+            </span>
+          )}
+          {!readOnly.value && group.value?.share && pendingSet.value.has(expense.id) && (
+            <span class="receipt-pending" title={t.receiptPendingHelp}>
+              {t.receiptPending}
             </span>
           )}
         </strong>

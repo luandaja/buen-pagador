@@ -15,10 +15,14 @@ export async function saveGroup(group: Group): Promise<void> {
 }
 
 export async function deleteGroup(groupId: string): Promise<void> {
-  const transaction = (await database()).transaction(['groups', 'receipts'], 'readwrite');
-  const receipts = transaction.objectStore('receipts');
-  const keys = await receipts.getAllKeys(IDBKeyRange.bound(`${groupId}:`, `${groupId}:￿`));
-  await Promise.all([transaction.objectStore('groups').delete(groupId), ...keys.map((key) => receipts.delete(key)), transaction.done]);
+  const transaction = (await database()).transaction(['groups', 'receipts', 'receiptUploads'], 'readwrite');
+  const range = IDBKeyRange.bound(`${groupId}:`, `${groupId}:￿`);
+  await Promise.all([
+    transaction.objectStore('groups').delete(groupId),
+    transaction.objectStore('receipts').delete(range),
+    transaction.objectStore('receiptUploads').delete(range),
+    transaction.done,
+  ]);
 }
 
 const CURRENT_KEY = 'buen-pagador:current-group';

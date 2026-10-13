@@ -520,6 +520,13 @@ span.emoji-current {
   font-size: 14px;
 }
 
+.receipt-pending {
+  margin-left: 6px;
+  color: var(--warn);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .expense-text .expense-note {
   overflow: hidden;
   text-overflow: ellipsis;

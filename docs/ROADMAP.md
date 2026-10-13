@@ -17,7 +17,7 @@ De "¿quién pagó la cancha?" a dividir cualquier cuenta (un viaje, una cena, u
 | UI existente (cancha) | Se queda en TS vanilla; se migra solo si se toca | Migración incremental |
 | Descartados | htmx, Datastar (server-driven, incompatibles con E2E), Alpine (lógica fuera de TS y del gate CRAP), Svelte, Lit | Dictamen del comité técnico |
 | Edición concurrente | Un campo cifrado por ítem en un HASH de Redis + `PATCH`; merge de tres vías por campo en el cliente; polling con `?since=` | Dos personas agregando gastos no se pisan, sin CRDT ni websockets |
-| Evidencia | Nota de texto compartida + foto de boleta cifrada en Vercel Blob privado (`receipts/<grupo>/<gasto>.txt`), leída vía `/api/group/:id/receipt/:gasto`. Si Blob falla o no hay cuota, la foto queda solo en el dispositivo. Un cron diario (`/api/cron/receipts`) borra las fotos de grupos vencidos usando el sorted set `bp:receipts:due` | Nada de binarios en Redis; las fotos vencen con el grupo |
+| Evidencia | Nota de texto compartida + foto de boleta cifrada en Vercel Blob privado (`receipts/<grupo>/<gasto>.txt`), leída vía `/api/group/:id/receipt/:gasto`. Si Blob falla o no hay cuota, la foto queda en el dispositivo marcada como pendiente y se sube en un sync posterior (reintento cada 5 min); también se suben así las fotos anteriores a compartir o a Blob. Un cron diario (`/api/cron/receipts`) borra las fotos de grupos vencidos usando el sorted set `bp:receipts:due` | Nada de binarios en Redis; las fotos vencen con el grupo |
 | Dependencias | Última versión mayor de las dependencias principales | Si una integración se atrasa, se usa la librería directo |
 
 ## Modelo de datos

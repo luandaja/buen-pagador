@@ -9,10 +9,12 @@ export interface Schema extends DBSchema {
   images: { key: string; value: string };
   groups: { key: string; value: Group };
   receipts: { key: string; value: string };
+  // Which shared link each receipt photo was last uploaded to, keyed like `receipts`.
+  receiptUploads: { key: string; value: string };
 }
 
 export const DB_NAME = 'buen-pagador';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase<Schema>> | null = null;
 
@@ -27,6 +29,7 @@ export function database() {
         upgradingDatabase.createObjectStore('groups', { keyPath: 'id' });
         upgradingDatabase.createObjectStore('receipts');
       }
+      if (oldVersion < 3) upgradingDatabase.createObjectStore('receiptUploads');
     },
   });
   return dbPromise;

@@ -360,6 +360,8 @@ export const es = {
     receiptAlt: (what: string) => `Boleta de ${what}`,
     receiptError: 'No pudimos abrir esa imagen.',
     hasReceipt: 'Tiene foto de la boleta',
+    receiptPending: 'Foto solo en este dispositivo',
+    receiptPendingHelp: 'Todavía no se sube al link compartido. Se reintenta sola al sincronizar.',
     viewDetail: (what: string) => `Ver detalle de ${what}`,
     detailItems: 'Ítems de la boleta',
     detailShares: 'Le toca a cada uno',

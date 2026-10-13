@@ -4,13 +4,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/pr
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GroupApp } from '../../src/islands/group/GroupApp';
 import { group, readOnly, savedGroups } from '../../src/islands/group/store';
-import { resetSync, startSharing } from '../../src/islands/group/sync';
+import { UPLOAD_RETRY_MS } from '../../src/islands/group/receipts';
+import { resetSync, startSharing, syncNow } from '../../src/islands/group/sync';
 import { mountViewerApp, ViewerApp } from '../../src/islands/group/ViewerApp';
 import { resetGroupStore } from '../../src/lib/group-store';
 import { MemoryReceiptStore, receiptPath, resetReceiptStore } from '../../src/lib/receipt-store';
 import { resetDatabase } from '../../src/scripts/db';
 import { listGroups, rememberGroup, saveGroup } from '../../src/scripts/group/groups';
-import { saveReceipt } from '../../src/scripts/group/receipts';
+import { markUploaded, pendingUploads, saveReceipt } from '../../src/scripts/group/receipts';
 import { addPerson, newGroup, saveExpense, type GroupLink } from '../../src/scripts/group/model';
 import { useApiFetch } from '../helpers/api';
 
@@ -177,6 +178,7 @@ describe('shared receipt photos', () => {
     const shared = { ...trip(), id: 'mine', share: link };
     await saveGroup(shared);
     await saveReceipt(shared.id, 'hotel', PHOTO);
+    await markUploaded(shared.id, 'hotel', link.id);
     rememberGroup(shared.id);
     render(<GroupApp />);
     fireEvent.click(await screen.findByRole('button', { name: 'Editar Hotel' }));
@@ -184,6 +186,66 @@ describe('shared receipt photos', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(await sharedPhoto(link)).toBeNull();
+  });
+});
+
+describe('pending receipt uploads', () => {
+  async function sharedWithLocalPhoto() {
+    const link = await sharedLink();
+    const shared = { ...trip(), id: 'mine', share: link };
+    await saveGroup(shared);
+    await saveReceipt(shared.id, 'hotel', PHOTO);
+    group.value = shared;
+    return link;
+  }
+
+  it('uploads a photo that was only on this device on the next sync', async () => {
+    const link = await sharedWithLocalPhoto();
+    expect(await pendingUploads('mine', link.id)).toEqual(['hotel']);
+    await syncNow();
+    await waitFor(async () => expect(await sharedPhoto(link)).toBeTruthy());
+    await waitFor(async () => expect(await pendingUploads('mine', link.id)).toEqual([]));
+  });
+
+  it('retries a failed upload after a pause', async () => {
+    const link = await sharedWithLocalPhoto();
+    const put = vi.spyOn(MemoryReceiptStore.prototype, 'put').mockRejectedValueOnce(new Error('quota'));
+    await syncNow();
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(await pendingUploads('mine', link.id)).toEqual(['hotel']);
+
+    await syncNow();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(put).toHaveBeenCalledTimes(1);
+
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now + UPLOAD_RETRY_MS);
+    await syncNow();
+    await waitFor(async () => expect(await sharedPhoto(link)).toBeTruthy());
+    expect(await pendingUploads('mine', link.id)).toEqual([]);
+  });
+
+  it('marks photos that are only on this device until they are uploaded', async () => {
+    const link = await sharedWithLocalPhoto();
+    group.value = null;
+    rememberGroup('mine');
+    const put = vi.spyOn(MemoryReceiptStore.prototype, 'put').mockRejectedValueOnce(new Error('quota'));
+    render(<GroupApp />);
+    await waitFor(() => expect(put).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Foto solo en este dispositivo')).toBeTruthy();
+
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + UPLOAD_RETRY_MS);
+    await syncNow();
+    await waitFor(() => expect(screen.queryByText('Foto solo en este dispositivo')).toBeNull());
+    expect(await sharedPhoto(link)).toBeTruthy();
+  });
+
+  it('uploads everything again when the group is shared under a new link', async () => {
+    const link = await sharedWithLocalPhoto();
+    await markUploaded('mine', 'hotel', link.id);
+    expect(await pendingUploads('mine', 'otherlink1')).toEqual(['hotel']);
+    expect(await pendingUploads('mine', link.id)).toEqual([]);
   });
 });
 
