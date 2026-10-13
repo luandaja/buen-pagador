@@ -189,6 +189,37 @@
   white-space: nowrap;
 }
 
+.person-name {
+  justify-self: start;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-bottom: 1.5px dashed transparent;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: text;
+}
+
+.person-name:hover {
+  border-bottom-color: rgba(247, 248, 252, 0.4);
+}
+
+.person-name strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.person-name-input {
+  min-width: 0;
+  padding: 2px 6px;
+  font: inherit;
+  font-weight: 700;
+}
+
 .person-text span {
   font-size: 13px;
   color: var(--board-dim);

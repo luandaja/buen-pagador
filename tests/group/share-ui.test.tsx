@@ -263,6 +263,20 @@ describe('public viewer', () => {
     expect(document.documentElement.dataset.palette).toBe('atardecer');
   });
 
+  it('shows names renamed after the link was shared', async () => {
+    group.value = trip();
+    await startSharing();
+    const link = group.value!.share!;
+    group.value = { ...group.value!, people: group.value!.people.map((person) => (person.name === 'Beto' ? { ...person, name: 'Roberto' } : person)) };
+    await syncNow();
+    group.value = null;
+
+    render(<ViewerApp hash={`#${link.id}.${link.key}`} />);
+    await screen.findByText('Roberto');
+    expect(screen.queryByText('Beto')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Cambiar el nombre/ })).toBeNull();
+  });
+
   it('polls for changes', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     const link = await sharedLink();
