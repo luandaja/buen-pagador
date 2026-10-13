@@ -707,14 +707,20 @@ button.person-emoji:hover {
   overflow: hidden;
   border-radius: 10px;
   background: #fff;
-  touch-action: pan-y;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.receipt-lens:active {
+  cursor: grabbing;
 }
 
 .receipt-lens-image {
   position: absolute;
   top: 0;
   left: 0;
-  transition: transform 0.25s ease, width 0.2s ease, height 0.2s ease;
+  transition: width 0.2s ease, height 0.2s ease;
 }
 
 .receipt-lens-image img,
@@ -859,4 +865,14 @@ button.person-emoji:hover {
   .receipt-splitter.has-photo .receipt-lens {
     height: calc(100dvh - 140px);
   }
+}
+
+.receipt-check.is-info {
+  color: var(--chalk);
+  font-weight: 600;
+}
+
+#receiptTotal + .link {
+  justify-self: start;
+  font-size: 13px;
 }
