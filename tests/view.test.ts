@@ -10,7 +10,7 @@ beforeEach(() => {
     <section id="progress" data-perspective="owner">
       <p id="progressLabel"></p><span id="paidOut"></span><p id="heroOut"></p>
       <div id="thermo"></div>
-      <b id="shareOut"></b><b id="collectedOut"></b>
+      <span id="shareLabel"></span><b id="shareOut"></b><b id="collectedOut"></b>
       <p id="missingOut"></p>
     </section>
     <div id="faces"></div>`;
@@ -47,7 +47,17 @@ describe('renderTotals', () => {
     const elements = progressElements();
     elements.progress.dataset.perspective = 'public';
     renderTotals(elements, data([face('a', false)]));
-    expect(elements.label.textContent).toBe(es.progress.publicMissing);
+    expect(elements.label.textContent).toBe(es.progress.publicShare);
+  });
+
+  it('the public view leads with the share and steps the missing total down', () => {
+    const elements = progressElements();
+    elements.progress.dataset.perspective = 'public';
+    renderTotals(elements, data([face('a', true), face('b', false), face('c', false), face('d', false)]));
+    expect(elements.hero.textContent).toBe('S/\u00a025');
+    expect(elements.shareLabel.textContent).toBe(es.progress.publicMissing);
+    expect(elements.shareOut.textContent).toBe('S/\u00a075');
+    expect(elements.shareOut.classList.contains('is-accent')).toBe(false);
   });
 });
 
