@@ -12,6 +12,7 @@ export function progressElements() {
     hero: byId<HTMLParagraphElement>('heroOut'),
     paidOut: byId<HTMLSpanElement>('paidOut'),
     meter: byId<HTMLDivElement>('thermo'),
+    shareLabel: byId<HTMLSpanElement>('shareLabel'),
     shareOut: byId<HTMLElement>('shareOut'),
     collectedOut: byId<HTMLElement>('collectedOut'),
     missingOut: byId<HTMLParagraphElement>('missingOut'),
@@ -31,13 +32,24 @@ export function gameMetaText(game: Pick<TotalsInput, 'faces' | 'cost' | 'currenc
 
 const MAX_SEGMENTS = 40;
 
-export function progressView(totals: Totals, game: Pick<TotalsInput, 'cost' | 'currency'>, isOwner: boolean) {
+type ProgressView = { label: string; hero: string; full: boolean; aside?: { label: string; value: string } };
+
+export function progressView(totals: Totals, game: Pick<TotalsInput, 'cost' | 'currency'>, isOwner: boolean): ProgressView {
   const pending = totals.people - totals.paid;
   const copy = es.progress;
   if (totals.people === 0) return { label: copy.noPlayers, hero: '—', full: false };
   if (pending === 0) {
     const hero = game.cost ? money(game.cost, game.currency) : `${totals.people}/${totals.people}`;
     return { label: copy.settled, hero, full: true };
+  }
+  // Players on the public link mostly need their own share; the missing total steps down.
+  if (!isOwner && totals.share != null && totals.missing != null) {
+    return {
+      label: copy.publicShare,
+      hero: money(totals.share, game.currency),
+      full: false,
+      aside: { label: copy.publicMissing, value: money(totals.missing, game.currency) },
+    };
   }
   if (totals.missing != null) {
     return { label: isOwner ? copy.ownerMissing : copy.publicMissing, hero: money(totals.missing, game.currency), full: false };
@@ -62,7 +74,9 @@ export function renderTotals(elements: ProgressElements, game: TotalsInput, mess
   elements.progress.classList.toggle('is-full', view.full);
   elements.paidOut.textContent = `${totals.paid}/${totals.people}`;
   renderMeter(elements.meter, totals);
-  elements.shareOut.textContent = money(totals.share, game.currency);
+  elements.shareLabel.textContent = view.aside?.label ?? es.progress.share;
+  elements.shareOut.textContent = view.aside?.value ?? money(totals.share, game.currency);
+  elements.shareOut.classList.toggle('is-accent', !view.aside);
   elements.collectedOut.textContent = money(totals.collected, game.currency);
   elements.missingOut.textContent = message ?? '';
   return totals;

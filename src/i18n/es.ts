@@ -109,6 +109,7 @@ export const es = {
     paidCount: 'pagaron',
     meter: 'Avance de pagos',
     share: 'Cuota',
+    publicShare: 'Tu cuota',
     ownerCollected: 'Te pagaron',
     publicCollected: 'Recaudado',
     noPlayers: 'Pagaron',
