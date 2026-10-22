@@ -235,6 +235,97 @@ describe('photo and faces', () => {
   });
 });
 
+describe('game without photo', () => {
+  function startWithoutPhoto(count: number) {
+    byId<HTMLInputElement>('startCount').value = String(count);
+    byId('noPhoto').dispatchEvent(new Event('submit', { cancelable: true }));
+  }
+
+  const step = (direction: 1 | -1) => click(document.querySelector(`[data-step="${direction}"]`)!);
+
+  it('starts with how many people there are, and the count can be edited', async () => {
+    await startEditor();
+    expect(byId('noPhoto').hidden).toBe(false);
+    startWithoutPhoto(4);
+    expect(faceButtons()).toHaveLength(4);
+    expect(byId('dropzone').hidden).toBe(true);
+    expect(byId('noPhoto').hidden).toBe(true);
+    expect(byId('stageArea').classList.contains('is-grid')).toBe(true);
+    expect(byId('modes').hidden).toBe(true);
+    expect(byId('peek').hidden).toBe(true);
+    expect(textOf('newPhoto')).toBe(es.upload.addPhoto);
+    expect(textOf('hint')).toBe(es.hints.grid);
+    expect(byId<HTMLInputElement>('headcount').value).toBe('4');
+
+    click(faceButtons()[3]);
+    step(-1);
+    expect(textOf('paidOut')).toBe('1/3');
+    step(1);
+    expect(textOf('paidOut')).toBe('1/4');
+    input(byId<HTMLInputElement>('headcount'), '10', 'change');
+    expect(faceButtons()).toHaveLength(10);
+    input(byId<HTMLInputElement>('headcount'), '', 'change');
+    expect(byId<HTMLInputElement>('headcount').value).toBe('10');
+    input(byId<HTMLInputElement>('headcount'), '1', 'change');
+    expect(byId<HTMLButtonElement>('fewer').disabled).toBe(true);
+    expect(textOf('paidOut')).toBe('1/1');
+    input(byId<HTMLInputElement>('headcount'), '10', 'change');
+
+    input(byId<HTMLInputElement>('cost'), '100');
+    expect(textOf('shareOut')).toBe(money(10, 'S/'));
+    await eventually(async () => expect((await openGameRecord())?.faces).toHaveLength(10));
+  });
+
+  it('shares a link without photo and can add the photo later', async () => {
+    await startEditor();
+    startWithoutPhoto(2);
+    click(byId('linkAction'));
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.live));
+    const [id, key] = new URL(textOf('publicUrl')!).hash.slice(1).split('.');
+    const shared = await loadShare({ id, key }, true);
+    expect(shared.image).toBeUndefined();
+    expect(shared.state.faces).toHaveLength(2);
+
+    uploadPhoto();
+    await eventually(() => expect(faceButtons()).toHaveLength(3));
+    expect(byId('stageArea').classList.contains('is-grid')).toBe(false);
+    expect(byId('modes').hidden).toBe(false);
+    expect(textOf('newPhoto')).toBe(es.upload.changePhoto);
+  });
+});
+
+describe('per-person quota', () => {
+  it('charges a fixed share even if it does not add up to the cost', async () => {
+    await startWithGame({ cost: 90 });
+    expect(byId<HTMLInputElement>('quota').placeholder).toBe('30');
+    input(byId<HTMLInputElement>('quota'), '35');
+    expect(textOf('shareOut')).toBe(money(35, 'S/'));
+    expect(textOf('heroOut')).toBe(money(105, 'S/'));
+    expect(byId<HTMLSelectElement>('rounding').disabled).toBe(true);
+    expect(textOf('gameMeta')).toBe([es.game.metaCost(money(90, 'S/')), es.game.metaQuota(money(35, 'S/')), es.game.metaPlayers(3)].join(' · '));
+    await eventually(async () => expect((await openGameRecord())?.quota).toBe(35));
+  });
+
+  it('hides the cost from the link while the organizer keeps it', async () => {
+    const game = await startWithGame({ cost: 90 });
+    click(byId('linkAction'));
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.live));
+    const hideTotal = byId<HTMLInputElement>('hideTotal');
+    hideTotal.checked = true;
+    hideTotal.dispatchEvent(new Event('change'));
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.live));
+    const [id, key] = new URL(textOf('publicUrl')!).hash.slice(1).split('.');
+    expect((await loadShare({ id, key }, false)).state).toMatchObject({ cost: null, quota: 30, hideTotal: true });
+
+    await unmount();
+    await startEditor({ savedGames: [{ ...(await gameStore.loadGame(game.id))! }], openGameId: game.id });
+    await eventually(() => expect(textOf('syncStatus')).toBe(es.share.live));
+    expect(byId<HTMLInputElement>('cost').value).toBe('90');
+    expect(byId<HTMLInputElement>('quota').value).toBe('');
+    expect(byId<HTMLInputElement>('hideTotal').checked).toBe(true);
+  });
+});
+
 describe('emojis', () => {
   const rightClick = (target: Element) => target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
 
@@ -547,20 +638,34 @@ describe('my games', () => {
     await eventually(() => expect(isDialogOpen()).toBe(false));
   });
 
+  it('starts a new game from the top without opening the list', async () => {
+    await startWithGame({ title: 'Thursday' });
+    expect(byId('newGameTop').hidden).toBe(false);
+    click(byId('newGameTop'));
+    await eventually(() => expect(textOf('gameTitle')).toBe(es.game.newGame));
+    expect(byId('dropzone').hidden).toBe(false);
+    expect(byId('newGameTop').hidden).toBe(true);
+    expect(isDialogOpen()).toBe(false);
+    expect(await gameStore.listGames()).toHaveLength(1);
+  });
+
   it('starts, repeats and continues to the next game', async () => {
-    const paidGame = settledGame({ title: 'Monday', cost: 60, rounding: 1 });
+    const paidGame = settledGame({ title: 'Monday', cost: 60, rounding: 1, quota: 25, hideTotal: true });
     await startEditor({ savedGames: [paidGame], openGameId: paidGame.id });
 
     click(byId('linkAction'));
     await eventually(() => expect(byId('stageWrap').hidden).toBe(true));
     expect(textOf('gameTitle')).toBe('Monday');
     expect(byId<HTMLInputElement>('cost').value).toBe('60');
+    expect(byId<HTMLInputElement>('quota').value).toBe('25');
+    expect(byId<HTMLInputElement>('hideTotal').checked).toBe(true);
     expect(byId('gameForm').hidden).toBe(false);
 
     await openHistoryDrawer();
     click(byId('newGame'));
     await eventually(() => expect(textOf('gameTitle')).toBe(es.game.newGame));
     expect(byId<HTMLInputElement>('cost').value).toBe('');
+    expect(byId('newGameTop').hidden).toBe(true);
 
     await openHistoryDrawer();
     const rowMenu = historyRow('Monday').querySelector('details')!;

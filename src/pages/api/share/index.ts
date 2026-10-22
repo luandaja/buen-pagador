@@ -8,11 +8,17 @@ export const POST: APIRoute = async ({ request }) => {
   const body = await readJson(request, MAX_IMG + MAX_STATE + MAX_PAY + 1_000);
   if (!body) return fail(413, 'too_large');
   const { img, state, pay } = body;
-  const isValid = isPayload(img, MAX_IMG) && isPayload(state, MAX_STATE) && isOptionalPayload(pay, MAX_PAY);
+  const isValid = isOptionalPayload(img, MAX_IMG) && isPayload(state, MAX_STATE) && isOptionalPayload(pay, MAX_PAY);
   if (!isValid) return fail(400, 'invalid');
 
   const id = randomId();
   const token = randomToken();
-  await getStore().create(id, { img, state, edit: await sha256(token), v: 1, ...(pay ? { pay: pay as string, pv: 1 } : {}) });
+  await getStore().create(id, {
+    state,
+    edit: await sha256(token),
+    v: 1,
+    ...(img ? { img: img as string } : {}),
+    ...(pay ? { pay: pay as string, pv: 1 } : {}),
+  });
   return json({ id, token, v: 1, ttl: TTL_SECONDS }, 201);
 };

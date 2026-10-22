@@ -99,4 +99,11 @@ describe('card pieces', () => {
       [es.card.stats.missing, money(50, 'S/')],
     ]);
   });
+
+  it('statCells keeps only the share and who paid when the total is hidden', () => {
+    expect(statCells({ ...state, hideTotal: true }, computeTotals(state))).toEqual([
+      [es.card.stats.share, money(50, 'S/')],
+      [es.card.stats.paid, '1/2'],
+    ]);
+  });
 });

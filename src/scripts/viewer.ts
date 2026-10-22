@@ -63,11 +63,12 @@ function renderPay() {
 }
 
 function render() {
-  if (!shared || !image) return;
+  if (!shared) return;
   elements.state.hidden = true;
   elements.stageWrap.hidden = false;
   elements.panel.hidden = false;
-  if (elements.photo.getAttribute('src') !== image) elements.photo.src = image;
+  elements.stageArea.classList.toggle('is-grid', !image);
+  if (image && elements.photo.getAttribute('src') !== image) elements.photo.src = image;
 
   const title = shared.title.trim() || es.viewer.defaultTitle;
   elements.title.textContent = title;
@@ -75,6 +76,7 @@ function render() {
 
   syncFaces(elements.faces, faceMarkers, shared.faces, {
     interactive: false,
+    grid: !image,
     label: (face, index) => es.faces.readOnly(index + 1, face.paid),
   });
   renderTotals(progressOutputs, shared);
@@ -144,7 +146,7 @@ elements.copyPayNote.addEventListener('click', async () => {
 });
 
 elements.download.addEventListener('click', async () => {
-  if (!shared || !image) return;
+  if (!shared) return;
   elements.download.disabled = true;
   elements.exportMsg.textContent = es.image.generating;
   try {

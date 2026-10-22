@@ -5,6 +5,7 @@ import {
   DEBTOR_EMOJIS,
   defaultPrefs,
   defaultState,
+  isStarted,
   loadPrefs,
   money,
   newGame,
@@ -45,6 +46,19 @@ describe('computeTotals', () => {
 
   it('zero cost yields no amounts', () => {
     expect(computeTotals({ faces: [face(true)], cost: 0, rounding: 0 }).share).toBeNull();
+  });
+
+  it('a per-person quota wins over the split, even when it does not add up to the cost', () => {
+    const faces = [face(true), face(false), face(false)];
+    expect(computeTotals({ faces, cost: 100, quota: 40, rounding: 1 })).toMatchObject({ share: 40, collected: 40, missing: 80 });
+    expect(computeTotals({ faces, cost: null, quota: 10, rounding: 0 })).toMatchObject({ share: 10, missing: 20 });
+    expect(computeTotals({ faces: [], cost: null, quota: 10, rounding: 0 }).share).toBeNull();
+  });
+
+  it('a game starts with a photo or, without one, with its people', () => {
+    expect(isStarted({ image: null, faces: [] })).toBe(false);
+    expect(isStarted({ image: 'x', faces: [] })).toBe(true);
+    expect(isStarted({ image: null, faces: [face(false)] })).toBe(true);
   });
 });
 

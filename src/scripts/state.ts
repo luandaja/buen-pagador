@@ -16,6 +16,10 @@ export interface Game {
   updatedAt: number;
   title: string;
   cost: number | null;
+  // Fixed amount per person; when set it wins over cost ÷ people, even if the sum does not match the cost.
+  quota: number | null;
+  // The public link and the image show only the share: no cost, collected or missing totals.
+  hideTotal: boolean;
   currency: string;
   rounding: number;
   faces: Face[];
@@ -51,7 +55,7 @@ export const DEBTOR_EMOJIS = [
 const PREFS_KEY = 'buen-pagador:prefs';
 const LEGACY_KEY = 'buen-pagador:v1';
 
-type GameBase = Partial<Pick<Game, 'title' | 'cost' | 'currency' | 'rounding' | 'payNote' | 'payQr'>>;
+type GameBase = Partial<Pick<Game, 'title' | 'cost' | 'quota' | 'hideTotal' | 'currency' | 'rounding' | 'payNote' | 'payQr'>>;
 
 export function newGame(base: GameBase = {}): Game {
   const now = Date.now();
@@ -61,6 +65,8 @@ export function newGame(base: GameBase = {}): Game {
     updatedAt: now,
     title: '',
     cost: null,
+    quota: null,
+    hideTotal: false,
     currency: 'S/',
     rounding: 0,
     faces: [],
@@ -160,14 +166,23 @@ function shuffled<T>(items: T[]): T[] {
   return result;
 }
 
-export function computeTotals(state: Pick<State, 'faces' | 'cost' | 'rounding'>): Totals {
+// Without a photo the game starts once it has people, so the faces carry no position.
+export const isStarted = (game: Pick<Game, 'image' | 'faces'>) => !!game.image || game.faces.length > 0;
+
+type TotalsInput = Pick<State, 'faces' | 'cost' | 'rounding'> & Partial<Pick<State, 'quota'>>;
+
+function shareOf(state: TotalsInput, people: number): number | null {
+  if (state.quota && state.quota > 0) return state.quota;
+  if (!state.cost || state.cost <= 0) return null;
+  return roundUp(state.cost / people, state.rounding);
+}
+
+export function computeTotals(state: TotalsInput): Totals {
   const people = state.faces.length;
   const paid = state.faces.filter((face) => face.paid).length;
   const paidRatio = people ? paid / people : 0;
-  if (!state.cost || state.cost <= 0 || people === 0) {
-    return { people, paid, share: null, collected: null, missing: null, paidRatio };
-  }
-  const share = roundUp(state.cost / people, state.rounding);
+  const share = people ? shareOf(state, people) : null;
+  if (share == null) return { people, paid, share: null, collected: null, missing: null, paidRatio };
   return { people, paid, share, collected: share * paid, missing: share * (people - paid), paidRatio };
 }
 

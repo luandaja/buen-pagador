@@ -26,8 +26,16 @@ describe('POST /api/share', () => {
     expect(await response.json()).toMatchObject({ id: expect.stringMatching(/^[A-Za-z0-9]{10}$/), v: 1 });
   });
 
+  it('creates a link without a photo', async () => {
+    const response = await create({ state: 'c3Q' });
+    expect(response.status).toBe(201);
+    const { id } = await response.json();
+    expect(await (await callApi(`/api/share/${id}?img=1`)).json()).toEqual({ state: 'c3Q', v: 1, pv: 0, ttl: TTL_SECONDS });
+  });
+
   it('rejects invalid or oversized data', async () => {
     expect((await create({ img: 'not valid!', state: 'x' })).status).toBe(400);
+    expect((await create({ img: 'aW1n' })).status).toBe(400);
     expect((await create({ img: 'a'.repeat(MAX_IMG + MAX_PAY + 70_000), state: 'x' })).status).toBe(413);
     expect((await create({ img: 'a'.repeat(MAX_IMG + 10), state: 'x' })).status).toBe(400);
   });

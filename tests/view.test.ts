@@ -10,7 +10,7 @@ beforeEach(() => {
     <section id="progress" data-perspective="owner">
       <p id="progressLabel"></p><span id="paidOut"></span><p id="heroOut"></p>
       <div id="thermo"></div>
-      <span id="shareLabel"></span><b id="shareOut"></b><b id="collectedOut"></b>
+      <p id="progressSums"><span id="shareLabel"></span><b id="shareOut"></b><b id="collectedOut"></b></p>
       <p id="missingOut"></p>
     </section>
     <div id="faces"></div>`;
@@ -58,6 +58,27 @@ describe('renderTotals', () => {
     expect(elements.shareLabel.textContent).toBe(es.progress.publicMissing);
     expect(elements.shareOut.textContent).toBe('S/\u00a075');
     expect(elements.shareOut.classList.contains('is-accent')).toBe(false);
+    expect(elements.sums.hidden).toBe(false);
+  });
+
+  it('with the total hidden the public view shows only the share', () => {
+    const elements = progressElements();
+    elements.progress.dataset.perspective = 'public';
+    const faces = [face('a', true), face('b', false)];
+    renderTotals(elements, { ...data(faces, null), quota: 30, hideTotal: true });
+    expect(elements.label.textContent).toBe(es.progress.publicShare);
+    expect(elements.hero.textContent).toBe('S/\u00a030');
+    expect(elements.sums.hidden).toBe(true);
+    renderTotals(elements, { ...data([face('a', true)], 60), hideTotal: true });
+    expect(elements.hero.textContent).toBe('1/1');
+  });
+
+  it('the organizer still sees every total when hidden from the link', () => {
+    const elements = progressElements();
+    renderTotals(elements, { ...data([face('a', true), face('b', false)]), quota: 60, hideTotal: true });
+    expect(elements.hero.textContent).toBe('S/\u00a060');
+    expect(elements.collectedOut.textContent).toBe('S/\u00a060');
+    expect(elements.sums.hidden).toBe(false);
   });
 });
 
@@ -78,6 +99,9 @@ describe('gameMetaText', () => {
     expect(gameMetaText(data([face('a', false), face('b', false)]))).toBe([es.game.metaCost(money(100, 'S/')), es.game.metaPlayers(2)].join(' · '));
     expect(gameMetaText(data([face('a', false)], null))).toBe(es.game.metaPlayers(1));
     expect(gameMetaText(data([], null))).toBe(es.game.metaEmpty);
+    expect(gameMetaText({ ...data([face('a', false)]), quota: 12 })).toBe(
+      [es.game.metaCost(money(100, 'S/')), es.game.metaQuota(money(12, 'S/')), es.game.metaPlayers(1)].join(' · '),
+    );
   });
 });
 
@@ -109,6 +133,14 @@ describe('syncFaces', () => {
     expect(marker.tagName).toBe('SPAN');
     expect(marker.getAttribute('role')).toBe('img');
     expect(marker.hasAttribute('aria-pressed')).toBe(false);
+  });
+
+  it('leaves faces unplaced in a grid, for games without photo', () => {
+    const markers = new Map<string, HTMLElement>();
+    const container = document.getElementById('faces')!;
+    syncFaces(container, markers, [face('a', false)], { interactive: true, label: () => 'x' });
+    syncFaces(container, markers, [face('a', false)], { interactive: true, grid: true, label: () => 'x' });
+    expect(markers.get('a')!.hasAttribute('style')).toBe(false);
   });
 });
 

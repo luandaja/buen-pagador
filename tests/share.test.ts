@@ -3,6 +3,7 @@ import { resetStore } from '../src/lib/store';
 import {
   createShare,
   deleteShare,
+  fromShared,
   loadShare,
   masterUrl,
   parseMasterHash,
@@ -11,7 +12,6 @@ import {
   pushShare,
   hasPay,
   payOf,
-  ShareError,
   SCHEMA_VERSION,
   toShared,
 } from '../src/scripts/share';
@@ -62,6 +62,21 @@ describe('links', () => {
 
   it('stamps the schema version', () => {
     expect(toShared(state).schemaVersion).toBe(SCHEMA_VERSION);
+  });
+
+  it('shares a fixed quota as is, and only the share when the total is hidden', () => {
+    expect(toShared({ ...state, quota: 12 })).toMatchObject({ cost: 100, quota: 12, hideTotal: false });
+    expect(toShared({ ...state, hideTotal: true })).toMatchObject({ cost: null, quota: 100, hideTotal: true });
+    expect(toShared({ ...state, quota: 12, hideTotal: true })).toMatchObject({ cost: null, quota: 12 });
+  });
+
+  it('takes the shared cost and quota unless they were hidden and this device knows its own', () => {
+    const shared = { ...toShared({ ...state, hideTotal: true }), title: 'Friday' };
+    expect(fromShared(shared, { cost: 100, quota: null })).not.toHaveProperty('cost');
+    expect(fromShared(shared, { cost: 100, quota: null })).toMatchObject({ title: 'Friday', hideTotal: true });
+    expect(fromShared(shared, { cost: null, quota: null })).toMatchObject({ cost: null, quota: 100 });
+    expect(fromShared(toShared(state), { cost: 80, quota: 5 })).toMatchObject({ cost: 100, quota: null });
+    expect(fromShared(toShared(state), { cost: 80, quota: 5 })).not.toHaveProperty('schemaVersion');
   });
 });
 
@@ -114,8 +129,17 @@ describe('full cycle against the API', () => {
     expect((await loadShare(link, false)).pv).toBe(2);
   });
 
-  it('cannot create without a photo', async () => {
-    await expect(createShare({ ...state, image: null })).rejects.toBeInstanceOf(ShareError);
+  it('creates a link without a photo', async () => {
+    const link = await createShare({ ...state, image: null });
+    const loaded = await loadShare(link, true);
+    expect(loaded.image).toBeUndefined();
+    expect(loaded.state.faces).toHaveLength(1);
+  });
+
+  it('a hidden total never reaches the link, only the share', async () => {
+    const hidden = { ...state, cost: 100, faces: [...state.faces, { ...state.faces[0], id: 'b', paid: false }], hideTotal: true };
+    const link = await createShare(hidden);
+    expect((await loadShare(link, false)).state).toMatchObject({ cost: null, quota: 50, hideTotal: true });
   });
 
   it('a different key reports the link as broken', async () => {

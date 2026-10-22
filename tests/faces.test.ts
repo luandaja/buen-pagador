@@ -9,6 +9,8 @@ import {
   fileName,
   removeFace,
   rerollEmojis,
+  MAX_PEOPLE,
+  setHeadcount,
   statusMessage,
   togglePaid,
 } from '../src/scripts/faces';
@@ -82,6 +84,28 @@ describe('blockEmoji', () => {
   });
 });
 
+describe('setHeadcount', () => {
+  it('adds unplaced people with fresh emojis', () => {
+    const faces = setHeadcount([make('a', '🐸')], 3, ['🐔']);
+    expect(faces).toHaveLength(3);
+    expect(faces[0].id).toBe('a');
+    expect(faces[1]).toMatchObject({ x: 0, y: 0, w: 0, h: 0, paid: false });
+    expect(faces.map((face) => face.emoji)).not.toContain('🐔');
+    expect(new Set(faces.map((face) => face.emoji)).size).toBe(3);
+  });
+
+  it('removes the latest who still owe before anyone who paid', () => {
+    const faces = [make('a', '🐸'), make('b', '🦊'), make('c', '🐼', true), make('d', '🐙', true)];
+    expect(setHeadcount(faces, 3, []).map((face) => face.id)).toEqual(['a', 'c', 'd']);
+    expect(setHeadcount(faces, 1, []).map((face) => face.id)).toEqual(['c']);
+  });
+
+  it('keeps between one and the maximum', () => {
+    expect(setHeadcount([make('a', '🐸')], 0, [])).toHaveLength(1);
+    expect(setHeadcount([], MAX_PEOPLE + 10, [])).toHaveLength(MAX_PEOPLE);
+  });
+});
+
 describe('labels', () => {
   it('labels each face by mode', () => {
     expect(faceLabel(make('a', '🐸'), 0, 'edit')).toBe(es.faces.remove(1));
@@ -91,11 +115,17 @@ describe('labels', () => {
 
   it('shows the first pending step', () => {
     const faces = [make('a', '🐸')];
-    expect(statusMessage({ image: null, faces, cost: 10 }, false)).toBe(es.status.uploadFirst);
+    expect(statusMessage({ image: null, faces: [], cost: 10 }, false)).toBe(es.status.uploadFirst);
     expect(statusMessage({ image: 'x', faces, cost: 10 }, true)).toBe(es.status.counting);
     expect(statusMessage({ image: 'x', faces: [], cost: 10 }, false)).toBe(es.status.addPlayers);
     expect(statusMessage({ image: 'x', faces, cost: null }, false)).toBe(es.status.setCost);
     expect(statusMessage({ image: 'x', faces, cost: 10 }, false)).toBeUndefined();
+  });
+
+  it('a game without photo starts with its people, and a per-person quota is enough', () => {
+    const faces = [make('a', '🐸')];
+    expect(statusMessage({ image: null, faces, cost: null }, false)).toBe(es.status.setCost);
+    expect(statusMessage({ image: null, faces, cost: null, quota: 10 }, false)).toBeUndefined();
   });
 
   it('builds the file name from the title', () => {

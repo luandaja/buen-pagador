@@ -51,6 +51,31 @@ test('editor shares an encrypted link the viewer can read and follow', async ({ 
     .toContain('1/1');
 });
 
+test('a game without photo charges a fixed share and hides the cost from the link', async ({ page, context }) => {
+  await page.goto('/');
+  await page.locator('#startCount').fill('5');
+  await page.getByRole('button', { name: 'Empezar sin foto' }).click();
+  await expect(page.locator('#faces > *')).toHaveCount(5);
+  await page.getByRole('button', { name: 'Una persona más' }).click();
+  await expect(page.locator('#faces > *')).toHaveCount(6);
+
+  await page.locator('#cost').fill('100');
+  await page.locator('#quota').fill('20');
+  await page.getByLabel('Ocultar el costo: el grupo solo ve su cuota').check();
+  await page.locator('#faces > *').first().click();
+  await page.locator('#linkAction').click();
+  const urlText = page.locator('#publicUrl');
+  await expect(urlText).toHaveText(/\/view#/, { timeout: 10_000 });
+
+  const viewer = await context.newPage();
+  await viewer.goto((await urlText.textContent())!);
+  await expect(viewer.locator('#faces > *')).toHaveCount(6);
+  await expect(viewer.locator('#panel')).toContainText('Tu cuota');
+  await expect(viewer.locator('#panel')).toContainText('S/ 20');
+  await expect(viewer.locator('#panel')).toContainText('1/6');
+  await expect(viewer.locator('#panel')).not.toContainText('100');
+});
+
 test('footer shows the app version and the court keeps its colors', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(35, 64, 200)');
