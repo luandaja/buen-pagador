@@ -90,6 +90,9 @@ export function peopleFrom(text: string, blocked: string[]): Face[] {
 
 export const personName = (face: Face, index: number) => face.name?.trim() || es.faces.person(index + 1);
 
+// Without a photo each person is a disc with their initial, or their number while unnamed.
+export const personInitial = (face: Face, index: number) => Array.from(face.name?.trim() ?? '')[0]?.toLocaleUpperCase('es') ?? String(index + 1);
+
 export const rerollEmojis = (faces: Face[], blocked: string[]): Face[] => {
   const emojis = pickEmojis(faces.length, [], blocked);
   return faces.map((face, index) => ({ ...face, emoji: emojis[index] }));

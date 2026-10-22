@@ -271,6 +271,7 @@ describe('game without photo', () => {
     expect(byId('noPhoto').hidden).toBe(true);
     expect(byId('stageArea').classList.contains('is-grid')).toBe(true);
     expect(byId('peek').hidden).toBe(true);
+    expect(byId('reroll').hidden).toBe(true);
     expect(textOf('editMode')).toBe(es.toolbar.editPeople);
     expect(textOf('newPhoto')).toBe(es.upload.addPhoto);
     expect(textOf('hint')).toBe(es.hints.grid);
