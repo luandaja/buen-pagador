@@ -40,13 +40,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - id: playwright
-        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      - run: pnpm exec playwright install --with-deps --only-shell chromium
+      # The runner image already ships Chrome's system libraries; --with-deps pulled fonts and xvfb through apt
+      # on every run, which took minutes whenever the Ubuntu mirror was slow. The browser itself downloads in seconds.
+      - name: Install headless Chromium
+        run: pnpm exec playwright install --only-shell chromium
       - name: E2E must pass
         run: pnpm e2e
       - if: failure()
