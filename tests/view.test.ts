@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { es } from '../src/i18n/es';
 import { computeTotals, money, type Face } from '../src/scripts/state';
-import { fitStageToPhoto, gameMetaText, progressView, renderTotals, syncFaces, progressElements } from '../src/scripts/view';
+import { fitStageToPhoto, gameMetaText, progressView, renderTotals, syncFaces, syncPeople, progressElements } from '../src/scripts/view';
 
 const face = (id: string, paid: boolean, emoji = '🐸'): Face => ({ id, x: 0.1, y: 0.2, w: 0.1, h: 0.15, emoji, paid });
 
@@ -135,12 +135,34 @@ describe('syncFaces', () => {
     expect(marker.hasAttribute('aria-pressed')).toBe(false);
   });
 
-  it('leaves faces unplaced in a grid, for games without photo', () => {
+  it('leaves faces unplaced in a grid, for games without photo, with their names', () => {
     const markers = new Map<string, HTMLElement>();
     const container = document.getElementById('faces')!;
     syncFaces(container, markers, [face('a', false)], { interactive: true, label: () => 'x' });
-    syncFaces(container, markers, [face('a', false)], { interactive: true, grid: true, label: () => 'x' });
+    syncFaces(container, markers, [{ ...face('a', false), name: 'Juan' }], { interactive: true, grid: true, label: () => 'x' });
     expect(markers.get('a')!.hasAttribute('style')).toBe(false);
+    expect(markers.get('a')!.querySelector('.face-name')!.textContent).toBe('Juan');
+  });
+});
+
+describe('syncPeople', () => {
+  it('keeps one row per person and never overwrites the name being typed', () => {
+    const list = document.createElement('ol');
+    document.body.append(list);
+    const rows = new Map<string, HTMLElement>();
+    syncPeople(list, rows, [{ ...face('a', true), name: 'Juan' }]);
+    const field = rows.get('a')!.querySelector('input')!;
+    expect(field.value).toBe('Juan');
+    expect(rows.get('a')!.classList.contains('is-paid')).toBe(true);
+    expect(rows.get('a')!.querySelector('button')!.disabled).toBe(true);
+
+    field.focus();
+    field.value = 'Juan ';
+    syncPeople(list, rows, [{ ...face('a', true), name: 'Juan' }, face('b', false)]);
+    expect(field.value).toBe('Juan ');
+    expect(rows.get('b')!.querySelector('input')!.placeholder).toBe(es.faces.person(2));
+    expect(rows.get('a')!.querySelector('button')!.disabled).toBe(false);
+    expect(list.children).toHaveLength(2);
   });
 });
 

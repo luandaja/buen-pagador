@@ -77,11 +77,15 @@ describe('public view', () => {
     expect(textOf('paidOut')).toBe('1/2');
   });
 
-  it('shows the people in a grid when the game has no photo', async () => {
-    await openPublicView(undefined, { image: null });
+  it('shows the people in a grid with their names when the game has no photo', async () => {
+    const named = [{ ...sharedGame.faces[0], name: 'Juan' }, sharedGame.faces[1]];
+    await openPublicView(undefined, { image: null, faces: named });
     await panelVisible();
     expect(byId('stageArea').classList.contains('is-grid')).toBe(true);
     expect(faceMarkers()).toHaveLength(2);
+    expect(faceMarkers()[0].querySelector('.face-name')!.textContent).toBe('Juan');
+    expect(faceMarkers()[0].getAttribute('aria-label')).toBe(es.faces.readOnly('Juan', true));
+    expect(faceMarkers()[1].getAttribute('aria-label')).toBe(es.faces.readOnly(es.faces.person(2), false));
     expect(faceMarkers()[0].hasAttribute('style')).toBe(false);
     expect(byId('photo').hasAttribute('src')).toBe(false);
   });

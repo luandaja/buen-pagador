@@ -1,5 +1,6 @@
 import { es, locale } from '../i18n/es';
 import { renderCard } from './export';
+import { personName } from './faces';
 import { canvasToBlob } from './image';
 import { loadShare, parsePublicHash, ShareError, type Loaded, type PayInfo, type SharedState } from './share';
 import { PREVIEW_HASH } from './routes';
@@ -77,7 +78,7 @@ function render() {
   syncFaces(elements.faces, faceMarkers, shared.faces, {
     interactive: false,
     grid: !image,
-    label: (face, index) => es.faces.readOnly(index + 1, face.paid),
+    label: (face, index) => es.faces.readOnly(personName(face, index), face.paid),
   });
   renderTotals(progressOutputs, shared);
   renderPay();

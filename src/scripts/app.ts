@@ -3,14 +3,19 @@ import { detectFaces, warmUp } from './detect';
 import { renderCard } from './export';
 import {
   addFaceAt,
+  addPeople,
   blockEmoji,
   boxesToFaces,
   faceLabel,
   fileName,
-  removeFace,
+  fillNames,
   MAX_PEOPLE,
+  parseNames,
+  peopleFrom,
+  personName,
+  removeFace,
+  renameFace,
   rerollEmojis,
-  setHeadcount,
   statusMessage,
   togglePaid,
   type Mode,
@@ -46,13 +51,13 @@ import {
   type Prefs,
   type State,
 } from './state';
-import { byId, fitStageToPhoto, gameMetaText, progressElements, progressView, renderTotals, syncFaces } from './view';
+import { byId, fitStageToPhoto, gameMetaText, progressElements, progressView, renderTotals, syncFaces, syncPeople } from './view';
 
 const elements = {
   dropzone: byId<HTMLLabelElement>('dropzone'),
   file: byId<HTMLInputElement>('file'),
   noPhoto: byId<HTMLFormElement>('noPhoto'),
-  startCount: byId<HTMLInputElement>('startCount'),
+  startPeople: byId<HTMLTextAreaElement>('startPeople'),
   stageWrap: byId<HTMLDivElement>('stageWrap'),
   stageArea: byId<HTMLDivElement>('stageArea'),
   stage: byId<HTMLDivElement>('stage'),
@@ -64,11 +69,10 @@ const elements = {
   blockedBar: byId<HTMLParagraphElement>('blockedBar'),
   blockedList: byId<HTMLSpanElement>('blockedList'),
   unblock: byId<HTMLButtonElement>('unblock'),
-  modes: byId<HTMLDivElement>('modes'),
-  headcountBox: byId<HTMLDivElement>('headcountBox'),
-  headcount: byId<HTMLInputElement>('headcount'),
-  fewer: byId<HTMLButtonElement>('fewer'),
-  more: byId<HTMLButtonElement>('more'),
+  editMode: byId<HTMLButtonElement>('editMode'),
+  peopleEditor: byId<HTMLDivElement>('peopleEditor'),
+  peopleList: byId<HTMLOListElement>('peopleList'),
+  addPerson: byId<HTMLButtonElement>('addPerson'),
   reroll: byId<HTMLButtonElement>('reroll'),
   peek: byId<HTMLButtonElement>('peek'),
   newPhoto: byId<HTMLButtonElement>('newPhoto'),
@@ -129,6 +133,7 @@ const HINTS: Record<Mode, string> = {
   pay: isTouchDevice ? es.hints.payTouch : es.hints.payMouse,
   edit: es.hints.edit,
 };
+const GRID_HINTS: Record<Mode, string> = { pay: es.hints.grid, edit: es.hints.gridEdit };
 
 const SHARED_FIELDS: (keyof State)[] = ['faces', 'cost', 'quota', 'hideTotal', 'currency', 'title', 'rounding'];
 const PAY_FIELDS: (keyof State)[] = ['payNote', 'payQr'];
@@ -149,6 +154,7 @@ let creating = false;
 let copiedRecently = false;
 let formOpen = false;
 const faceMarkers = new Map<string, HTMLElement>();
+const personRows = new Map<string, HTMLElement>();
 
 async function migrateLegacy(prefs: Prefs): Promise<Prefs> {
   const legacy = takeLegacy();
@@ -206,7 +212,7 @@ function update(patch: Partial<State>, sync = true) {
   if (sync && state.share) queueShareSync(patch);
 }
 
-const modeHint = () => (state.image ? HINTS[mode] : es.hints.grid);
+const modeHint = () => (state.image ? HINTS : GRID_HINTS)[mode];
 
 function setMode(next: Mode) {
   mode = next;
@@ -215,6 +221,7 @@ function setMode(next: Mode) {
   document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((button) => {
     button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
   });
+  renderStage();
   renderFaces();
 }
 
@@ -293,18 +300,20 @@ function renderLink() {
   elements.linkExpiry.textContent = expiryText(link?.expiresAt);
 }
 
-// Without a photo the stage is a grid of people and the toolbar edits how many there are.
+// Without a photo the stage is a grid of people, and editing them is a list of names.
 function renderStage() {
   const grid = !state.image;
+  const editingPeople = grid && mode === 'edit';
   elements.stageArea.classList.toggle('is-grid', grid);
-  elements.modes.hidden = grid;
+  elements.stageArea.hidden = editingPeople;
+  elements.peopleEditor.hidden = !editingPeople;
   elements.peek.hidden = grid;
-  elements.headcountBox.hidden = !grid;
+  elements.editMode.textContent = grid ? es.toolbar.editPeople : es.toolbar.edit;
   elements.newPhoto.textContent = grid ? es.upload.addPhoto : es.upload.changePhoto;
-  elements.fewer.disabled = state.faces.length <= 1;
-  elements.more.disabled = state.faces.length >= MAX_PEOPLE;
-  if (document.activeElement !== elements.headcount) elements.headcount.value = String(state.faces.length);
   if (state.image && elements.photo.getAttribute('src') !== state.image) elements.photo.src = state.image;
+  if (!editingPeople) return;
+  syncPeople(elements.peopleList, personRows, state.faces);
+  elements.addPerson.disabled = state.faces.length >= MAX_PEOPLE;
 }
 
 function render() {
@@ -409,31 +418,74 @@ elements.dropzone.addEventListener('drop', (event) => {
   handleFile(event.dataTransfer?.files?.[0]);
 });
 
-const setPeople = (count: number) => update({ faces: setHeadcount(state.faces, count, state.blocked) });
-
 elements.noPhoto.addEventListener('submit', (event) => {
   event.preventDefault();
-  setPeople(elements.startCount.valueAsNumber);
-  elements.startCount.value = '';
+  const faces = peopleFrom(elements.startPeople.value, state.blocked);
+  elements.startPeople.setCustomValidity(faces.length ? '' : es.upload.noPeople);
+  if (!elements.startPeople.reportValidity()) return;
+  elements.startPeople.value = '';
+  update({ faces });
   setMode('pay');
-  elements.more.focus();
+  faceMarkers.get(faces[0].id)?.focus();
 });
 
-// Typed counts apply on change, so passing through "1" on the way to "12" does not drop people.
-elements.headcount.addEventListener('change', () => {
-  const count = elements.headcount.valueAsNumber;
-  if (Number.isFinite(count)) setPeople(count);
-  elements.headcount.value = String(state.faces.length);
+elements.startPeople.addEventListener('input', () => elements.startPeople.setCustomValidity(''));
+
+// A bare number starts on Enter; in a list of names Enter adds a line.
+elements.startPeople.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' || event.shiftKey || !/^\s*\d*\s*$/.test(elements.startPeople.value)) return;
+  event.preventDefault();
+  elements.noPhoto.requestSubmit();
 });
 
-elements.headcountBox.addEventListener('click', (event) => {
-  const step = (event.target as HTMLElement).closest<HTMLElement>('[data-step]')?.dataset.step;
-  if (step) setPeople(state.faces.length + Number(step));
+const personRow = (node: EventTarget | null) => (node as HTMLElement).closest<HTMLElement>('.person-row')!;
+const rowIndex = (row: HTMLElement) => state.faces.findIndex((face) => face.id === row.dataset.id);
+const focusName = (index: number) => elements.peopleList.querySelectorAll<HTMLInputElement>('.person-name')[index]?.focus();
+
+function addPerson() {
+  update({ faces: addPeople(state.faces, 1, state.blocked) });
+  focusName(state.faces.length - 1);
+}
+
+elements.addPerson.addEventListener('click', addPerson);
+
+elements.peopleList.addEventListener('input', (event) => {
+  const input = event.target as HTMLInputElement;
+  update({ faces: renameFace(state.faces, personRow(input).dataset.id!, input.value) });
+});
+
+elements.peopleList.addEventListener('click', (event) => {
+  const remove = (event.target as HTMLElement).closest('.person-remove');
+  if (!remove) return;
+  const index = rowIndex(personRow(remove));
+  update({ faces: removeFace(state.faces, state.faces[index].id) });
+  focusName(Math.min(index, state.faces.length - 1));
+});
+
+// Enter moves to the next name; on the last one it adds someone, unless the name is still empty.
+elements.peopleList.addEventListener('keydown', (event) => {
+  const input = event.target as HTMLInputElement;
+  if (event.key !== 'Enter' || !input.matches('.person-name')) return;
+  event.preventDefault();
+  const index = rowIndex(personRow(input));
+  if (index < state.faces.length - 1) focusName(index + 1);
+  else if (input.value.trim()) addPerson();
+  else input.blur();
+});
+
+// Pasting the group's list fills the names from this person on.
+elements.peopleList.addEventListener('paste', (event) => {
+  const names = parseNames(event.clipboardData?.getData('text') ?? '');
+  if (names.length < 2) return;
+  event.preventDefault();
+  const input = event.target as HTMLInputElement;
+  input.value = names[0];
+  update({ faces: fillNames(state.faces, rowIndex(personRow(input)), names, state.blocked) });
 });
 
 elements.newPhoto.addEventListener('click', () => {
-  const hasPayments = state.faces.some((face) => face.paid);
-  if (!hasPayments || confirm(es.upload.changePhotoConfirm)) elements.file.click();
+  const wouldLoseWork = state.faces.some((face) => face.paid || face.name);
+  if (!wouldLoseWork || confirm(es.upload.changePhotoConfirm)) elements.file.click();
 });
 
 const faceTarget = (event: Event) => (event.target as HTMLElement).closest<HTMLElement>('.face');
@@ -443,7 +495,7 @@ function onFaceClick(faceId: string) {
   const index = state.faces.findIndex((face) => face.id === faceId);
   update({ faces: togglePaid(state.faces, faceId) });
   const totals = computeTotals(state);
-  announce(es.faces.announce(index + 1, state.faces[index].paid, totals.paid, totals.people));
+  announce(es.faces.announce(personName(state.faces[index], index), state.faces[index].paid, totals.paid, totals.people));
 }
 
 function onEmptyClick(event: MouseEvent) {

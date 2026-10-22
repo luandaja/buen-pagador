@@ -8,6 +8,8 @@ export interface Face {
   h: number;
   emoji: string;
   paid: boolean;
+  // Only people added without a photo have a name; faces on a photo are recognized by sight.
+  name?: string;
 }
 
 export interface Game {

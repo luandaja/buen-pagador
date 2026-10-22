@@ -45,18 +45,50 @@ export function addFaceAt(faces: Face[], centerX: number, centerY: number, aspec
 }
 
 export const MAX_PEOPLE = 60;
+export const MAX_NAME = 30;
 
-// Without a photo the people are just a count. Removing drops the latest who still owe, so a payment is not lost by accident.
-export function setHeadcount(faces: Face[], count: number, blocked: string[]): Face[] {
-  const target = Math.min(MAX_PEOPLE, Math.max(1, Math.round(count)));
-  if (target <= faces.length) {
-    const dropOrder = [...faces].reverse().sort((first, second) => Number(first.paid) - Number(second.paid));
-    const dropped = new Set(dropOrder.slice(0, faces.length - target).map((face) => face.id));
-    return faces.filter((face) => !dropped.has(face.id));
-  }
-  const emojis = pickEmojis(target - faces.length, faces.map((face) => face.emoji), blocked);
+// Without a photo people carry no position.
+export function addPeople(faces: Face[], count: number, blocked: string[]): Face[] {
+  const room = Math.max(0, Math.min(count, MAX_PEOPLE - faces.length));
+  const emojis = pickEmojis(room, faces.map((face) => face.emoji), blocked);
   return [...faces, ...emojis.map((emoji) => ({ id: createId(), x: 0, y: 0, w: 0, h: 0, emoji, paid: false }))];
 }
+
+const named = (face: Face, name: string): Face => ({ ...face, name: name.trim().slice(0, MAX_NAME) || undefined });
+
+export const renameFace = (faces: Face[], faceId: string, name: string): Face[] =>
+  faces.map((face) => (face.id === faceId ? named(face, name) : face));
+
+// A list fills the names from one person on, adding whoever is missing.
+export function fillNames(faces: Face[], start: number, names: string[], blocked: string[]): Face[] {
+  const people = addPeople(faces, start + names.length - faces.length, blocked);
+  return people.map((face, index) => (index >= start && index < start + names.length ? named(face, names[index - start]) : face));
+}
+
+const LIST_MARKER = /^\s*(?:\d+\s*[.)\-:]+|[-–•·*]\s)\s*/;
+const NOISE = /[\u2705\u2714\u2611\u2713\uFE0F*_]/gu;
+
+// Lists pasted from the group chat: one name per line, with numbers, bullets, checks or a header around them.
+export function parseNames(text: string): string[] {
+  const lines = text.split(/\r?\n/);
+  const items = lines.length > 1 ? lines : text.split(/[,;]/);
+  const listed = items.filter((line) => LIST_MARKER.test(line));
+  // In a numbered list, the lines without a number are the title or notes, not people.
+  const people = listed.length >= 2 ? listed : items;
+  return people
+    .map((line) => line.replace(LIST_MARKER, '').replace(NOISE, '').trim().slice(0, MAX_NAME))
+    .filter(Boolean)
+    .slice(0, MAX_PEOPLE);
+}
+
+// The start field takes how many people there are, or the list of their names.
+export function peopleFrom(text: string, blocked: string[]): Face[] {
+  const count = text.trim();
+  if (/^\d+$/.test(count)) return addPeople([], Number(count), blocked);
+  return fillNames([], 0, parseNames(text), blocked);
+}
+
+export const personName = (face: Face, index: number) => face.name?.trim() || es.faces.person(index + 1);
 
 export const rerollEmojis = (faces: Face[], blocked: string[]): Face[] => {
   const emojis = pickEmojis(faces.length, [], blocked);
@@ -82,9 +114,9 @@ export function blockEmoji(state: Pick<State, 'faces' | 'blocked'>, faceId: stri
 }
 
 export function faceLabel(face: Face, index: number, mode: Mode): string {
-  const position = index + 1;
-  if (mode === 'edit') return es.faces.remove(position);
-  return face.paid ? es.faces.paidUndo(position) : es.faces.owesMark(position);
+  const who = personName(face, index);
+  if (mode === 'edit') return es.faces.remove(who);
+  return face.paid ? es.faces.paidUndo(who) : es.faces.owesMark(who);
 }
 
 export function statusMessage(state: Pick<State, 'image' | 'faces' | 'cost'> & Partial<Pick<State, 'quota'>>, scanning: boolean): string | undefined {
