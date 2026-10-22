@@ -24,6 +24,6 @@ pnpm build && pnpm js-budget 40   # JS inicial por página, en KB gz
 
 ## Versiones
 
-SemVer con [Conventional Commits](https://www.conventionalcommits.org/); release-please abre el PR de release y escribe el [CHANGELOG](CHANGELOG.md). El plan está en [docs/ROADMAP.md](docs/ROADMAP.md).
+SemVer con [Conventional Commits](https://www.conventionalcommits.org/). Cada push a `main` corre [release.yml](.github/workflows/release.yml), que sube la versión una vez por commit desde el último tag (`tipo!:` o `BREAKING CHANGE` → major, `feat`/`fix` → minor, el resto → patch; los merges no cuentan), escribe el [CHANGELOG](CHANGELOG.md), etiqueta `vX.Y.Z` y publica el release. La versión y el CHANGELOG no se tocan a mano: basta con que los commits, y el título del PR si se hace squash, sigan el formato. El plan está en [docs/ROADMAP.md](docs/ROADMAP.md).
 
 [MIT](LICENSE)
