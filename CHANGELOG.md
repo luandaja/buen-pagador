@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.17.1](https://github.com/luandaja/buen-pagador/compare/v1.16.2...v1.17.1) (2026-10-22)
+
+### Features
+
+* people without photo as initials, in a ring on desktop ([26c3cb2](https://github.com/luandaja/buen-pagador/commit/26c3cb2dff79d2933b37e204400541b59bbc7c76))
+
+### Other Changes
+
+* describe the per-commit release workflow in the README ([ba518b6](https://github.com/luandaja/buen-pagador/commit/ba518b6046f267ad1d717effb2610be03ff5068e))
+
 ## [1.16.2](https://github.com/luandaja/buen-pagador/compare/v1.5.0...v1.16.2) (2026-10-22)
 
 ### Features

@@ -2,7 +2,7 @@
   "name": "buen-pagador",
   "description": "Divide la cancha, el viaje o la cena y marca quién ya pagó. Local-first y cifrado de punta a punta.",
   "type": "module",
-  "version": "1.16.2",
+  "version": "1.17.1",
   "private": true,
   "license": "MIT",
   "packageManager": "pnpm@11.8.0",
