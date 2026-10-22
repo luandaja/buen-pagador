@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.6.0](https://github.com/luandaja/buen-pagador/compare/v1.5.0...v1.6.0) (2026-10-22)
+
+
+### Features
+
+* add discreet copyright to version footer ([a1c07f3](https://github.com/luandaja/buen-pagador/commit/a1c07f36c7626719539fb74d81f51936eb6413c8))
+* add discreet copyright to version footer ([9f87344](https://github.com/luandaja/buen-pagador/commit/9f87344934c40008bdedc12f304d6cc94f42c4d2))
+* clickable wordmark and games I was invited to ([d04e636](https://github.com/luandaja/buen-pagador/commit/d04e63683cb0758b026b300109a965cf5969a5b2))
+* clickable wordmark and games I was invited to ([c270c46](https://github.com/luandaja/buen-pagador/commit/c270c46491077ed29897c9d86196953227f3aa8f))
+* court games without photo, a fixed share and a hidden total ([b8e4f76](https://github.com/luandaja/buen-pagador/commit/b8e4f766012e0838c03836428d498c0cab9a2d0d))
+* court games without photo, a fixed share and a hidden total ([6c6f2ab](https://github.com/luandaja/buen-pagador/commit/6c6f2abf8976472d23c9af21c1d75e66cd23c254))
+* expense detail in the read-only view and receipt photos shared via Vercel Blob ([2dd657e](https://github.com/luandaja/buen-pagador/commit/2dd657e578a70f9b3eedcb5eaf785479f9f08e8b))
+* flag receipt photos that are only on this device ([a2aeef2](https://github.com/luandaja/buen-pagador/commit/a2aeef291495a8e96500f4953c3a41bf7f7078e4))
+* lead the public court link with each player's share ([391488a](https://github.com/luandaja/buen-pagador/commit/391488ad52d4f982af1665ba3d71ca510876bd23))
+* lead the public court link with each player's share ([55be02a](https://github.com/luandaja/buen-pagador/commit/55be02a5aa65362853b736df0eb7724d339ad9f9))
+* name people in court games without photo ([fb71fae](https://github.com/luandaja/buen-pagador/commit/fb71fae41e6da781aa8abaa9966b48bc772b252d))
+* name people in court games without photo ([d66b3fb](https://github.com/luandaja/buen-pagador/commit/d66b3fb7d5840186949057f492be0bf8340e5b3a))
+* rename people after they are added ([2ba7768](https://github.com/luandaja/buen-pagador/commit/2ba776876b3c8d0c8cc80e4222c5fc57e4a02fc1))
+* rename people after they are added ([c739e3d](https://github.com/luandaja/buen-pagador/commit/c739e3db09530c24d0553471ee161ba900256d23))
+* share receipt photos encrypted through Vercel Blob ([bffc6cb](https://github.com/luandaja/buen-pagador/commit/bffc6cb721d0fc640b1f00a348819f42e1ed7888))
+* show expense detail and receipt in the read-only view ([7555e9c](https://github.com/luandaja/buen-pagador/commit/7555e9c3a4bf1e82792f3a059027d6d8bc095d8b))
+* subir fotos de boleta pendientes y marcar las que solo están en el dispositivo ([15dc0b0](https://github.com/luandaja/buen-pagador/commit/15dc0b006086380351d09dd521224684a4397362))
+* upload receipt photos the shared link is still missing ([f6d5d28](https://github.com/luandaja/buen-pagador/commit/f6d5d281cbbcc2d64285d1e64f844eccfe253a62))
+
+
+### Bug Fixes
+
+* **group:** drop the sidebar's own scroll so the page has a single scrollbar ([dd75840](https://github.com/luandaja/buen-pagador/commit/dd75840cae213e4853f8488b91cd0fefb50c8310))
+* **group:** drop the sidebar's own scroll so the page has a single scrollbar ([2a6532e](https://github.com/luandaja/buen-pagador/commit/2a6532eb252fce18a85c769338fb2e013459a56c))
+
 ## [1.5.0](https://github.com/luandaja/buen-pagador/compare/v1.4.0...v1.5.0) (2026-10-13)
 
 
