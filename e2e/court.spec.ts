@@ -51,12 +51,15 @@ test('editor shares an encrypted link the viewer can read and follow', async ({ 
     .toContain('1/1');
 });
 
-test('a game without photo charges a fixed share and hides the cost from the link', async ({ page, context }) => {
+test('a game without photo starts from the group list, charges a fixed share and hides the cost', async ({ page, context }) => {
   await page.goto('/');
-  await page.locator('#startCount').fill('5');
+  await page.locator('#startPeople').fill('Jueves 9 pm\n1. Juan\n2. Pedro ✅\n3. Luis\n4. Ana\n5. Rosa');
   await page.getByRole('button', { name: 'Empezar sin foto' }).click();
   await expect(page.locator('#faces > *')).toHaveCount(5);
-  await page.getByRole('button', { name: 'Una persona más' }).click();
+  await page.getByRole('button', { name: 'Editar personas' }).click();
+  await page.getByRole('button', { name: 'Agregar persona' }).click();
+  await page.keyboard.type('Carla');
+  await page.getByRole('button', { name: 'Marcar pagos' }).click();
   await expect(page.locator('#faces > *')).toHaveCount(6);
 
   await page.locator('#cost').fill('100');
@@ -70,6 +73,8 @@ test('a game without photo charges a fixed share and hides the cost from the lin
   const viewer = await context.newPage();
   await viewer.goto((await urlText.textContent())!);
   await expect(viewer.locator('#faces > *')).toHaveCount(6);
+  await expect(viewer.locator('#faces')).toContainText('Carla');
+  await expect(viewer.getByRole('img', { name: 'Juan: pagó' })).toBeVisible();
   await expect(viewer.locator('#panel')).toContainText('Tu cuota');
   await expect(viewer.locator('#panel')).toContainText('S/ 20');
   await expect(viewer.locator('#panel')).toContainText('1/6');

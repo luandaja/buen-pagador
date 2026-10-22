@@ -2,15 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { es } from '../src/i18n/es';
 import {
   addFaceAt,
+  addPeople,
   blockEmoji,
   boxesToFaces,
   defaultFaceSize,
   faceLabel,
   fileName,
+  fillNames,
   removeFace,
   rerollEmojis,
+  MAX_NAME,
   MAX_PEOPLE,
-  setHeadcount,
+  parseNames,
+  peopleFrom,
+  personName,
+  renameFace,
   statusMessage,
   togglePaid,
 } from '../src/scripts/faces';
@@ -84,33 +90,71 @@ describe('blockEmoji', () => {
   });
 });
 
-describe('setHeadcount', () => {
-  it('adds unplaced people with fresh emojis', () => {
-    const faces = setHeadcount([make('a', '🐸')], 3, ['🐔']);
+describe('people without photo', () => {
+  it('adds unplaced people with fresh emojis, up to the maximum', () => {
+    const faces = addPeople([make('a', '🐸')], 2, ['🐔']);
     expect(faces).toHaveLength(3);
     expect(faces[0].id).toBe('a');
     expect(faces[1]).toMatchObject({ x: 0, y: 0, w: 0, h: 0, paid: false });
     expect(faces.map((face) => face.emoji)).not.toContain('🐔');
     expect(new Set(faces.map((face) => face.emoji)).size).toBe(3);
+    expect(addPeople([], MAX_PEOPLE + 10, [])).toHaveLength(MAX_PEOPLE);
+    expect(addPeople(faces, -1, [])).toHaveLength(3);
   });
 
-  it('removes the latest who still owe before anyone who paid', () => {
-    const faces = [make('a', '🐸'), make('b', '🦊'), make('c', '🐼', true), make('d', '🐙', true)];
-    expect(setHeadcount(faces, 3, []).map((face) => face.id)).toEqual(['a', 'c', 'd']);
-    expect(setHeadcount(faces, 1, []).map((face) => face.id)).toEqual(['c']);
+  it('renames someone, trimming and clearing empty names', () => {
+    const faces = [make('a', '🐸', true), make('b', '🦊')];
+    expect(renameFace(faces, 'a', '  Juan  ')[0]).toMatchObject({ name: 'Juan', paid: true });
+    expect(renameFace(faces, 'a', 'x'.repeat(MAX_NAME + 5))[0].name).toHaveLength(MAX_NAME);
+    expect(renameFace(renameFace(faces, 'a', 'Juan'), 'a', '  ')[0].name).toBeUndefined();
+    expect(renameFace(faces, 'a', 'Juan')[1]).toBe(faces[1]);
   });
 
-  it('keeps between one and the maximum', () => {
-    expect(setHeadcount([make('a', '🐸')], 0, [])).toHaveLength(1);
-    expect(setHeadcount([], MAX_PEOPLE + 10, [])).toHaveLength(MAX_PEOPLE);
+  it('fills names from one person on and adds whoever is missing', () => {
+    const faces = fillNames([make('a', '🐸', true), make('b', '🦊')], 1, ['Pedro', 'Luis', 'Ana'], []);
+    expect(faces.map((face) => face.name)).toEqual([undefined, 'Pedro', 'Luis', 'Ana']);
+    expect(faces[0].paid).toBe(true);
+  });
+
+  it('names people the way they are named', () => {
+    expect(personName(make('a', '🐸'), 2)).toBe(es.faces.person(3));
+    expect(personName({ ...make('a', '🐸'), name: 'Juan' }, 2)).toBe('Juan');
+  });
+});
+
+describe('parseNames', () => {
+  it('reads a numbered list from the group chat, without its title, checks or bold', () => {
+    const list = 'Jueves 9 pm 🏀\n1. Juan\n2) *Pedro* ✅\n3.Luis ✔️\n4 - Ana\n5.\nTraigan pelota';
+    expect(parseNames(list)).toEqual(['Juan', 'Pedro', 'Luis', 'Ana']);
+  });
+
+  it('reads plain lines, bullets and names separated by commas', () => {
+    expect(parseNames('Juan\n\n  Pedro Pérez \n')).toEqual(['Juan', 'Pedro Pérez']);
+    expect(parseNames('- Juan\n• Pedro')).toEqual(['Juan', 'Pedro']);
+    expect(parseNames('Juan, Pedro; Luis')).toEqual(['Juan', 'Pedro', 'Luis']);
+    expect(parseNames('Juan')).toEqual(['Juan']);
+    expect(parseNames('   ')).toEqual([]);
+  });
+
+  it('caps how many and how long', () => {
+    const many = Array.from({ length: MAX_PEOPLE + 5 }, (_, index) => `Persona ${index}`).join('\n');
+    expect(parseNames(many)).toHaveLength(MAX_PEOPLE);
+    expect(parseNames('x'.repeat(50))[0]).toHaveLength(MAX_NAME);
+  });
+
+  it('the start field takes a count or a list', () => {
+    expect(peopleFrom(' 4 ', [])).toHaveLength(4);
+    expect(peopleFrom('0', [])).toEqual([]);
+    expect(peopleFrom('1. Juan\n2. Pedro', []).map((face) => face.name)).toEqual(['Juan', 'Pedro']);
+    expect(peopleFrom('', [])).toEqual([]);
   });
 });
 
 describe('labels', () => {
   it('labels each face by mode', () => {
-    expect(faceLabel(make('a', '🐸'), 0, 'edit')).toBe(es.faces.remove(1));
-    expect(faceLabel(make('a', '🐸', true), 1, 'pay')).toBe(es.faces.paidUndo(2));
-    expect(faceLabel(make('a', '🐸'), 2, 'pay')).toBe(es.faces.owesMark(3));
+    expect(faceLabel(make('a', '🐸'), 0, 'edit')).toBe(es.faces.remove(es.faces.person(1)));
+    expect(faceLabel(make('a', '🐸', true), 1, 'pay')).toBe(es.faces.paidUndo(es.faces.person(2)));
+    expect(faceLabel({ ...make('a', '🐸'), name: 'Juan' }, 2, 'pay')).toBe(es.faces.owesMark('Juan'));
   });
 
   it('shows the first pending step', () => {

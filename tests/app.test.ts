@@ -179,9 +179,9 @@ describe('photo and faces', () => {
     await startWithGame();
     click(faceButtons()[0]);
     expect(textOf('paidOut')).toBe('1/3');
-    expect(textOf('announce')).toBe(es.faces.announce(1, true, 1, 3));
+    expect(textOf('announce')).toBe(es.faces.announce(es.faces.person(1), true, 1, 3));
     click(faceButtons()[0]);
-    expect(textOf('announce')).toBe(es.faces.announce(1, false, 0, 3));
+    expect(textOf('announce')).toBe(es.faces.announce(es.faces.person(1), false, 0, 3));
 
     click(byId('faces'));
     expect(faceButtons()).toHaveLength(3);
@@ -236,60 +236,127 @@ describe('photo and faces', () => {
 });
 
 describe('game without photo', () => {
-  function startWithoutPhoto(count: number) {
-    byId<HTMLInputElement>('startCount').value = String(count);
-    byId('noPhoto').dispatchEvent(new Event('submit', { cancelable: true }));
+  function typeStart(text: string) {
+    const field = byId<HTMLTextAreaElement>('startPeople');
+    field.value = text;
+    field.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
-  const step = (direction: 1 | -1) => click(document.querySelector(`[data-step="${direction}"]`)!);
+  const submitStart = () => byId('noPhoto').dispatchEvent(new Event('submit', { cancelable: true }));
+  const pressEnter = (element: Element) => element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  const gridNames = () => [...document.querySelectorAll('#faces .face-name')].map((name) => name.textContent);
+  const nameFields = () => [...document.querySelectorAll<HTMLInputElement>('.person-name')];
+  const removeButtons = () => [...document.querySelectorAll<HTMLButtonElement>('.person-remove')];
 
-  it('starts with how many people there are, and the count can be edited', async () => {
+  function paste(element: Element, text: string) {
+    const event = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', { value: { getData: () => text } });
+    element.dispatchEvent(event);
+  }
+
+  it('starts from the group list pasted as is, and shows each name', async () => {
     await startEditor();
     expect(byId('noPhoto').hidden).toBe(false);
-    startWithoutPhoto(4);
-    expect(faceButtons()).toHaveLength(4);
+    typeStart('   ');
+    submitStart();
+    expect(byId('noPhoto').hidden).toBe(false);
+    expect(byId<HTMLTextAreaElement>('startPeople').validationMessage).toBe(es.upload.noPeople);
+
+    typeStart('Jueves 9 pm\n1. Juan\n2. Pedro ✅\n3. Luis');
+    submitStart();
+    expect(faceButtons()).toHaveLength(3);
+    expect(gridNames()).toEqual(['Juan', 'Pedro', 'Luis']);
+    expect(faceButtons()[0].getAttribute('aria-label')).toBe(es.faces.owesMark('Juan'));
     expect(byId('dropzone').hidden).toBe(true);
     expect(byId('noPhoto').hidden).toBe(true);
     expect(byId('stageArea').classList.contains('is-grid')).toBe(true);
-    expect(byId('modes').hidden).toBe(true);
     expect(byId('peek').hidden).toBe(true);
+    expect(textOf('editMode')).toBe(es.toolbar.editPeople);
     expect(textOf('newPhoto')).toBe(es.upload.addPhoto);
     expect(textOf('hint')).toBe(es.hints.grid);
-    expect(byId<HTMLInputElement>('headcount').value).toBe('4');
 
-    click(faceButtons()[3]);
-    step(-1);
-    expect(textOf('paidOut')).toBe('1/3');
-    step(1);
-    expect(textOf('paidOut')).toBe('1/4');
-    input(byId<HTMLInputElement>('headcount'), '10', 'change');
-    expect(faceButtons()).toHaveLength(10);
-    input(byId<HTMLInputElement>('headcount'), '', 'change');
-    expect(byId<HTMLInputElement>('headcount').value).toBe('10');
-    input(byId<HTMLInputElement>('headcount'), '1', 'change');
-    expect(byId<HTMLButtonElement>('fewer').disabled).toBe(true);
-    expect(textOf('paidOut')).toBe('1/1');
-    input(byId<HTMLInputElement>('headcount'), '10', 'change');
-
-    input(byId<HTMLInputElement>('cost'), '100');
-    expect(textOf('shareOut')).toBe(money(10, 'S/'));
-    await eventually(async () => expect((await openGameRecord())?.faces).toHaveLength(10));
+    click(faceButtons()[1]);
+    expect(textOf('announce')).toBe(es.faces.announce('Pedro', true, 1, 3));
   });
 
-  it('shares a link without photo and can add the photo later', async () => {
+  it('starts with just a count on Enter, while a list keeps Enter for new lines', async () => {
     await startEditor();
-    startWithoutPhoto(2);
+    typeStart('Juan');
+    pressEnter(byId('startPeople'));
+    expect(byId('noPhoto').hidden).toBe(false);
+    typeStart('4');
+    pressEnter(byId('startPeople'));
+    expect(faceButtons()).toHaveLength(4);
+    expect(gridNames()).toEqual(['', '', '', '']);
+    expect(faceButtons()[0].getAttribute('aria-label')).toBe(es.faces.owesMark(es.faces.person(1)));
+  });
+
+  it('edits people as a list: names, Enter to the next, add, paste and remove', async () => {
+    await startEditor();
+    typeStart('2');
+    submitStart();
+    click(faceButtons()[0]);
+    click(byId('editMode'));
+    expect(byId('peopleEditor').hidden).toBe(false);
+    expect(byId('stageArea').hidden).toBe(true);
+    expect(textOf('hint')).toBe(es.hints.gridEdit);
+    expect(nameFields().map((field) => field.placeholder)).toEqual([es.faces.person(1), es.faces.person(2)]);
+    expect(document.querySelector('.person-row')!.classList.contains('is-paid')).toBe(true);
+
+    nameFields()[0].focus();
+    input(nameFields()[0], 'Juan ');
+    expect(removeButtons()[0].getAttribute('aria-label')).toBe(es.faces.remove('Juan'));
+    pressEnter(nameFields()[0]);
+    expect(document.activeElement).toBe(nameFields()[1]);
+    input(nameFields()[1], 'Pedro');
+    pressEnter(nameFields()[1]);
+    expect(nameFields()).toHaveLength(3);
+    expect(document.activeElement).toBe(nameFields()[2]);
+    pressEnter(nameFields()[2]);
+    expect(nameFields()).toHaveLength(3);
+    expect(document.activeElement).not.toBe(nameFields()[2]);
+
+    nameFields()[2].focus();
+    paste(nameFields()[2], 'Luis\nAna');
+    expect(nameFields().map((field) => field.value)).toEqual(['Juan', 'Pedro', 'Luis', 'Ana']);
+    paste(nameFields()[3], 'Ana María');
+    expect(nameFields()).toHaveLength(4);
+
+    click(removeButtons()[1]);
+    expect(nameFields().map((field) => field.value)).toEqual(['Juan', 'Luis', 'Ana']);
+    expect(document.activeElement).toBe(nameFields()[1]);
+    click(byId('addPerson'));
+    expect(document.activeElement).toBe(nameFields()[3]);
+    click(removeButtons()[3]);
+    click(removeButtons()[2]);
+    click(removeButtons()[1]);
+    expect(removeButtons()[0].disabled).toBe(true);
+
+    click(document.querySelector('[data-mode="pay"]')!);
+    expect(byId('peopleEditor').hidden).toBe(true);
+    expect(gridNames()).toEqual(['Juan']);
+    expect(textOf('paidOut')).toBe('1/1');
+    await eventually(async () => expect((await openGameRecord())?.faces.map((face) => face.name)).toEqual(['Juan']));
+  });
+
+  it('shares the names without photo, and asks before a photo replaces them', async () => {
+    await startEditor();
+    typeStart('1. Juan\n2. Pedro');
+    submitStart();
     click(byId('linkAction'));
     await eventually(() => expect(textOf('syncStatus')).toBe(es.share.live));
     const [id, key] = new URL(textOf('publicUrl')!).hash.slice(1).split('.');
     const shared = await loadShare({ id, key }, true);
     expect(shared.image).toBeUndefined();
-    expect(shared.state.faces).toHaveLength(2);
+    expect(shared.state.faces.map((face) => face.name)).toEqual(['Juan', 'Pedro']);
 
+    const confirmDialog = answerConfirm(false);
+    click(byId('newPhoto'));
+    expect(confirmDialog).toHaveBeenCalledWith(es.upload.changePhotoConfirm);
     uploadPhoto();
     await eventually(() => expect(faceButtons()).toHaveLength(3));
     expect(byId('stageArea').classList.contains('is-grid')).toBe(false);
-    expect(byId('modes').hidden).toBe(false);
+    expect(textOf('editMode')).toBe(es.toolbar.edit);
     expect(textOf('newPhoto')).toBe(es.upload.changePhoto);
   });
 });

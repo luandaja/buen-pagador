@@ -1,4 +1,5 @@
 import { es } from '../i18n/es';
+import { MAX_NAME, personName } from './faces';
 import { computeTotals, money, type Face, type Totals } from './state';
 
 type TotalsInput = { faces: Face[]; cost: number | null; quota?: number | null; hideTotal?: boolean; currency: string; rounding: number };
@@ -94,7 +95,7 @@ export function renderTotals(elements: ProgressElements, game: TotalsInput, mess
 }
 
 const FACE_HTML =
-  '<span class="face-ring"></span><span class="face-emoji"></span><span class="face-check">✓</span><span class="face-remove">×</span>';
+  '<span class="face-ring"></span><span class="face-emoji"></span><span class="face-check">✓</span><span class="face-remove">×</span><span class="face-name"></span>';
 
 // Without a photo the faces sit in a grid, so they carry no position.
 type FaceOptions = { interactive: boolean; grid?: boolean; label: (face: Face, index: number) => string };
@@ -121,27 +122,66 @@ function placeMarker(marker: HTMLElement, face: Face, grid = false) {
 function updateFaceMarker(marker: HTMLElement, face: Face, index: number, options: FaceOptions) {
   placeMarker(marker, face, options.grid);
   marker.querySelector('.face-emoji')!.textContent = face.emoji;
+  marker.querySelector('.face-name')!.textContent = face.name ?? '';
   if (!face.paid) marker.classList.remove('is-settled');
   marker.classList.toggle('is-paid', face.paid);
   if (options.interactive) marker.setAttribute('aria-pressed', String(face.paid));
   marker.setAttribute('aria-label', options.label(face, index));
 }
 
-export function syncFaces(container: HTMLElement, markers: Map<string, HTMLElement>, faces: Face[], options: FaceOptions) {
+type KeyedRender = { create: (face: Face) => HTMLElement; refresh: (node: HTMLElement, face: Face, index: number) => void };
+
+// Nodes are keyed by face and only ever appended or removed, so a focused node is never moved.
+function syncKeyed(container: HTMLElement, nodes: Map<string, HTMLElement>, faces: Face[], { create, refresh }: KeyedRender) {
   const currentIds = new Set(faces.map((face) => face.id));
-  for (const [faceId, marker] of markers) {
+  for (const [faceId, node] of nodes) {
     if (currentIds.has(faceId)) continue;
-    marker.remove();
-    markers.delete(faceId);
+    node.remove();
+    nodes.delete(faceId);
   }
   faces.forEach((face, index) => {
-    if (!markers.has(face.id)) {
-      const marker = createFaceMarker(face, options.interactive);
-      container.append(marker);
-      markers.set(face.id, marker);
+    if (!nodes.has(face.id)) {
+      const node = create(face);
+      container.append(node);
+      nodes.set(face.id, node);
     }
-    updateFaceMarker(markers.get(face.id)!, face, index, options);
+    refresh(nodes.get(face.id)!, face, index);
   });
+}
+
+export function syncFaces(container: HTMLElement, markers: Map<string, HTMLElement>, faces: Face[], options: FaceOptions) {
+  syncKeyed(container, markers, faces, {
+    create: (face) => createFaceMarker(face, options.interactive),
+    refresh: (marker, face, index) => updateFaceMarker(marker, face, index, options),
+  });
+}
+
+const PERSON_HTML = `<span class="person-emoji" aria-hidden="true"></span><input class="person-name" type="text" maxlength="${MAX_NAME}" autocomplete="off" enterkeyhint="next" /><button type="button" class="icon-btn person-remove">×</button>`;
+
+function createPersonRow(face: Face): HTMLElement {
+  const row = document.createElement('li');
+  row.className = 'person-row';
+  row.dataset.id = face.id;
+  row.innerHTML = PERSON_HTML;
+  return row;
+}
+
+function updatePersonRow(row: HTMLElement, face: Face, index: number, count: number) {
+  const input = row.querySelector('input')!;
+  const remove = row.querySelector('button')!;
+  row.querySelector('.person-emoji')!.textContent = face.emoji;
+  row.classList.toggle('is-paid', face.paid);
+  input.placeholder = es.faces.person(index + 1);
+  input.setAttribute('aria-label', es.faces.nameLabel(index + 1));
+  // While someone types, the field is the source of truth.
+  if (document.activeElement !== input) input.value = face.name ?? '';
+  remove.setAttribute('aria-label', es.faces.remove(personName(face, index)));
+  remove.disabled = count <= 1;
+}
+
+// Without a photo people are edited as a list, one row per person.
+export function syncPeople(list: HTMLElement, rows: Map<string, HTMLElement>, faces: Face[]) {
+  syncKeyed(list, rows, faces, { create: createPersonRow, refresh: (row, face, index) => updatePersonRow(row, face, index, faces.length) });
 }
 
 export function fitStageToPhoto(photo: HTMLImageElement, stageArea: HTMLElement) {

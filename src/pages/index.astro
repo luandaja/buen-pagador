@@ -2,7 +2,6 @@
 import Layout from '../components/Layout.astro';
 import Progress from '../components/Progress.astro';
 import { es } from '../i18n/es';
-import { MAX_PEOPLE } from '../scripts/faces';
 
 const { upload, toolbar, game, pay, steps, share, image, history } = es;
 ---
@@ -27,9 +26,9 @@ const { upload, toolbar, game, pay, steps, share, image, history } = es;
         <span class="dropzone-note">{upload.note}</span>
       </label>
       <form class="no-photo" id="noPhoto">
-        <label for="startCount">{upload.noPhoto}</label>
+        <label for="startPeople">{upload.noPhoto}</label>
         <div class="no-photo-row">
-          <input id="startCount" class="count-input" type="number" inputmode="numeric" min="1" max={MAX_PEOPLE} placeholder="10" required />
+          <textarea id="startPeople" rows="1" maxlength="4000" placeholder={upload.noPhotoPlaceholder} required></textarea>
           <button type="submit" class="secondary small">{upload.noPhotoStart}</button>
         </div>
       </form>
@@ -38,13 +37,7 @@ const { upload, toolbar, game, pay, steps, share, image, history } = es;
         <div class="stage-toolbar">
           <div class="segmented" id="modes" role="group" aria-label={toolbar.mode}>
             <button type="button" aria-pressed="true" data-mode="pay">{toolbar.pay}</button>
-            <button type="button" aria-pressed="false" data-mode="edit">{toolbar.edit}</button>
-          </div>
-          <div class="headcount" id="headcountBox" role="group" aria-labelledby="headcountLabel" hidden>
-            <label id="headcountLabel" for="headcount">{toolbar.people}</label>
-            <button type="button" class="icon-btn" id="fewer" data-step="-1" aria-label={toolbar.fewer}>−</button>
-            <input id="headcount" class="count-input" type="number" inputmode="numeric" min="1" max={MAX_PEOPLE} />
-            <button type="button" class="icon-btn" id="more" data-step="1" aria-label={toolbar.more}>+</button>
+            <button type="button" aria-pressed="false" data-mode="edit" id="editMode">{toolbar.edit}</button>
           </div>
           <div class="toolbar-actions">
             <button type="button" class="ghost" id="peek" aria-pressed="false" title={toolbar.peekTitle}>
@@ -70,6 +63,10 @@ const { upload, toolbar, game, pay, steps, share, image, history } = es;
               <p id="scanText">{upload.scanning}</p>
             </div>
           </div>
+        </div>
+        <div class="people-editor" id="peopleEditor" hidden>
+          <ol class="people-list" id="peopleList" aria-label={toolbar.editPeople}></ol>
+          <button type="button" class="secondary small" id="addPerson"><span aria-hidden="true">+</span>&nbsp;{toolbar.addPerson}</button>
         </div>
       </div>
     </section>
