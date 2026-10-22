@@ -21,7 +21,7 @@ import {
   type Mode,
 } from './faces';
 import { deleteGame, findByShareId, listGames, loadGame, saveGame } from './games';
-import { renderHistory } from './history';
+import { othersVisits, renderHistory } from './history';
 import { expiryText } from './links';
 import { canvasToBlob, fileToDataUrl, qrFromFile, thumbFrom } from './image';
 import {
@@ -52,6 +52,7 @@ import {
   type State,
 } from './state';
 import { byId, fitStageToPhoto, gameMetaText, progressElements, progressView, renderTotals, syncFaces, syncPeople } from './view';
+import { listVisits } from './visited';
 
 const elements = {
   dropzone: byId<HTMLLabelElement>('dropzone'),
@@ -819,14 +820,15 @@ elements.stopLink.addEventListener('click', () => {
 });
 
 async function refreshHistoryCount() {
-  const count = (await listGames()).length;
+  const games = await listGames();
+  const count = games.length + othersVisits(listVisits(), games).length;
   elements.historyCount.hidden = count === 0;
   elements.historyCount.textContent = String(count);
   elements.historyCountLabel.textContent = es.history.countLabel(count);
 }
 
 async function renderHistoryList() {
-  renderHistory({ list: elements.historyList, summary: elements.historySummary, empty: elements.historyEmpty }, await listGames(), state.id);
+  renderHistory({ list: elements.historyList, summary: elements.historySummary, empty: elements.historyEmpty }, await listGames(), state.id, listVisits());
 }
 
 async function switchTo(game: Game) {
