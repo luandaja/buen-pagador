@@ -3,7 +3,7 @@ import { es } from '../i18n/es';
 import { bytesToDataUrl, shareImageBytes } from './image';
 import { expiresAtFrom } from './links';
 import { PUBLIC_PATH } from './routes';
-import type { Face, State } from './state';
+import { computeTotals, type Face, type Game, type State } from './state';
 
 export interface ShareLink {
   id: string;
@@ -18,6 +18,8 @@ export interface SharedState {
   schemaVersion: number;
   title: string;
   cost: number | null;
+  quota: number | null;
+  hideTotal: boolean;
   currency: string;
   rounding: number;
   faces: Face[];
@@ -68,10 +70,14 @@ const COORDINATE_PRECISION = 10000;
 const roundCoordinate = (value: number) => Math.round(value * COORDINATE_PRECISION) / COORDINATE_PRECISION;
 
 export function toShared(state: State): SharedState {
+  // A hidden total never leaves the device: the link carries only the share each person pays.
+  const hidden = state.hideTotal;
   return {
     schemaVersion: SCHEMA_VERSION,
     title: state.title,
-    cost: state.cost,
+    cost: hidden ? null : state.cost,
+    quota: hidden ? computeTotals(state).share : state.quota,
+    hideTotal: hidden,
     currency: state.currency,
     rounding: state.rounding,
     faces: state.faces.map((face) => ({
@@ -82,6 +88,13 @@ export function toShared(state: State): SharedState {
       h: roundCoordinate(face.h),
     })),
   };
+}
+
+// With the total hidden the link has no cost and a derived quota, so a device that already knows them keeps its own.
+export function fromShared(shared: SharedState, local: Pick<Game, 'cost' | 'quota'>): Partial<Game> {
+  const { schemaVersion, cost, quota, ...fields } = shared;
+  const keepLocal = shared.hideTotal && (local.cost != null || local.quota != null);
+  return keepLocal ? fields : { ...fields, cost, quota };
 }
 
 const errorText = (body: { error?: string }) => es.errors[body.error ?? 'network'] ?? es.errors.network;
@@ -97,11 +110,10 @@ export async function request<T>(path: string, init: RequestInit = {}, token?: s
 }
 
 export async function createShare(state: State): Promise<ShareLink> {
-  if (!state.image) throw new ShareError(es.errors.no_photo, 400);
   const { key, raw } = await newKey();
   const pay = payOf(state);
   const [encryptedImage, encryptedState, encryptedPay] = await Promise.all([
-    shareImageBytes(state.image).then((bytes) => encrypt(key, bytes)),
+    state.image ? shareImageBytes(state.image).then((bytes) => encrypt(key, bytes)) : undefined,
     encryptJson(key, toShared(state)),
     hasPay(pay) ? encryptJson(key, pay) : undefined,
   ]);
@@ -143,7 +155,7 @@ export interface Loaded {
 type RawShare = { state: string; v: number; pv?: number; img?: string; pay?: string; canEdit?: boolean; ttl?: number };
 
 async function decryptShare(key: CryptoKey, encrypted: RawShare): Promise<Loaded> {
-  const state = { schemaVersion: 1, ...(await decryptJson<Partial<SharedState>>(key, encrypted.state)) } as SharedState;
+  const state = { schemaVersion: 1, quota: null, hideTotal: false, ...(await decryptJson<Partial<SharedState>>(key, encrypted.state)) } as SharedState;
   const image = encrypted.img ? await bytesToDataUrl(await decrypt(key, encrypted.img)) : undefined;
   const pay = encrypted.pay ? await decryptJson<PayInfo>(key, encrypted.pay) : undefined;
   return { state, v: encrypted.v, pv: encrypted.pv ?? 0, image, pay, canEdit: encrypted.canEdit, expiresAt: expiresAtFrom(encrypted.ttl) };

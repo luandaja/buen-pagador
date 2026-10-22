@@ -1,7 +1,7 @@
 import { es } from '../i18n/es';
 import { computeTotals, money, type Face, type Totals } from './state';
 
-type TotalsInput = { faces: Face[]; cost: number | null; currency: string; rounding: number };
+type TotalsInput = { faces: Face[]; cost: number | null; quota?: number | null; hideTotal?: boolean; currency: string; rounding: number };
 
 export const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -12,6 +12,7 @@ export function progressElements() {
     hero: byId<HTMLParagraphElement>('heroOut'),
     paidOut: byId<HTMLSpanElement>('paidOut'),
     meter: byId<HTMLDivElement>('thermo'),
+    sums: byId<HTMLParagraphElement>('progressSums'),
     shareLabel: byId<HTMLSpanElement>('shareLabel'),
     shareOut: byId<HTMLElement>('shareOut'),
     collectedOut: byId<HTMLElement>('collectedOut'),
@@ -21,10 +22,11 @@ export function progressElements() {
 
 export type ProgressElements = ReturnType<typeof progressElements>;
 
-export function gameMetaText(game: Pick<TotalsInput, 'faces' | 'cost' | 'currency'>): string {
+export function gameMetaText(game: Pick<TotalsInput, 'faces' | 'cost' | 'quota' | 'currency'>): string {
   const people = game.faces.length;
   const parts = [
     game.cost ? es.game.metaCost(money(game.cost, game.currency)) : '',
+    game.quota ? es.game.metaQuota(money(game.quota, game.currency)) : '',
     people ? es.game.metaPlayers(people) : '',
   ].filter(Boolean);
   return parts.length ? parts.join(' · ') : es.game.metaEmpty;
@@ -32,9 +34,9 @@ export function gameMetaText(game: Pick<TotalsInput, 'faces' | 'cost' | 'currenc
 
 const MAX_SEGMENTS = 40;
 
-type ProgressView = { label: string; hero: string; full: boolean; aside?: { label: string; value: string } };
+type ProgressView = { label: string; hero: string; full: boolean; aside?: { label: string; value: string }; noSums?: boolean };
 
-export function progressView(totals: Totals, game: Pick<TotalsInput, 'cost' | 'currency'>, isOwner: boolean): ProgressView {
+function baseView(totals: Totals, game: Pick<TotalsInput, 'cost' | 'currency'>, isOwner: boolean): ProgressView {
   const pending = totals.people - totals.paid;
   const copy = es.progress;
   if (totals.people === 0) return { label: copy.noPlayers, hero: '—', full: false };
@@ -57,6 +59,14 @@ export function progressView(totals: Totals, game: Pick<TotalsInput, 'cost' | 'c
   return { label: copy.pendingLabel, hero: copy.pendingHero(pending, totals.people), full: false };
 }
 
+export function progressView(totals: Totals, game: Pick<TotalsInput, 'cost' | 'hideTotal' | 'currency'>, isOwner: boolean): ProgressView {
+  const view = baseView(totals, game, isOwner);
+  if (isOwner || !game.hideTotal) return view;
+  // A hidden total leaves only the share: the link carries no cost, and the collected and missing sums go away.
+  const { aside, ...shareOnly } = view;
+  return { ...shareOnly, hero: view.full ? `${totals.people}/${totals.people}` : view.hero, noSums: true };
+}
+
 function renderMeter(meter: HTMLElement, totals: Totals) {
   const percent = Math.round(totals.paidRatio * 100);
   meter.style.setProperty('--pct', String(totals.paidRatio));
@@ -74,6 +84,7 @@ export function renderTotals(elements: ProgressElements, game: TotalsInput, mess
   elements.progress.classList.toggle('is-full', view.full);
   elements.paidOut.textContent = `${totals.paid}/${totals.people}`;
   renderMeter(elements.meter, totals);
+  elements.sums.hidden = !!view.noSums;
   elements.shareLabel.textContent = view.aside?.label ?? es.progress.share;
   elements.shareOut.textContent = view.aside?.value ?? money(totals.share, game.currency);
   elements.shareOut.classList.toggle('is-accent', !view.aside);
@@ -85,7 +96,8 @@ export function renderTotals(elements: ProgressElements, game: TotalsInput, mess
 const FACE_HTML =
   '<span class="face-ring"></span><span class="face-emoji"></span><span class="face-check">✓</span><span class="face-remove">×</span>';
 
-type FaceOptions = { interactive: boolean; label: (face: Face, index: number) => string };
+// Without a photo the faces sit in a grid, so they carry no position.
+type FaceOptions = { interactive: boolean; grid?: boolean; label: (face: Face, index: number) => string };
 
 function createFaceMarker(face: Face, interactive: boolean): HTMLElement {
   const marker = document.createElement(interactive ? 'button' : 'span');
@@ -98,11 +110,16 @@ function createFaceMarker(face: Face, interactive: boolean): HTMLElement {
   return marker;
 }
 
-function updateFaceMarker(marker: HTMLElement, face: Face, index: number, options: FaceOptions) {
+function placeMarker(marker: HTMLElement, face: Face, grid = false) {
+  if (grid) return marker.removeAttribute('style');
   marker.style.left = `${face.x * 100}%`;
   marker.style.top = `${face.y * 100}%`;
   marker.style.width = `${face.w * 100}%`;
   marker.style.height = `${face.h * 100}%`;
+}
+
+function updateFaceMarker(marker: HTMLElement, face: Face, index: number, options: FaceOptions) {
+  placeMarker(marker, face, options.grid);
   marker.querySelector('.face-emoji')!.textContent = face.emoji;
   if (!face.paid) marker.classList.remove('is-settled');
   marker.classList.toggle('is-paid', face.paid);

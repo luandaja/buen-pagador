@@ -8,7 +8,9 @@ import {
   faceLabel,
   fileName,
   removeFace,
+  MAX_PEOPLE,
   rerollEmojis,
+  setHeadcount,
   statusMessage,
   togglePaid,
   type Mode,
@@ -20,6 +22,7 @@ import { canvasToBlob, fileToDataUrl, qrFromFile, thumbFrom } from './image';
 import {
   createShare,
   deleteShare,
+  fromShared,
   loadShare,
   masterUrl,
   parseMasterHash,
@@ -31,6 +34,7 @@ import {
 } from './share';
 import {
   computeTotals,
+  isStarted,
   loadPrefs,
   newGame,
   pickEmojis,
@@ -47,6 +51,8 @@ import { byId, fitStageToPhoto, gameMetaText, progressElements, progressView, re
 const elements = {
   dropzone: byId<HTMLLabelElement>('dropzone'),
   file: byId<HTMLInputElement>('file'),
+  noPhoto: byId<HTMLFormElement>('noPhoto'),
+  startCount: byId<HTMLInputElement>('startCount'),
   stageWrap: byId<HTMLDivElement>('stageWrap'),
   stageArea: byId<HTMLDivElement>('stageArea'),
   stage: byId<HTMLDivElement>('stage'),
@@ -58,6 +64,11 @@ const elements = {
   blockedBar: byId<HTMLParagraphElement>('blockedBar'),
   blockedList: byId<HTMLSpanElement>('blockedList'),
   unblock: byId<HTMLButtonElement>('unblock'),
+  modes: byId<HTMLDivElement>('modes'),
+  headcountBox: byId<HTMLDivElement>('headcountBox'),
+  headcount: byId<HTMLInputElement>('headcount'),
+  fewer: byId<HTMLButtonElement>('fewer'),
+  more: byId<HTMLButtonElement>('more'),
   reroll: byId<HTMLButtonElement>('reroll'),
   peek: byId<HTMLButtonElement>('peek'),
   newPhoto: byId<HTMLButtonElement>('newPhoto'),
@@ -77,7 +88,10 @@ const elements = {
   payChipNote: byId<HTMLSpanElement>('payChipNote'),
   currency: byId<HTMLInputElement>('currency'),
   cost: byId<HTMLInputElement>('cost'),
+  quota: byId<HTMLInputElement>('quota'),
+  quotaCurrency: byId<HTMLSpanElement>('quotaCurrency'),
   rounding: byId<HTMLSelectElement>('rounding'),
+  hideTotal: byId<HTMLInputElement>('hideTotal'),
   steps: byId<HTMLOListElement>('steps'),
   progressWrap: byId<HTMLDivElement>('progressWrap'),
   dockSum: byId<HTMLParagraphElement>('dockSum'),
@@ -97,6 +111,7 @@ const elements = {
   stopLink: byId<HTMLButtonElement>('stopLink'),
   announce: byId<HTMLParagraphElement>('announce'),
   openHistory: byId<HTMLButtonElement>('openHistory'),
+  newGameTop: byId<HTMLButtonElement>('newGameTop'),
   historyCount: byId<HTMLSpanElement>('historyCount'),
   historyCountLabel: byId<HTMLSpanElement>('historyCountLabel'),
   historyStatus: byId<HTMLParagraphElement>('historyStatus'),
@@ -115,7 +130,7 @@ const HINTS: Record<Mode, string> = {
   edit: es.hints.edit,
 };
 
-const SHARED_FIELDS: (keyof State)[] = ['faces', 'cost', 'currency', 'title', 'rounding'];
+const SHARED_FIELDS: (keyof State)[] = ['faces', 'cost', 'quota', 'hideTotal', 'currency', 'title', 'rounding'];
 const PAY_FIELDS: (keyof State)[] = ['payNote', 'payQr'];
 const GAME_FIELDS: (keyof State)[] = [...SHARED_FIELDS, ...PAY_FIELDS, 'image', 'share'];
 
@@ -149,8 +164,10 @@ async function restore(): Promise<State> {
   return { ...game, faces: refreshEmojis(game.faces, prefs.blocked), includePhoto: prefs.includePhoto, blocked: prefs.blocked };
 }
 
+const needsCost = (game: Game) => !game.cost && !game.quota;
+
 let state: State = await restore();
-formOpen = !state.cost;
+formOpen = needsCost(state);
 
 let saveTimer = 0;
 function persist() {
@@ -162,7 +179,7 @@ async function flush() {
   clearTimeout(saveTimer);
   const { game, prefs } = splitState(state);
   savePrefs(prefs);
-  if (!game.image) return;
+  if (!isStarted(game)) return;
   await saveGame(game);
   await refreshHistoryCount();
 }
@@ -189,10 +206,12 @@ function update(patch: Partial<State>, sync = true) {
   if (sync && state.share) queueShareSync(patch);
 }
 
+const modeHint = () => (state.image ? HINTS[mode] : es.hints.grid);
+
 function setMode(next: Mode) {
   mode = next;
   elements.stage.classList.toggle('is-edit', mode === 'edit');
-  elements.hint.textContent = HINTS[mode];
+  elements.hint.textContent = modeHint();
   document.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((button) => {
     button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
   });
@@ -200,7 +219,11 @@ function setMode(next: Mode) {
 }
 
 function renderFaces() {
-  syncFaces(elements.faces, faceMarkers, state.faces, { interactive: true, label: (face, index) => faceLabel(face, index, mode) });
+  syncFaces(elements.faces, faceMarkers, state.faces, {
+    interactive: true,
+    grid: !state.image,
+    label: (face, index) => faceLabel(face, index, mode),
+  });
 }
 
 function renderPay() {
@@ -216,11 +239,19 @@ function renderPay() {
   if (qrImage) elements.payChipQr.src = qrImage;
 }
 
+function renderQuota() {
+  const autoShare = computeTotals({ ...state, quota: null }).share;
+  elements.quota.placeholder = autoShare == null ? '' : String(Math.round(autoShare * 100) / 100);
+  elements.quotaCurrency.textContent = state.currency;
+  elements.rounding.disabled = !!state.quota;
+}
+
 function renderGameCard() {
   elements.gameTitle.textContent = state.title.trim() || es.game.newGame;
   elements.gameMeta.textContent = gameMetaText(state);
   elements.gameForm.hidden = !formOpen;
   elements.editGame.setAttribute('aria-expanded', String(formOpen));
+  renderQuota();
   renderPay();
 }
 
@@ -230,11 +261,11 @@ const isSettled = () => {
 };
 
 function renderProgress() {
-  const hasImage = !!state.image;
-  elements.steps.hidden = hasImage;
-  const completedSteps = [hasImage, !!state.cost, !!state.share];
+  const started = isStarted(state);
+  elements.steps.hidden = started;
+  const completedSteps = [started, !needsCost(state), !!state.share];
   elements.steps.querySelectorAll('li').forEach((step, index) => step.classList.toggle('is-done', completedSteps[index]));
-  elements.progressWrap.hidden = !hasImage;
+  elements.progressWrap.hidden = !started;
   const totals = renderTotals(progressOutputs, state, statusMessage(state, scanning));
   const view = progressView(totals, state, true);
   elements.dockSum.textContent = `${view.label} ${view.hero} · ${totals.paid}/${totals.people}`;
@@ -250,28 +281,46 @@ function linkActionLabel() {
 
 function renderLink() {
   const link = state.share;
+  const started = isStarted(state);
   if (!copiedRecently) elements.linkAction.textContent = linkActionLabel();
-  elements.linkAction.disabled = !state.image || scanning || creating;
-  elements.linkAction.title = state.image ? '' : es.share.needsPhoto;
-  elements.linkShare.hidden = !state.image;
-  elements.panelActions.hidden = !state.image;
+  elements.linkAction.disabled = !started || scanning || creating;
+  elements.linkAction.title = started ? '' : es.share.needsPhoto;
+  elements.linkShare.hidden = !started;
+  elements.panelActions.hidden = !started;
   elements.linkReady.hidden = !link;
   elements.masterBox.hidden = !link;
   elements.publicUrl.textContent = link ? publicUrl(link) : '';
   elements.linkExpiry.textContent = expiryText(link?.expiresAt);
 }
 
+// Without a photo the stage is a grid of people and the toolbar edits how many there are.
+function renderStage() {
+  const grid = !state.image;
+  elements.stageArea.classList.toggle('is-grid', grid);
+  elements.modes.hidden = grid;
+  elements.peek.hidden = grid;
+  elements.headcountBox.hidden = !grid;
+  elements.newPhoto.textContent = grid ? es.upload.addPhoto : es.upload.changePhoto;
+  elements.fewer.disabled = state.faces.length <= 1;
+  elements.more.disabled = state.faces.length >= MAX_PEOPLE;
+  if (document.activeElement !== elements.headcount) elements.headcount.value = String(state.faces.length);
+  if (state.image && elements.photo.getAttribute('src') !== state.image) elements.photo.src = state.image;
+}
+
 function render() {
-  const hasImage = !!state.image;
-  elements.dropzone.hidden = hasImage;
-  elements.stageWrap.hidden = !hasImage;
-  if (hasImage && elements.photo.getAttribute('src') !== state.image) elements.photo.src = state.image!;
+  const started = isStarted(state);
+  elements.dropzone.hidden = started;
+  elements.noPhoto.hidden = started;
+  elements.stageWrap.hidden = !started;
   elements.scanning.hidden = !scanning;
   elements.openHistory.disabled = scanning || creating;
-  elements.download.disabled = scanning || !hasImage;
-  elements.share.disabled = scanning || !hasImage;
+  elements.newGameTop.hidden = !started;
+  elements.newGameTop.disabled = scanning || creating;
+  elements.download.disabled = scanning || !started;
+  elements.share.disabled = scanning || !started;
   elements.blockedBar.hidden = state.blocked.length === 0;
   elements.blockedList.textContent = state.blocked.join(' ');
+  renderStage();
   renderFaces();
   renderGameCard();
   renderProgress();
@@ -283,7 +332,9 @@ function fillForm() {
   elements.payNote.value = state.payNote;
   elements.currency.value = state.currency;
   elements.cost.value = state.cost == null ? '' : String(state.cost);
+  elements.quota.value = state.quota == null ? '' : String(state.quota);
   elements.rounding.value = String(state.rounding);
+  elements.hideTotal.checked = state.hideTotal;
   elements.includePhoto.checked = state.includePhoto;
 }
 
@@ -356,6 +407,28 @@ elements.dropzone.addEventListener('dragleave', setDragOver(false));
 elements.dropzone.addEventListener('drop', (event) => {
   setDragOver(false)(event);
   handleFile(event.dataTransfer?.files?.[0]);
+});
+
+const setPeople = (count: number) => update({ faces: setHeadcount(state.faces, count, state.blocked) });
+
+elements.noPhoto.addEventListener('submit', (event) => {
+  event.preventDefault();
+  setPeople(elements.startCount.valueAsNumber);
+  elements.startCount.value = '';
+  setMode('pay');
+  elements.more.focus();
+});
+
+// Typed counts apply on change, so passing through "1" on the way to "12" does not drop people.
+elements.headcount.addEventListener('change', () => {
+  const count = elements.headcount.valueAsNumber;
+  if (Number.isFinite(count)) setPeople(count);
+  elements.headcount.value = String(state.faces.length);
+});
+
+elements.headcountBox.addEventListener('click', (event) => {
+  const step = (event.target as HTMLElement).closest<HTMLElement>('[data-step]')?.dataset.step;
+  if (step) setPeople(state.faces.length + Number(step));
 });
 
 elements.newPhoto.addEventListener('click', () => {
@@ -449,7 +522,7 @@ elements.faces.addEventListener(
 
 elements.unblock.addEventListener('click', () => {
   update({ blocked: [] });
-  elements.hint.textContent = HINTS[mode];
+  elements.hint.textContent = modeHint();
 });
 
 function setPeek(isPeeking: boolean) {
@@ -490,7 +563,9 @@ elements.payQrFile.addEventListener('change', async () => {
 elements.payQrRemove.addEventListener('click', () => update({ payQr: null }));
 elements.currency.addEventListener('input', () => update({ currency: elements.currency.value.trim() }));
 elements.cost.addEventListener('input', () => update({ cost: parseCost(elements.cost.value) }));
+elements.quota.addEventListener('input', () => update({ quota: parseCost(elements.quota.value) }));
 elements.rounding.addEventListener('change', () => update({ rounding: parseFloat(elements.rounding.value) }));
+elements.hideTotal.addEventListener('change', () => update({ hideTotal: elements.hideTotal.checked }));
 elements.includePhoto.addEventListener('change', () => update({ includePhoto: elements.includePhoto.checked }));
 
 async function buildFile() {
@@ -607,7 +682,9 @@ const payFields = (pay?: PayInfo): Partial<State> => (pay ? { payNote: pay.note,
 async function pullShared(link: ShareLink) {
   try {
     const loaded = await loadShare(link, false, true);
-    if (state.share?.id === link.id) update({ ...loaded.state, ...payFields(loaded.pay), share: { ...state.share, expiresAt: loaded.expiresAt } }, false);
+    if (state.share?.id === link.id) {
+      update({ ...fromShared(loaded.state, state), ...payFields(loaded.pay), share: { ...state.share, expiresAt: loaded.expiresAt } }, false);
+    }
     setSync(LIVE_STATUS, 'ok');
   } catch (error) {
     if (!dropLinkOnLoss(error)) setSync(es.share.offlineLocal, 'error');
@@ -709,7 +786,7 @@ async function switchTo(game: Game) {
   setPeek(false);
   setSync('');
   state = { ...game, faces: refreshEmojis(game.faces, state.blocked), includePhoto: state.includePhoto, blocked: state.blocked };
-  formOpen = !state.cost;
+  formOpen = needsCost(state);
   fillForm();
   setMode('pay');
   render();
@@ -721,8 +798,17 @@ function ensureThumb() {
   if (state.image && !state.thumb) makeThumb(state.image);
 }
 
-type GameBase = Pick<Game, 'title' | 'cost' | 'currency' | 'rounding' | 'payNote' | 'payQr'>;
-const baseOf = ({ title, cost, currency, rounding, payNote, payQr }: GameBase): GameBase => ({ title, cost, currency, rounding, payNote, payQr });
+type GameBase = Pick<Game, 'title' | 'cost' | 'quota' | 'hideTotal' | 'currency' | 'rounding' | 'payNote' | 'payQr'>;
+const baseOf = ({ title, cost, quota, hideTotal, currency, rounding, payNote, payQr }: GameBase): GameBase => ({
+  title,
+  cost,
+  quota,
+  hideTotal,
+  currency,
+  rounding,
+  payNote,
+  payQr,
+});
 
 async function startNewGame(base: Partial<GameBase> = { currency: state.currency, rounding: state.rounding }) {
   elements.history.close();
@@ -800,6 +886,7 @@ elements.history.addEventListener('click', (event) => {
   });
 });
 elements.newGame.addEventListener('click', () => startNewGame());
+elements.newGameTop.addEventListener('click', () => startNewGame());
 
 async function gameForLink(link: ShareLink): Promise<Game> {
   const existing = await findByShareId(link.id);
@@ -814,7 +901,7 @@ async function openMasterLink(link: ShareLink) {
     const base = await gameForLink(link);
     const image = loaded.image ?? base.image;
     const thumb = base.thumb ?? (image ? await thumbFrom(image).catch(() => null) : null);
-    await switchTo({ ...base, ...loaded.state, ...payFields(loaded.pay), image, thumb, share: link, updatedAt: Date.now() });
+    await switchTo({ ...base, ...fromShared(loaded.state, base), ...payFields(loaded.pay), image, thumb, share: link, updatedAt: Date.now() });
     setSync(LIVE_STATUS, 'ok');
   } catch (error) {
     console.error(error);

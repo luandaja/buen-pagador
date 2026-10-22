@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { Redis } from '@upstash/redis';
 
 export interface ShareRecord {
-  img: string;
+  img?: string;
   state: string;
   edit: string;
   v: number;
@@ -58,8 +58,8 @@ class RedisStore implements Store {
   async create(id: string, record: ShareRecord) {
     const key = PREFIX + id;
     const transaction = this.redis.multi();
-    const { pay, pv, ...requiredFields } = record;
-    transaction.hset(key, { ...requiredFields, v: String(requiredFields.v), pv: String(pv ?? 0), ...(pay ? { pay } : {}) });
+    const { img, pay, pv, ...requiredFields } = record;
+    transaction.hset(key, { ...requiredFields, v: String(requiredFields.v), pv: String(pv ?? 0), ...(img ? { img } : {}), ...(pay ? { pay } : {}) });
     transaction.expire(key, TTL_SECONDS);
     await transaction.exec();
   }

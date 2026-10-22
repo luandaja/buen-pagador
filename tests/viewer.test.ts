@@ -77,6 +77,24 @@ describe('public view', () => {
     expect(textOf('paidOut')).toBe('1/2');
   });
 
+  it('shows the people in a grid when the game has no photo', async () => {
+    await openPublicView(undefined, { image: null });
+    await panelVisible();
+    expect(byId('stageArea').classList.contains('is-grid')).toBe(true);
+    expect(faceMarkers()).toHaveLength(2);
+    expect(faceMarkers()[0].hasAttribute('style')).toBe(false);
+    expect(byId('photo').hasAttribute('src')).toBe(false);
+  });
+
+  it('shows only each person\'s share when the total is hidden', async () => {
+    await openPublicView(undefined, { quota: 35, hideTotal: true });
+    await panelVisible();
+    expect(textOf('progressLabel')).toBe(es.progress.publicShare);
+    expect(textOf('heroOut')).toBe(money(35, 'S/'));
+    expect(byId('progressSums').hidden).toBe(true);
+    expect(byId('panel').textContent).not.toContain(money(60, 'S/'));
+  });
+
   it('refreshes when the tab becomes visible again', async () => {
     const link = await openPublicView();
     await eventually(() => expect(textOf('paidOut')).toBe('1/2'));

@@ -21,6 +21,13 @@ describe('court preview', () => {
     expect(await loadPreview()).toBeNull();
   });
 
+  it('previews a game without photo once it has people', async () => {
+    const game = { ...newGame({ title: 'Jueves', quota: 10 }), faces: [{ id: 'a', x: 0, y: 0, w: 0, h: 0, emoji: '🐸', paid: false }] };
+    await saveGame(game);
+    savePrefs({ includePhoto: true, blocked: [], currentGameId: game.id });
+    expect(await loadPreview()).toMatchObject({ image: null, shared: { quota: 10, faces: [{ id: 'a' }] } });
+  });
+
   it('builds what the public viewer shows, with payment details only when present', async () => {
     const game = { ...newGame({ title: 'Jueves', cost: 100 }), image: 'data:image/jpeg;base64,FOTO' };
     await saveGame(game);

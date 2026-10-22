@@ -5,7 +5,7 @@ import { computeTotals, money, type Face, type State, type Totals } from './stat
 type Context = CanvasRenderingContext2D;
 type Box = { x: number; y: number; w: number; h: number };
 export type CardInput = Pick<State, 'image' | 'faces' | 'cost' | 'currency' | 'title' | 'rounding' | 'includePhoto'> &
-  Partial<Pick<State, 'payNote' | 'payQr'>>;
+  Partial<Pick<State, 'quota' | 'hideTotal' | 'payNote' | 'payQr'>>;
 
 const COLORS = {
   court: '#2340c8',
@@ -68,13 +68,12 @@ export function statusLine(totals: Totals): { text: string; done: boolean } {
   return { text: es.card.pending(Math.round(totals.paidRatio * 100), pending), done: false };
 }
 
-export function statCells(state: Pick<State, 'cost' | 'currency'>, totals: Totals): [string, string][] {
-  return [
-    [es.card.stats.cost, money(state.cost, state.currency)],
-    [es.card.stats.share, money(totals.share, state.currency)],
-    [es.card.stats.paid, `${totals.paid}/${totals.people}`],
-    [es.card.stats.missing, money(totals.missing, state.currency)],
-  ];
+export function statCells(state: Pick<CardInput, 'cost' | 'currency' | 'hideTotal'>, totals: Totals): [string, string][] {
+  const share: [string, string] = [es.card.stats.share, money(totals.share, state.currency)];
+  const paid: [string, string] = [es.card.stats.paid, `${totals.paid}/${totals.people}`];
+  // The image goes to the same group as the link, so a hidden total stays hidden here too.
+  if (state.hideTotal) return [share, paid];
+  return [[es.card.stats.cost, money(state.cost, state.currency)], share, paid, [es.card.stats.missing, money(totals.missing, state.currency)]];
 }
 
 function drawBall(ctx: Context, centerX: number, centerY: number, radius: number) {
@@ -204,6 +203,7 @@ function drawPercent(ctx: Context, state: CardInput, totals: Totals, box: Box) {
   const fontSize = fitText(ctx, percentText, box.w, 280, 900, DISPLAY);
   const baseline = box.y + box.h / 2 + fontSize * 0.3;
   ctx.fillText(percentText, box.x, baseline);
+  if (!state.cost || state.hideTotal) return;
   ctx.font = `600 40px ${BODY}`;
   ctx.fillStyle = COLORS.chalkDim;
   ctx.fillText(es.card.collectedOf(money(totals.collected, state.currency), money(state.cost, state.currency)), box.x + 6, baseline + 64);
@@ -264,7 +264,7 @@ function drawStats(ctx: Context, cells: [string, string][]) {
     ctx.fillStyle = COLORS.chalkDim;
     ctx.font = `700 22px ${BODY}`;
     ctx.fillText(label, centerX, top + 48);
-    ctx.fillStyle = index === 1 ? COLORS.ball : COLORS.chalk;
+    ctx.fillStyle = label === es.card.stats.share ? COLORS.ball : COLORS.chalk;
     fitText(ctx, value, cellWidth - 24, 60, 800, DISPLAY);
     ctx.fillText(value, centerX, top + 108);
   });

@@ -1,6 +1,6 @@
 import { es } from '../i18n/es';
 import type { DetectedBox } from './detect';
-import { createId, DEBTOR_EMOJIS, pickEmojis, type Face, type State } from './state';
+import { createId, DEBTOR_EMOJIS, isStarted, pickEmojis, type Face, type State } from './state';
 
 export type Mode = 'pay' | 'edit';
 
@@ -44,6 +44,20 @@ export function addFaceAt(faces: Face[], centerX: number, centerY: number, aspec
   return [...faces, newFace];
 }
 
+export const MAX_PEOPLE = 60;
+
+// Without a photo the people are just a count. Removing drops the latest who still owe, so a payment is not lost by accident.
+export function setHeadcount(faces: Face[], count: number, blocked: string[]): Face[] {
+  const target = Math.min(MAX_PEOPLE, Math.max(1, Math.round(count)));
+  if (target <= faces.length) {
+    const dropOrder = [...faces].reverse().sort((first, second) => Number(first.paid) - Number(second.paid));
+    const dropped = new Set(dropOrder.slice(0, faces.length - target).map((face) => face.id));
+    return faces.filter((face) => !dropped.has(face.id));
+  }
+  const emojis = pickEmojis(target - faces.length, faces.map((face) => face.emoji), blocked);
+  return [...faces, ...emojis.map((emoji) => ({ id: createId(), x: 0, y: 0, w: 0, h: 0, emoji, paid: false }))];
+}
+
 export const rerollEmojis = (faces: Face[], blocked: string[]): Face[] => {
   const emojis = pickEmojis(faces.length, [], blocked);
   return faces.map((face, index) => ({ ...face, emoji: emojis[index] }));
@@ -73,12 +87,12 @@ export function faceLabel(face: Face, index: number, mode: Mode): string {
   return face.paid ? es.faces.paidUndo(position) : es.faces.owesMark(position);
 }
 
-export function statusMessage(state: Pick<State, 'image' | 'faces' | 'cost'>, scanning: boolean): string | undefined {
+export function statusMessage(state: Pick<State, 'image' | 'faces' | 'cost'> & Partial<Pick<State, 'quota'>>, scanning: boolean): string | undefined {
   const pendingSteps: [boolean, string][] = [
-    [!state.image, es.status.uploadFirst],
+    [!isStarted(state), es.status.uploadFirst],
     [scanning, es.status.counting],
     [state.faces.length === 0, es.status.addPlayers],
-    [!state.cost, es.status.setCost],
+    [!state.cost && !state.quota, es.status.setCost],
   ];
   return pendingSteps.find(([isPending]) => isPending)?.[1];
 }
