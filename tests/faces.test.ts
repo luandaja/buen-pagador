@@ -15,6 +15,7 @@ import {
   MAX_PEOPLE,
   parseNames,
   peopleFrom,
+  personInitial,
   personName,
   renameFace,
   statusMessage,
@@ -119,6 +120,12 @@ describe('people without photo', () => {
   it('names people the way they are named', () => {
     expect(personName(make('a', '🐸'), 2)).toBe(es.faces.person(3));
     expect(personName({ ...make('a', '🐸'), name: 'Juan' }, 2)).toBe('Juan');
+  });
+
+  it('gives each person an initial, or their number while unnamed', () => {
+    expect(personInitial({ ...make('a', '🐸'), name: ' ñato' }, 0)).toBe('Ñ');
+    expect(personInitial({ ...make('a', '🐸'), name: '🦊 Zorro' }, 0)).toBe('🦊');
+    expect(personInitial(make('a', '🐸'), 2)).toBe('3');
   });
 });
 

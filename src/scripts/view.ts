@@ -1,5 +1,5 @@
 import { es } from '../i18n/es';
-import { MAX_NAME, personName } from './faces';
+import { MAX_NAME, personInitial, personName } from './faces';
 import { computeTotals, money, type Face, type Totals } from './state';
 
 type TotalsInput = { faces: Face[]; cost: number | null; quota?: number | null; hideTotal?: boolean; currency: string; rounding: number };
@@ -95,7 +95,7 @@ export function renderTotals(elements: ProgressElements, game: TotalsInput, mess
 }
 
 const FACE_HTML =
-  '<span class="face-ring"></span><span class="face-emoji"></span><span class="face-check">✓</span><span class="face-remove">×</span><span class="face-name"></span>';
+  '<span class="face-ring"></span><span class="face-emoji"></span><span class="face-initial" aria-hidden="true"></span><span class="face-check">✓</span><span class="face-remove">×</span><span class="face-name"></span>';
 
 // Without a photo the faces sit in a grid, so they carry no position.
 type FaceOptions = { interactive: boolean; grid?: boolean; label: (face: Face, index: number) => string };
@@ -111,8 +111,8 @@ function createFaceMarker(face: Face, interactive: boolean): HTMLElement {
   return marker;
 }
 
-function placeMarker(marker: HTMLElement, face: Face, grid = false) {
-  if (grid) return marker.removeAttribute('style');
+function placeMarker(marker: HTMLElement, face: Face, index: number, grid = false) {
+  if (grid) return marker.setAttribute('style', `--i: ${index}`);
   marker.style.left = `${face.x * 100}%`;
   marker.style.top = `${face.y * 100}%`;
   marker.style.width = `${face.w * 100}%`;
@@ -120,8 +120,9 @@ function placeMarker(marker: HTMLElement, face: Face, grid = false) {
 }
 
 function updateFaceMarker(marker: HTMLElement, face: Face, index: number, options: FaceOptions) {
-  placeMarker(marker, face, options.grid);
+  placeMarker(marker, face, index, options.grid);
   marker.querySelector('.face-emoji')!.textContent = face.emoji;
+  marker.querySelector('.face-initial')!.textContent = options.grid ? personInitial(face, index) : '';
   marker.querySelector('.face-name')!.textContent = face.name ?? '';
   if (!face.paid) marker.classList.remove('is-settled');
   marker.classList.toggle('is-paid', face.paid);
@@ -149,7 +150,13 @@ function syncKeyed(container: HTMLElement, nodes: Map<string, HTMLElement>, face
   });
 }
 
+// On a wide screen a small group stands in a ring around the center circle, with the count in the middle.
+const MAX_RING = 10;
+
 export function syncFaces(container: HTMLElement, markers: Map<string, HTMLElement>, faces: Face[], options: FaceOptions) {
+  container.classList.toggle('is-ring', !!options.grid && faces.length > 0 && faces.length <= MAX_RING);
+  container.style.setProperty('--n', String(faces.length));
+  container.dataset.count = `${faces.filter((face) => face.paid).length}/${faces.length}`;
   syncKeyed(container, markers, faces, {
     create: (face) => createFaceMarker(face, options.interactive),
     refresh: (marker, face, index) => updateFaceMarker(marker, face, index, options),
