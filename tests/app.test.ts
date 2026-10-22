@@ -679,7 +679,7 @@ describe('group link', () => {
 });
 
 describe('my games', () => {
-  it('lists grouped games and opens one', async () => {
+  it('lists my games and opens one', async () => {
     const owingGame = buildGame({ title: 'Thursday', updatedAt: 2 });
     const paidGame = settledGame({ title: 'Monday', updatedAt: 1 });
     await startEditor({ savedGames: [owingGame, paidGame], openGameId: owingGame.id });
@@ -689,7 +689,7 @@ describe('my games', () => {
     await openHistoryDrawer();
     expect(isDialogOpen()).toBe(true);
     const sectionTitles = [...document.querySelectorAll('.drawer-section')].map((heading) => heading.textContent);
-    expect(sectionTitles).toEqual([es.history.debts, es.history.settled]);
+    expect(sectionTitles).toEqual([es.history.mine]);
     expect(historyRow('Thursday').classList.contains('is-current')).toBe(true);
     expect(textOf('historySummary')).toBe(es.history.owed(money(90, 'S/'), 1));
 

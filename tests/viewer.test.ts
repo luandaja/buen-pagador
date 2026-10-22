@@ -5,6 +5,7 @@ import { resetStore } from '../src/lib/store';
 import PublicPage from '../src/pages/view.astro';
 import { createShare, deleteShare, pushShare, type ShareLink } from '../src/scripts/share';
 import { defaultState, money, type State } from '../src/scripts/state';
+import { listVisits } from '../src/scripts/visited';
 import { useApiFetch } from './helpers/api';
 import { byId, click, eventually, mount, renderPage, unmount } from './helpers/dom';
 
@@ -64,7 +65,7 @@ const panelVisible = () => eventually(() => expect(byId('panel').hidden).toBe(fa
 
 describe('public view', () => {
   it('shows the photo, who paid and the progress without editing', async () => {
-    await openPublicView();
+    const link = await openPublicView();
     await panelVisible();
     expect(textOf('viewTitle')).toBe('Thursday');
     expect(document.title).toBe(es.meta.pageTitle('Thursday'));
@@ -72,6 +73,7 @@ describe('public view', () => {
     expect(textOf('shareOut')).toBe(money(30, 'S/'));
     expect(faceMarkers().map((marker) => marker.tagName)).toEqual(['SPAN', 'SPAN']);
     expect(textOf('updated')).toMatch(/\d/);
+    expect(listVisits()[0]).toMatchObject({ id: link.id, key: link.key, title: 'Thursday' });
 
     click(faceMarkers()[1]);
     expect(textOf('paidOut')).toBe('1/2');
@@ -116,6 +118,7 @@ describe('public view', () => {
     document.dispatchEvent(new Event('visibilitychange'));
     await eventually(() => expect(textOf('viewerStateTitle')).toBe(es.viewer.goneTitle));
     expect(byId('panel').hidden).toBe(true);
+    expect(listVisits().some((visit) => visit.id === link.id)).toBe(false);
   });
 
   it('keeps the last data when offline', async () => {

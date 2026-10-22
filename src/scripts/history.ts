@@ -1,6 +1,8 @@
 import { es, locale } from '../i18n/es';
 import type { GameMeta } from './games';
+import { PUBLIC_PATH } from './routes';
 import { computeTotals, money } from './state';
+import type { Visit } from './visited';
 
 export interface GameSummary {
   id: string;
@@ -40,14 +42,6 @@ export function summarize(game: GameMeta): GameSummary {
     currency: game.currency,
     linked: !!game.share,
     thumb: game.thumb,
-  };
-}
-
-export function groupGames(games: GameMeta[]) {
-  const summaries = games.map(summarize);
-  return {
-    debts: summaries.filter((summary) => summary.badge.tone === 'debt'),
-    settled: summaries.filter((summary) => summary.badge.tone !== 'debt'),
   };
 }
 
@@ -125,11 +119,40 @@ function sectionElement(title: string, summaries: GameSummary[], currentId: stri
   return fragment;
 }
 
+function visitElement(visit: Visit): HTMLLIElement {
+  const row = createElement('li', 'game-row');
+  const link = createElement('a', 'game-open');
+  link.href = `${PUBLIC_PATH}#${visit.id}.${visit.key}`;
+  const thumb = createElement('span', 'thumb thumb-empty', '🏀');
+  thumb.setAttribute('aria-hidden', 'true');
+  const text = createElement('span', 'game-row-text');
+  text.append(createElement('strong', '', visit.title), createElement('span', '', es.history.seen(formatDate(visit.seenAt))));
+  link.append(thumb, text, createElement('span', 'row-amount is-empty', es.history.view));
+  row.append(link);
+  return row;
+}
+
+function visitsElement(visits: Visit[]): DocumentFragment {
+  const fragment = document.createDocumentFragment();
+  if (visits.length === 0) return fragment;
+  const list = createElement('ul', 'game-list');
+  list.append(...visits.map(visitElement));
+  fragment.append(createElement('h3', 'drawer-section', es.history.invited), list);
+  return fragment;
+}
+
+// Links to my own games are already listed above with edit rights.
+export const othersVisits = (visits: Visit[], games: GameMeta[]) => {
+  const mine = new Set(games.map((game) => game.share?.id));
+  return visits.filter((visit) => !mine.has(visit.id));
+};
+
 type HistoryElements = { list: HTMLElement; summary: HTMLElement; empty: HTMLElement };
 
-export function renderHistory(elements: HistoryElements, games: GameMeta[], currentId: string | null) {
-  const { debts, settled } = groupGames(games);
-  elements.list.replaceChildren(sectionElement(es.history.debts, debts, currentId), sectionElement(es.history.settled, settled, currentId));
-  elements.summary.textContent = games.length ? debtSummary([...debts, ...settled]) : '';
-  elements.empty.hidden = games.length > 0;
+export function renderHistory(elements: HistoryElements, games: GameMeta[], currentId: string | null, visits: Visit[] = []) {
+  const created = games.map(summarize);
+  const opened = othersVisits(visits, games);
+  elements.list.replaceChildren(sectionElement(es.history.mine, created, currentId), visitsElement(opened));
+  elements.summary.textContent = games.length ? debtSummary(created) : '';
+  elements.empty.hidden = games.length + opened.length > 0;
 }
