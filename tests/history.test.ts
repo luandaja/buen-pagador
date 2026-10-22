@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { GameMeta } from '../src/scripts/games';
-import { debtSummary, formatDate, groupGames, renderHistory, summarize } from '../src/scripts/history';
+import { debtSummary, formatDate, renderHistory, summarize } from '../src/scripts/history';
 import { es } from '../src/i18n/es';
 import { money, newGame, type Face } from '../src/scripts/state';
 
@@ -38,12 +38,6 @@ describe('summaries', () => {
     expect(date).not.toContain('.');
   });
 
-  it('groups games with debts first', () => {
-    const { debts, settled } = groupGames([paid, debtor, empty]);
-    expect(debts.map((summary) => summary.id)).toEqual(['owing']);
-    expect(settled.map((summary) => summary.id)).toEqual(['settled', 'empty']);
-  });
-
   it('adds up what you are owed per currency', () => {
     const usd = game({ id: 'usd', currency: '$', cost: 20, faces: [face(false)] });
     expect(debtSummary([summarize(paid)])).toBe(es.history.nobodyOwes);
@@ -63,7 +57,7 @@ describe('renderHistory', () => {
   it('renders sections, the current game and actions', () => {
     renderHistory(elements, [debtor, paid], 'settled');
     const sections = [...elements.list.querySelectorAll('h3')].map((heading) => heading.textContent);
-    expect(sections).toEqual([es.history.debts, es.history.settled]);
+    expect(sections).toEqual([es.history.mine]);
     const rows = elements.list.querySelectorAll('li');
     expect(rows[0].dataset.id).toBe('owing');
     expect(rows[0].querySelector('.tag-live')).not.toBeNull();
@@ -84,6 +78,23 @@ describe('renderHistory', () => {
     expect(elements.list.children).toHaveLength(0);
     expect(elements.summary.textContent).toBe('');
     expect(elements.empty.hidden).toBe(false);
+  });
+
+  it('lists games I was invited to, skipping my own', async () => {
+    const visits = [
+      { id: 'x', key: 'k', title: 'Mine', seenAt: 1 },
+      { id: 'abc', key: 'secret', title: 'Friday', seenAt: new Date(2026, 9, 2).getTime() },
+    ];
+    renderHistory(elements, [debtor], null, visits);
+    const sections = [...elements.list.querySelectorAll('h3')].map((heading) => heading.textContent);
+    expect(sections).toEqual([es.history.mine, es.history.invited]);
+    const link = elements.list.querySelector<HTMLAnchorElement>('a.game-open')!;
+    expect(link.getAttribute('href')).toBe('/view#abc.secret');
+    expect(link.querySelector('strong')?.textContent).toBe('Friday');
+    expect(elements.list.textContent).not.toContain('Mine');
+
+    renderHistory(elements, [], null, visits.slice(1));
+    expect(elements.empty.hidden).toBe(true);
   });
 
   it('escapes titles instead of injecting HTML', () => {

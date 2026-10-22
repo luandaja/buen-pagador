@@ -22,10 +22,12 @@ async function addFace(page: Page) {
 }
 
 test('editor shares an encrypted link the viewer can read and follow', async ({ page, context }) => {
+  // Face detection runs on the CI CPU and can take most of the default 30s on its own.
+  test.slow();
   await page.goto('/');
   await page.locator('#file').setInputFiles({ name: 'team.jpg', mimeType: 'image/jpeg', buffer: await teamPhoto(page) });
   await expect(page.locator('#stageWrap')).toBeVisible();
-  await expect(page.locator('#scanning')).toBeHidden({ timeout: 30_000 });
+  await expect(page.locator('#scanning')).toBeHidden({ timeout: 60_000 });
 
   await addFace(page);
   await page.locator('#cost').fill('100');

@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.16.2](https://github.com/luandaja/buen-pagador/compare/v1.5.0...v1.16.2) (2026-10-22)
+
+### Features
+
+* add discreet copyright to version footer ([9f87344](https://github.com/luandaja/buen-pagador/commit/9f87344934c40008bdedc12f304d6cc94f42c4d2))
+* show expense detail and receipt in the read-only view ([7555e9c](https://github.com/luandaja/buen-pagador/commit/7555e9c3a4bf1e82792f3a059027d6d8bc095d8b))
+* share receipt photos encrypted through Vercel Blob ([bffc6cb](https://github.com/luandaja/buen-pagador/commit/bffc6cb721d0fc640b1f00a348819f42e1ed7888))
+* upload receipt photos the shared link is still missing ([f6d5d28](https://github.com/luandaja/buen-pagador/commit/f6d5d281cbbcc2d64285d1e64f844eccfe253a62))
+* flag receipt photos that are only on this device ([a2aeef2](https://github.com/luandaja/buen-pagador/commit/a2aeef291495a8e96500f4953c3a41bf7f7078e4))
+* rename people after they are added ([c739e3d](https://github.com/luandaja/buen-pagador/commit/c739e3db09530c24d0553471ee161ba900256d23))
+* lead the public court link with each player's share ([55be02a](https://github.com/luandaja/buen-pagador/commit/55be02a5aa65362853b736df0eb7724d339ad9f9))
+* court games without photo, a fixed share and a hidden total ([6c6f2ab](https://github.com/luandaja/buen-pagador/commit/6c6f2abf8976472d23c9af21c1d75e66cd23c254))
+* name people in court games without photo ([d66b3fb](https://github.com/luandaja/buen-pagador/commit/d66b3fb7d5840186949057f492be0bf8340e5b3a))
+* clickable wordmark and games I was invited to ([c270c46](https://github.com/luandaja/buen-pagador/commit/c270c46491077ed29897c9d86196953227f3aa8f))
+
+### Bug Fixes
+
+* drop the sidebar's own scroll so the page has a single scrollbar ([2a6532e](https://github.com/luandaja/buen-pagador/commit/2a6532eb252fce18a85c769338fb2e013459a56c))
+
+### Other Changes
+
+* add field-sizing property to textarea for better content fit ([bfeab75](https://github.com/luandaja/buen-pagador/commit/bfeab75a25927f830678d0da8f7ceb7478416180))
+* stop installing Playwright system deps and run E2E with 2 workers ([e2cb8f5](https://github.com/luandaja/buen-pagador/commit/e2cb8f56b5b21d1e826bfe9fc7e280e74e9c9c4a))
+* bump the version on every commit to main ([93f2d0e](https://github.com/luandaja/buen-pagador/commit/93f2d0e978536ae2c910828462f5ca2aed74e61b))
+* give the face-detection tests room on slow CI runners ([3d2d990](https://github.com/luandaja/buen-pagador/commit/3d2d990ad16ddd4f4100477c2eeb4a367cc89ea5))
+
 ## [1.5.0](https://github.com/luandaja/buen-pagador/compare/v1.4.0...v1.5.0) (2026-10-13)
 
 

@@ -5,6 +5,7 @@ import { canvasToBlob } from './image';
 import { loadShare, parsePublicHash, ShareError, type Loaded, type PayInfo, type SharedState } from './share';
 import { PREVIEW_HASH } from './routes';
 import { byId, fitStageToPhoto, progressElements, renderTotals, syncFaces } from './view';
+import { forgetVisit, rememberVisit } from './visited';
 
 const elements = {
   state: byId<HTMLDivElement>('viewerState'),
@@ -110,10 +111,14 @@ async function refresh(withImage = false) {
     image = loaded.image ?? image;
     shared = loaded.state;
     render();
+    rememberVisit({ ...link, title: shared.title.trim() || es.viewer.defaultTitle, seenAt: Date.now() });
   } catch (error) {
     console.error(error);
     const view = errorView(error, !!shared);
-    if (view?.stop) stopPolling();
+    if (view?.stop) {
+      stopPolling();
+      forgetVisit(link.id);
+    }
     if (view) showMessage(view.title, view.text);
   }
 }
