@@ -8,7 +8,7 @@ export interface Face {
   h: number;
   emoji: string;
   paid: boolean;
-  // Only people added without a photo have a name; faces on a photo are recognized by sight.
+  // People added without a photo have a name, and keep it on the face they get when a photo arrives.
   name?: string;
 }
 

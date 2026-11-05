@@ -28,9 +28,20 @@ export const es = {
     noPeople: 'Pon cuántos son o una lista de nombres.',
     noPhotoStart: 'Empezar sin foto',
     changePhotoConfirm:
-      'Las personas de este partido, con sus pagos y nombres, se reemplazan por las de la foto. Para otro partido usa «Nuevo partido». ¿Seguir?',
+      'Las personas de este partido, con sus pagos, se reemplazan por las de la foto. Para otro partido usa «Nuevo partido». ¿Seguir?',
     noFaces: 'No encontramos caras. Toca cada cara para agregarla a mano.',
     detectFailed: 'No pudimos detectar caras automáticamente. Toca cada cara para agregarla a mano.',
+  },
+  match: {
+    names: 'Personas sin cara',
+    who: '¿Quién es? Toca su nombre.',
+    missing: 'Toca un espacio vacío para ponerlo ahí. Quien no tenga cara queda abajo de la foto, con su nombre.',
+    allPlaced: 'Ya están todos. Dale «Listo» para usar esta foto.',
+    removeFace: 'Quitar esta cara',
+    cancel: 'Cancelar',
+    done: 'Listo',
+    face: (who: string) => `${who}. Tocar para cambiar quién es`,
+    placed: (who: string) => `${who} ya tiene cara.`,
   },
   toolbar: {
     mode: 'Modo',
