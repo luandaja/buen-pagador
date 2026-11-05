@@ -88,7 +88,7 @@ describe('public view', () => {
     expect(faceMarkers()[0].querySelector('.face-name')!.textContent).toBe('Juan');
     expect(faceMarkers()[0].getAttribute('aria-label')).toBe(es.faces.readOnly('Juan', true));
     expect(faceMarkers()[1].getAttribute('aria-label')).toBe(es.faces.readOnly(es.faces.person(2), false));
-    expect(faceMarkers()[0].hasAttribute('style')).toBe(false);
+    expect(faceMarkers()[0].getAttribute('style')).toBe('--i: 0');
     expect(byId('photo').hasAttribute('src')).toBe(false);
   });
 

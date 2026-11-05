@@ -328,6 +328,7 @@ function renderStage() {
   elements.stageArea.hidden = editingPeople;
   elements.peopleEditor.hidden = !editingPeople;
   elements.peek.hidden = grid;
+  elements.reroll.hidden = grid;
   elements.editMode.textContent = grid ? es.toolbar.editPeople : es.toolbar.edit;
   elements.newPhoto.textContent = grid ? es.upload.addPhoto : es.upload.changePhoto;
   if (image && elements.photo.getAttribute('src') !== image) elements.photo.src = image;

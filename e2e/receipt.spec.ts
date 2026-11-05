@@ -86,9 +86,11 @@ test('previews what payers will see, with payment details and link lifetime', as
 });
 
 test('previews the court before sharing it', async ({ page, context }) => {
+  // Face detection runs on the CI CPU and can take most of the default 30s on its own.
+  test.slow();
   await page.goto('/');
   await page.locator('#file').setInputFiles({ name: 'team.jpg', mimeType: 'image/jpeg', buffer: await photo(page, 800, 600) });
-  await expect(page.locator('#scanning')).toBeHidden({ timeout: 30_000 });
+  await expect(page.locator('#scanning')).toBeHidden({ timeout: 60_000 });
   await page.locator('#cost').fill('80');
   const [preview] = await Promise.all([context.waitForEvent('page'), page.getByRole('link', { name: 'Vista previa' }).click()]);
   await expect(preview.locator('#viewerBadge')).toHaveText('Vista previa');

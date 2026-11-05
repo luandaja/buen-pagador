@@ -11,3 +11,4 @@ coverage
 .env*
 test-results
 playwright-report
+release-notes.md

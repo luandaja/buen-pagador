@@ -140,8 +140,11 @@ describe('syncFaces', () => {
     const container = document.getElementById('faces')!;
     syncFaces(container, markers, [face('a', false)], { interactive: true, label: () => 'x' });
     syncFaces(container, markers, [{ ...face('a', false), name: 'Juan' }], { interactive: true, grid: true, label: () => 'x' });
-    expect(markers.get('a')!.hasAttribute('style')).toBe(false);
+    expect(markers.get('a')!.getAttribute('style')).toBe('--i: 0');
+    expect(container.classList.contains('is-ring')).toBe(true);
+    expect(container.dataset.count).toBe('0/1');
     expect(markers.get('a')!.querySelector('.face-name')!.textContent).toBe('Juan');
+    expect(markers.get('a')!.querySelector('.face-initial')!.textContent).toBe('J');
   });
 });
 

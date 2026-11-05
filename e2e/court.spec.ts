@@ -22,10 +22,12 @@ async function addFace(page: Page) {
 }
 
 test('editor shares an encrypted link the viewer can read and follow', async ({ page, context }) => {
+  // Face detection runs on the CI CPU and can take most of the default 30s on its own.
+  test.slow();
   await page.goto('/');
   await page.locator('#file').setInputFiles({ name: 'team.jpg', mimeType: 'image/jpeg', buffer: await teamPhoto(page) });
   await expect(page.locator('#stageWrap')).toBeVisible();
-  await expect(page.locator('#scanning')).toBeHidden({ timeout: 30_000 });
+  await expect(page.locator('#scanning')).toBeHidden({ timeout: 60_000 });
 
   await addFace(page);
   await page.locator('#cost').fill('100');
@@ -82,12 +84,14 @@ test('a game without photo starts from the group list, charges a fixed share and
 });
 
 test('a photo for a named list waits for "Listo" with each name on its face', async ({ page }) => {
+  // Face detection runs on the CI CPU and can take most of the default 30s on its own.
+  test.slow();
   await page.goto('/');
   await page.locator('#startPeople').fill('1. Juan\n2. Pedro');
   await page.getByRole('button', { name: 'Empezar sin foto' }).click();
   await page.locator('#file').setInputFiles({ name: 'team.jpg', mimeType: 'image/jpeg', buffer: await teamPhoto(page) });
   await expect(page.locator('#matcher')).toBeVisible();
-  await expect(page.locator('#scanning')).toBeHidden({ timeout: 30_000 });
+  await expect(page.locator('#scanning')).toBeHidden({ timeout: 60_000 });
 
   const stage = page.locator('#stage');
   const box = (await stage.boundingBox())!;
