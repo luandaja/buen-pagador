@@ -95,7 +95,7 @@ export function renderTotals(elements: ProgressElements, game: TotalsInput, mess
 }
 
 const FACE_HTML =
-  '<span class="face-ring"></span><span class="face-emoji"></span><span class="face-initial" aria-hidden="true"></span><span class="face-check">✓</span><span class="face-remove">×</span><span class="face-name"></span>';
+  '<span class="face-ring"></span><span class="face-emoji"></span><span class="face-initial" aria-hidden="true"></span><span class="face-check">✓</span><span class="face-name"></span>';
 
 // Without a photo the faces sit in a grid, so they carry no position.
 type FaceOptions = { interactive: boolean; grid?: boolean; label: (face: Face, index: number) => string };

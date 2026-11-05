@@ -169,6 +169,7 @@ let formOpen = false;
 // A photo for people with names waits here, off the game, until "Listo".
 type Match = { image: string; faces: State['faces']; people: State['faces']; selected: string };
 let match: Match | null = null;
+let editingFace = '';
 const faceMarkers = new Map<string, HTMLElement>();
 const personRows = new Map<string, HTMLElement>();
 
@@ -249,7 +250,8 @@ function renderFaces() {
     grid: !shownImage(),
     label: (face, index) => (match ? es.match.face(personName(face, index)) : faceLabel(face, index, mode)),
   });
-  for (const [faceId, marker] of faceMarkers) marker.classList.toggle('is-selected', faceId === match?.selected);
+  const selected = match?.selected ?? editingFace;
+  for (const [faceId, marker] of faceMarkers) marker.classList.toggle('is-selected', faceId === selected);
 }
 
 function renderPay() {
@@ -319,13 +321,14 @@ function renderLink() {
   elements.linkExpiry.textContent = expiryText(link?.expiresAt);
 }
 
-// Without a photo the stage is a grid of people, and editing them is a list of names.
+// Without a photo the stage is a grid of people and editing them is a list of names; with one, the list sits under it.
 function renderStage() {
   const image = shownImage();
   const grid = !image;
-  const editingPeople = grid && mode === 'edit';
+  const editingPeople = mode === 'edit' && state.faces.length > 0;
   elements.stageArea.classList.toggle('is-grid', grid);
-  elements.stageArea.hidden = editingPeople;
+  elements.stageArea.hidden = grid && editingPeople;
+  elements.stageWrap.classList.toggle('is-naming', !grid && editingPeople);
   elements.peopleEditor.hidden = !editingPeople;
   elements.peek.hidden = grid;
   elements.reroll.hidden = grid;
@@ -334,6 +337,7 @@ function renderStage() {
   if (image && elements.photo.getAttribute('src') !== image) elements.photo.src = image;
   if (!editingPeople) return;
   syncPeople(elements.peopleList, personRows, state.faces);
+  elements.addPerson.hidden = !grid;
   elements.addPerson.disabled = state.faces.length >= MAX_PEOPLE;
 }
 
@@ -605,7 +609,7 @@ elements.peopleList.addEventListener('keydown', (event) => {
   event.preventDefault();
   const index = rowIndex(personRow(input));
   if (index < state.faces.length - 1) focusName(index + 1);
-  else if (input.value.trim()) addPerson();
+  else if (input.value.trim() && !state.image) addPerson();
   else input.blur();
 });
 
@@ -615,9 +619,21 @@ elements.peopleList.addEventListener('paste', (event) => {
   if (names.length < 2) return;
   event.preventDefault();
   const input = event.target as HTMLInputElement;
+  const start = rowIndex(personRow(input));
   input.value = names[0];
-  update({ faces: fillNames(state.faces, rowIndex(personRow(input)), names, state.blocked) });
+  // On a photo everyone needs a spot, so the list only fills the faces there are.
+  const fitting = state.image ? names.slice(0, state.faces.length - start) : names;
+  update({ faces: fillNames(state.faces, start, fitting, state.blocked) });
 });
+
+// Editing a name uncovers that face, so it is clear who it belongs to.
+function markEditing(faceId: string) {
+  editingFace = faceId;
+  renderFaces();
+}
+
+elements.peopleList.addEventListener('focusin', (event) => markEditing(personRow(event.target).dataset.id!));
+elements.peopleList.addEventListener('focusout', () => markEditing(''));
 
 elements.newPhoto.addEventListener('click', () => {
   const wouldLosePayments = state.faces.some((face) => face.paid) && !state.faces.some((face) => face.name);
@@ -627,8 +643,8 @@ elements.newPhoto.addEventListener('click', () => {
 const faceTarget = (event: Event) => (event.target as HTMLElement).closest<HTMLElement>('.face');
 
 function onFaceClick(faceId: string) {
-  if (mode === 'edit') return update({ faces: removeFace(state.faces, faceId) });
   const index = state.faces.findIndex((face) => face.id === faceId);
+  if (mode === 'edit') return focusName(index);
   update({ faces: togglePaid(state.faces, faceId) });
   const totals = computeTotals(state);
   announce(es.faces.announce(personName(state.faces[index], index), state.faces[index].paid, totals.paid, totals.people));

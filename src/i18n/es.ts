@@ -60,7 +60,7 @@ export const es = {
   hints: {
     payTouch: 'Toca una cara cuando esa persona pague. Mantén presionado un emoji para cambiarlo y no volver a verlo.',
     payMouse: 'Toca una cara cuando esa persona pague. Clic derecho en un emoji para cambiarlo y no volver a verlo.',
-    edit: 'Toca un espacio vacío para agregar a alguien que no detectamos. Toca una cara para quitarla.',
+    edit: 'Toca una cara para cambiarle el nombre. Toca un espacio vacío para agregar a alguien que no detectamos.',
     initial: 'Toca una cara cuando esa persona pague.',
     grid: 'Toca a cada uno cuando pague.',
     gridEdit: 'Escribe los nombres o pega la lista del grupo. Enter pasa al siguiente.',
@@ -71,6 +71,7 @@ export const es = {
     person: (n: number) => `Persona ${n}`,
     nameLabel: (n: number) => `Nombre de la persona ${n}`,
     remove: (who: string) => `Quitar a ${who}`,
+    rename: (who: string) => `Cambiar el nombre de ${who}`,
     paidUndo: (who: string) => `${who}: pagó. Tocar para deshacer`,
     owesMark: (who: string) => `${who}: debe. Tocar para marcar como pagado`,
     readOnly: (who: string, paid: boolean) => `${who}: ${paid ? 'pagó' : 'debe'}`,

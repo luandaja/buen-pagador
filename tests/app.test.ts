@@ -191,8 +191,71 @@ describe('photo and faces', () => {
     expect(editModeButton.getAttribute('aria-pressed')).toBe('true');
     click(byId('faces'), { clientX: 400, clientY: 300 });
     expect(faceButtons()).toHaveLength(4);
-    click(faceButtons()[3]);
+    click(document.querySelectorAll('.person-remove')[3]);
     expect(faceButtons()).toHaveLength(3);
+  });
+
+  describe('names on a photo', () => {
+    const nameFields = () => [...document.querySelectorAll<HTMLInputElement>('.person-name')];
+    const nameOn = (index: number) => faceButtons()[index].querySelector('.face-name')!.textContent;
+
+    async function editFaces() {
+      await startEditor();
+      uploadPhoto();
+      await eventually(() => expect(faceButtons()).toHaveLength(3));
+      click(document.querySelector('[data-mode="edit"]')!);
+    }
+
+    function paste(field: HTMLInputElement, text: string) {
+      const event = new Event('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', { value: { getData: () => text } });
+      field.dispatchEvent(event);
+    }
+
+    it('shows the list under the photo, without adding people who have no spot', async () => {
+      await editFaces();
+      expect(byId('stageArea').hidden).toBe(false);
+      expect(byId('peopleEditor').hidden).toBe(false);
+      expect(byId('addPerson').hidden).toBe(true);
+      expect(nameFields()).toHaveLength(3);
+
+      click(document.querySelector('[data-mode="pay"]')!);
+      expect(byId('peopleEditor').hidden).toBe(true);
+    });
+
+    it('renames a face tapped in the photo, and uncovers it meanwhile', async () => {
+      await editFaces();
+      click(faceButtons()[1]);
+      const field = nameFields()[1];
+      expect(document.activeElement).toBe(field);
+      expect(faceButtons()[1].classList.contains('is-selected')).toBe(true);
+
+      input(field, 'Luis');
+      expect(nameOn(1)).toBe('Luis');
+      field.blur();
+      expect(faceButtons()[1].classList.contains('is-selected')).toBe(false);
+    });
+
+    it('does not add anyone from Enter or from a list longer than the faces', async () => {
+      await editFaces();
+      const last = nameFields()[2];
+      input(last, 'Ana');
+      last.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+      expect(faceButtons()).toHaveLength(3);
+
+      paste(nameFields()[1], '1. Juan\n2. Pedro\n3. Luis');
+      expect(faceButtons()).toHaveLength(3);
+      expect(nameOn(1)).toBe('Juan');
+      expect(nameOn(2)).toBe('Pedro');
+    });
+
+    it('keeps the list closed on a photo with no faces yet', async () => {
+      mocks.detectedBoxes = [];
+      await startEditor();
+      uploadPhoto();
+      await eventually(() => expect(textOf('hint')).toBe(es.upload.noFaces));
+      expect(byId('peopleEditor').hidden).toBe(true);
+    });
   });
 
   it('reports non-images, photos without faces and failed detection', async () => {

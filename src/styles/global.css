@@ -481,25 +481,12 @@ select {
   opacity: 0.55;
 }
 
-.face-remove {
-  display: none;
-  position: absolute;
-  top: -10px;
-  right: -10px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--ball);
-  color: var(--ink);
-  font-weight: 800;
-  font-size: 15px;
-  line-height: 22px;
-  text-align: center;
-  pointer-events: none;
+.stage.is-edit .face.is-selected {
+  outline: 3px solid var(--ball);
 }
 
-.stage.is-edit .face-remove {
-  display: block;
+.stage.is-edit .face.is-selected .face-emoji {
+  opacity: 0;
 }
 
 .scanning {
@@ -880,6 +867,26 @@ select {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+  }
+
+  /* The photo keeps its height to tell faces apart, with the names beside it. */
+  .stage-wrap.is-naming {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 38%);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    column-gap: 12px;
+  }
+
+  .stage-wrap.is-naming > * {
+    grid-column: 1 / -1;
+  }
+
+  .stage-wrap.is-naming > .stage-area {
+    grid-area: -2 / 1;
+  }
+
+  .stage-wrap.is-naming > .people-editor {
+    grid-area: -2 / 2;
   }
 }
 
