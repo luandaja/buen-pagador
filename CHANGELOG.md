@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.19.0](https://github.com/luandaja/buen-pagador/compare/v1.18.1...v1.19.0) (2026-11-05)
+
+### Features
+
+* edit names on a game with photo ([9512e1a](https://github.com/luandaja/buen-pagador/commit/9512e1ad38c7f1502364997c0142ed37445efbf3))
+
 ## [1.18.1](https://github.com/luandaja/buen-pagador/compare/v1.17.1...v1.18.1) (2026-11-05)
 
 ### Features
