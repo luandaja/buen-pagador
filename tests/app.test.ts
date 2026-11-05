@@ -340,7 +340,7 @@ describe('game without photo', () => {
     await eventually(async () => expect((await openGameRecord())?.faces.map((face) => face.name)).toEqual(['Juan']));
   });
 
-  it('shares the names without photo, and asks before a photo replaces them', async () => {
+  it('shares the names without photo', async () => {
     await startEditor();
     typeStart('1. Juan\n2. Pedro');
     submitStart();
@@ -350,15 +350,153 @@ describe('game without photo', () => {
     const shared = await loadShare({ id, key }, true);
     expect(shared.image).toBeUndefined();
     expect(shared.state.faces.map((face) => face.name)).toEqual(['Juan', 'Pedro']);
+  });
+});
 
-    const confirmDialog = answerConfirm(false);
+describe('a photo for people with names', () => {
+  const chips = () => [...byId('matchNames').querySelectorAll<HTMLButtonElement>('.match-name')];
+  const chip = (name: string) => chips().find((button) => button.textContent!.includes(name))!;
+  const namesOnFaces = () => faceButtons().map((face) => face.querySelector('.face-name')!.textContent);
+  const leftToRight = () => faceButtons().sort((first, second) => parseFloat(first.style.left) - parseFloat(second.style.left));
+
+  async function startWithNames(names: string) {
+    await startEditor();
+    byId<HTMLTextAreaElement>('startPeople').value = names;
+    byId<HTMLFormElement>('noPhoto').requestSubmit();
+  }
+
+  async function startMatching(names = '1. Juan\n2. Pedro') {
+    await startWithNames(names);
+    const confirmDialog = answerConfirm(true);
     click(byId('newPhoto'));
-    expect(confirmDialog).toHaveBeenCalledWith(es.upload.changePhotoConfirm);
+    expect(confirmDialog).not.toHaveBeenCalled();
     uploadPhoto();
     await eventually(() => expect(faceButtons()).toHaveLength(3));
+    await eventually(() => expect(byId<HTMLButtonElement>('matchDone').disabled).toBe(false));
+    return confirmDialog;
+  }
+
+  it('keeps the game as it was until "Listo"', async () => {
+    await startMatching();
+    expect(byId('matcher').hidden).toBe(false);
+    expect(byId('stageToolbar').hidden).toBe(true);
     expect(byId('stageArea').classList.contains('is-grid')).toBe(false);
-    expect(textOf('editMode')).toBe(es.toolbar.edit);
+    expect(byId('stage').classList.contains('is-peek')).toBe(true);
+    expect(byId<HTMLButtonElement>('linkAction').disabled).toBe(true);
+    expect(byId<HTMLButtonElement>('newGameTop').disabled).toBe(true);
+
+    click(byId('matchCancel'));
+    expect(byId('matcher').hidden).toBe(true);
+    expect(byId('stageArea').classList.contains('is-grid')).toBe(true);
+    expect(byId('stage').classList.contains('is-peek')).toBe(false);
+    expect(namesOnFaces()).toEqual(['Juan', 'Pedro']);
+  });
+
+  it('puts each name on the face in turn, left to right, and adopts the photo on "Listo"', async () => {
+    mocks.detectedBoxes.reverse();
+    await startMatching();
+    expect(leftToRight()[0].classList.contains('is-selected')).toBe(true);
+    expect(textOf('hint')).toBe(es.match.who);
+    click(chip('Pedro'));
+    expect(leftToRight()[1].classList.contains('is-selected')).toBe(true);
+    click(chip('Juan'));
+    expect(chips()).toHaveLength(0);
+    expect(textOf('hint')).toBe(es.match.allPlaced);
+
+    click(byId('matchDone'));
+    expect(byId('matcher').hidden).toBe(true);
+    expect(byId('stageToolbar').hidden).toBe(false);
+    expect(byId('stage').classList.contains('is-peek')).toBe(false);
     expect(textOf('newPhoto')).toBe(es.upload.changePhoto);
+    expect(namesOnFaces()).toEqual(['Pedro', 'Juan', '']);
+    expect(faceButtons()[0].style.left).not.toBe('');
+  });
+
+  it('gives back the name of a face tapped again, and removes a face that is nobody', async () => {
+    await startMatching();
+    click(chip('Juan'));
+    click(leftToRight()[0]);
+    expect(namesOnFaces()).toEqual(['', '', '']);
+    expect(chips()).toHaveLength(2);
+    expect(leftToRight()[0].classList.contains('is-selected')).toBe(true);
+
+    click(byId('matchRemove'));
+    expect(faceButtons()).toHaveLength(2);
+    expect(leftToRight()[0].classList.contains('is-selected')).toBe(true);
+  });
+
+  it('places someone who is not on the photo by tapping an empty spot', async () => {
+    mocks.detectedBoxes.pop();
+    mocks.detectedBoxes.pop();
+    await startWithNames('1. Juan\n2. Pedro');
+    uploadPhoto();
+    await eventually(() => expect(textOf('hint')).toBe(es.match.who));
+    click(chip('Juan'));
+    expect(textOf('hint')).toBe(es.match.missing);
+    expect(chip('Pedro').disabled).toBe(true);
+    click(byId('faces'));
+    expect(chip('Pedro').disabled).toBe(false);
+    click(chip('Pedro'));
+    expect(namesOnFaces().sort()).toEqual(['Juan', 'Pedro']);
+  });
+
+  it('goes back to the list in its order after cancelling with someone placed', async () => {
+    await startMatching();
+    click(chip('Pedro'));
+    click(byId('matchCancel'));
+    expect(namesOnFaces()).toEqual(['Juan', 'Pedro']);
+  });
+
+  it('never loses a name or a payment: whoever has no face stays on the photo', async () => {
+    await startWithNames('1. Juan\n2. Pedro');
+    click(faceButtons()[0]);
+    uploadPhoto();
+    await eventually(() => expect(textOf('hint')).toBe(es.match.who));
+    expect(chip('Juan').textContent).toContain('✓');
+    const confirmDialog = answerConfirm(false);
+    click(byId('matchDone'));
+    expect(confirmDialog).not.toHaveBeenCalled();
+    expect(byId('matcher').hidden).toBe(true);
+    expect(faceButtons()).toHaveLength(5);
+    expect(namesOnFaces()).toEqual(['', '', '', 'Juan', 'Pedro']);
+    expect(faceButtons()[3].classList.contains('is-paid')).toBe(true);
+  });
+
+  it('keeps everyone on a photo where no face was found', async () => {
+    mocks.detectedBoxes = [];
+    await startWithNames('Juan, Pedro');
+    uploadPhoto();
+    await eventually(() => expect(textOf('hint')).toBe(es.upload.noFaces));
+    click(byId('matchDone'));
+    expect(byId('stageArea').classList.contains('is-grid')).toBe(false);
+    expect(namesOnFaces()).toEqual(['Juan', 'Pedro']);
+  });
+
+  it('keeps the people when the photo cannot be read', async () => {
+    mocks.fileToDataUrl.mockRejectedValue(new Error('bad file'));
+    await startWithNames('Juan, Pedro');
+    uploadPhoto();
+    await eventually(() => expect(textOf('exportMsg')).toBe(es.upload.notImage));
+    expect(namesOnFaces()).toEqual(['Juan', 'Pedro']);
+  });
+
+  it('survives a failed detection and a cancel while scanning', async () => {
+    mocks.detectFaces.mockRejectedValue(new Error('no model'));
+    await startWithNames('Juan, Pedro');
+    uploadPhoto();
+    await eventually(() => expect(textOf('hint')).toBe(es.upload.noFaces));
+
+    click(byId('matchCancel'));
+    let finishDetection = (_boxes: unknown[]) => {};
+    mocks.detectFaces.mockImplementation(() => new Promise((resolve) => (finishDetection = resolve)));
+    uploadPhoto();
+    await eventually(() => expect(byId('matcher').hidden).toBe(false));
+    await eventually(() => expect(mocks.detectFaces).toHaveBeenCalledTimes(2));
+    click(byId('matchCancel'));
+    finishDetection([]);
+    await Promise.resolve();
+    expect(byId('matcher').hidden).toBe(true);
+    expect(namesOnFaces()).toEqual(['Juan', 'Pedro']);
   });
 });
 

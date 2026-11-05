@@ -3,7 +3,7 @@ import Layout from '../components/Layout.astro';
 import Progress from '../components/Progress.astro';
 import { es } from '../i18n/es';
 
-const { upload, toolbar, game, pay, steps, share, image, history } = es;
+const { upload, match, toolbar, game, pay, steps, share, image, history } = es;
 ---
 
 <Layout nav="court">
@@ -34,7 +34,7 @@ const { upload, toolbar, game, pay, steps, share, image, history } = es;
       </form>
 
       <div class="stage-wrap" id="stageWrap" hidden>
-        <div class="stage-toolbar">
+        <div class="stage-toolbar" id="stageToolbar">
           <div class="segmented" id="modes" role="group" aria-label={toolbar.mode}>
             <button type="button" aria-pressed="true" data-mode="pay">{toolbar.pay}</button>
             <button type="button" aria-pressed="false" data-mode="edit" id="editMode">{toolbar.edit}</button>
@@ -62,6 +62,14 @@ const { upload, toolbar, game, pay, steps, share, image, history } = es;
               <span class="scan-bar"></span>
               <p id="scanText">{upload.scanning}</p>
             </div>
+          </div>
+        </div>
+        <div class="matcher" id="matcher" hidden>
+          <ul class="match-names" id="matchNames" aria-label={match.names}></ul>
+          <div class="match-actions">
+            <button type="button" class="link danger" id="matchRemove">{match.removeFace}</button>
+            <button type="button" class="ghost" id="matchCancel">{match.cancel}</button>
+            <button type="button" class="secondary small" id="matchDone">{match.done}</button>
           </div>
         </div>
         <div class="people-editor" id="peopleEditor" hidden>

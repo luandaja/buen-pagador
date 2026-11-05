@@ -611,24 +611,35 @@ select {
 }
 
 .face-name {
-  display: none;
-}
-
-.stage-area.is-grid .face-name {
-  display: block;
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 4px);
   left: 50%;
-  max-width: calc(100% + 16px);
+  max-width: 96px;
+  padding: 1px 6px;
   transform: translateX(-50%);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ink) 75%, transparent);
+  font-size: 12px;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.3;
   color: var(--chalk);
   pointer-events: none;
+}
+
+.face-name:empty {
+  display: none;
+}
+
+.stage-area.is-grid .face-name {
+  top: calc(100% + 8px);
+  max-width: calc(100% + 16px);
+  padding: 0;
+  background: none;
+  font-size: 13px;
+  line-height: 1.2;
 }
 
 /* Nothing sits under a disc to uncover, so it turns green instead of flying off. */
@@ -883,6 +894,64 @@ select {
   border-style: dashed;
   border-color: var(--ball);
   transition-delay: 0s;
+}
+
+.stage.is-match .faces {
+  cursor: crosshair;
+}
+
+.stage.is-peek .face.is-selected .face-ring {
+  border-style: solid;
+  border-width: max(3px, 6cqw);
+  background: color-mix(in srgb, var(--ball) 25%, transparent);
+}
+
+.matcher {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.match-names {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 30dvh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.match-name {
+  min-height: 44px;
+  padding: 7px 12px;
+  border: 1.5px solid var(--chalk);
+  border-radius: 999px;
+  background: var(--chalk);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.match-name:disabled {
+  background: transparent;
+  color: var(--chalk-dim);
+  border-color: rgba(247, 248, 252, 0.4);
+  cursor: default;
+}
+
+.match-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.match-actions .link {
+  margin-right: auto;
 }
 
 .viewer-state {

@@ -9,6 +9,11 @@ import {
   faceLabel,
   fileName,
   fillNames,
+  freeFace,
+  nextFreeFace,
+  seatAtBottom,
+  peopleToPlace,
+  placePerson,
   removeFace,
   rerollEmojis,
   MAX_NAME,
@@ -20,6 +25,7 @@ import {
   renameFace,
   statusMessage,
   togglePaid,
+  unplaced,
 } from '../src/scripts/faces';
 import { DEBTOR_EMOJIS, type Face } from '../src/scripts/state';
 
@@ -126,6 +132,50 @@ describe('people without photo', () => {
     expect(personInitial({ ...make('a', '🐸'), name: ' ñato' }, 0)).toBe('Ñ');
     expect(personInitial({ ...make('a', '🐸'), name: '🦊 Zorro' }, 0)).toBe('🦊');
     expect(personInitial(make('a', '🐸'), 2)).toBe('3');
+  });
+});
+
+describe('placing people on a photo', () => {
+  const spot = (id: string, x: number): Face => ({ id, x, y: 0.2, w: 0.1, h: 0.1, emoji: '🐸', paid: false });
+  const juan: Face = { id: 'juan', x: 0, y: 0, w: 0, h: 0, emoji: '🐔', paid: true, name: 'Juan' };
+  const nobody: Face = { id: 'nobody', x: 0, y: 0, w: 0, h: 0, emoji: '🦊', paid: false };
+
+  it('asks for a face only for people with a name or a payment', () => {
+    const paid = { ...nobody, id: 'paid', paid: true };
+    expect(peopleToPlace([juan, nobody, paid])).toEqual([juan, paid]);
+  });
+
+  it('gives the person the place of the face, keeping who they are', () => {
+    expect(placePerson([spot('a', 0.5)], 'a', juan)).toEqual([{ ...juan, x: 0.5, y: 0.2, w: 0.1, h: 0.1 }]);
+  });
+
+  it('knows who is left and which face comes next', () => {
+    const faces = placePerson([spot('a', 0.1), spot('b', 0.5)], 'a', juan);
+    expect(unplaced([juan], faces)).toEqual([]);
+    expect(unplaced([juan], [spot('a', 0.1)])).toEqual([juan]);
+    expect(nextFreeFace(faces, [juan])).toBe('b');
+    expect(nextFreeFace(placePerson(faces, 'b', { ...juan, id: 'x' }), [juan, { ...juan, id: 'x' }])).toBe('');
+  });
+
+  it('seats whoever has no face inside the photo, keeping name and payment', () => {
+    const people = Array.from({ length: 30 }, (_, index) => ({ ...juan, id: String(index) }));
+    const seated = seatAtBottom([spot('a', 0.5)], people, 4 / 3);
+    expect(seated).toHaveLength(31);
+    expect(seated[1]).toMatchObject({ name: 'Juan', paid: true });
+    expect(seatAtBottom([spot('a', 0.5)], [juan], 4 / 3)[1].w).toBe(0.1);
+    expect(seatAtBottom([{ ...spot('a', 0.5), w: 0.4 }], people.slice(0, 3), 4 / 3).every((face) => face.y >= 0)).toBe(true);
+    for (const face of seated) {
+      expect(face.x + face.w).toBeLessThanOrEqual(1);
+      expect(face.y).toBeGreaterThanOrEqual(0);
+      expect(face.y + face.h).toBeLessThan(1);
+    }
+    expect(new Set(seated.slice(1).map((face) => `${face.x},${face.y}`)).size).toBe(30);
+  });
+
+  it('turns a placed face back into a free one in the same spot', () => {
+    const [free] = freeFace(placePerson([spot('a', 0.5)], 'a', juan), 'juan');
+    expect(free).toMatchObject({ x: 0.5, paid: false, name: undefined });
+    expect(free.id).not.toBe('juan');
   });
 });
 

@@ -191,6 +191,18 @@ export function syncPeople(list: HTMLElement, rows: Map<string, HTMLElement>, fa
   syncKeyed(list, rows, faces, { create: createPersonRow, refresh: (row, face, index) => updatePersonRow(row, face, index, faces.length) });
 }
 
+export function matchChip(person: Face, who: string, disabled: boolean): HTMLElement {
+  const item = document.createElement('li');
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'match-name';
+  chip.dataset.id = person.id;
+  chip.disabled = disabled;
+  chip.textContent = `${who}${person.paid ? ' ✓' : ''}`;
+  item.append(chip);
+  return item;
+}
+
 export function fitStageToPhoto(photo: HTMLImageElement, stageArea: HTMLElement) {
   photo.addEventListener('load', () => {
     const aspectRatio = photo.naturalWidth / photo.naturalHeight;

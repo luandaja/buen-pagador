@@ -9,15 +9,21 @@ import {
   faceLabel,
   fileName,
   fillNames,
+  freeFace,
   MAX_PEOPLE,
+  nextFreeFace,
   parseNames,
   peopleFrom,
+  peopleToPlace,
   personName,
+  placePerson,
   removeFace,
   renameFace,
   rerollEmojis,
+  seatAtBottom,
   statusMessage,
   togglePaid,
+  unplaced,
   type Mode,
 } from './faces';
 import { deleteGame, findByShareId, listGames, loadGame, saveGame } from './games';
@@ -51,7 +57,7 @@ import {
   type Prefs,
   type State,
 } from './state';
-import { byId, fitStageToPhoto, gameMetaText, progressElements, progressView, renderTotals, syncFaces, syncPeople } from './view';
+import { byId, fitStageToPhoto, gameMetaText, matchChip, progressElements, progressView, renderTotals, syncFaces, syncPeople } from './view';
 import { listVisits } from './visited';
 
 const elements = {
@@ -60,6 +66,12 @@ const elements = {
   noPhoto: byId<HTMLFormElement>('noPhoto'),
   startPeople: byId<HTMLTextAreaElement>('startPeople'),
   stageWrap: byId<HTMLDivElement>('stageWrap'),
+  stageToolbar: byId<HTMLDivElement>('stageToolbar'),
+  matcher: byId<HTMLDivElement>('matcher'),
+  matchNames: byId<HTMLUListElement>('matchNames'),
+  matchRemove: byId<HTMLButtonElement>('matchRemove'),
+  matchCancel: byId<HTMLButtonElement>('matchCancel'),
+  matchDone: byId<HTMLButtonElement>('matchDone'),
   stageArea: byId<HTMLDivElement>('stageArea'),
   stage: byId<HTMLDivElement>('stage'),
   photo: byId<HTMLImageElement>('photo'),
@@ -154,6 +166,9 @@ let scanning = false;
 let creating = false;
 let copiedRecently = false;
 let formOpen = false;
+// A photo for people with names waits here, off the game, until "Listo".
+type Match = { image: string; faces: State['faces']; people: State['faces']; selected: string };
+let match: Match | null = null;
 const faceMarkers = new Map<string, HTMLElement>();
 const personRows = new Map<string, HTMLElement>();
 
@@ -214,6 +229,8 @@ function update(patch: Partial<State>, sync = true) {
 }
 
 const modeHint = () => (state.image ? HINTS : GRID_HINTS)[mode];
+const shownImage = () => match?.image ?? state.image;
+const isLocked = () => scanning || !!match;
 
 function setMode(next: Mode) {
   mode = next;
@@ -227,11 +244,12 @@ function setMode(next: Mode) {
 }
 
 function renderFaces() {
-  syncFaces(elements.faces, faceMarkers, state.faces, {
+  syncFaces(elements.faces, faceMarkers, match?.faces ?? state.faces, {
     interactive: true,
-    grid: !state.image,
-    label: (face, index) => faceLabel(face, index, mode),
+    grid: !shownImage(),
+    label: (face, index) => (match ? es.match.face(personName(face, index)) : faceLabel(face, index, mode)),
   });
+  for (const [faceId, marker] of faceMarkers) marker.classList.toggle('is-selected', faceId === match?.selected);
 }
 
 function renderPay() {
@@ -291,7 +309,7 @@ function renderLink() {
   const link = state.share;
   const started = isStarted(state);
   if (!copiedRecently) elements.linkAction.textContent = linkActionLabel();
-  elements.linkAction.disabled = !started || scanning || creating;
+  elements.linkAction.disabled = !started || isLocked() || creating;
   elements.linkAction.title = started ? '' : es.share.needsPhoto;
   elements.linkShare.hidden = !started;
   elements.panelActions.hidden = !started;
@@ -303,7 +321,8 @@ function renderLink() {
 
 // Without a photo the stage is a grid of people, and editing them is a list of names.
 function renderStage() {
-  const grid = !state.image;
+  const image = shownImage();
+  const grid = !image;
   const editingPeople = grid && mode === 'edit';
   elements.stageArea.classList.toggle('is-grid', grid);
   elements.stageArea.hidden = editingPeople;
@@ -312,10 +331,32 @@ function renderStage() {
   elements.reroll.hidden = grid;
   elements.editMode.textContent = grid ? es.toolbar.editPeople : es.toolbar.edit;
   elements.newPhoto.textContent = grid ? es.upload.addPhoto : es.upload.changePhoto;
-  if (state.image && elements.photo.getAttribute('src') !== state.image) elements.photo.src = state.image;
+  if (image && elements.photo.getAttribute('src') !== image) elements.photo.src = image;
   if (!editingPeople) return;
   syncPeople(elements.peopleList, personRows, state.faces);
   elements.addPerson.disabled = state.faces.length >= MAX_PEOPLE;
+}
+
+const who = (person: State['faces'][number]) => personName(person, state.faces.findIndex((face) => face.id === person.id));
+
+function matchHint(draft: Match, left: number) {
+  if (scanning) return es.upload.scanning;
+  if (draft.faces.length === 0) return es.upload.noFaces;
+  if (left === 0) return es.match.allPlaced;
+  return draft.selected ? es.match.who : es.match.missing;
+}
+
+function renderMatch() {
+  elements.stageToolbar.hidden = !!match;
+  elements.matcher.hidden = !match;
+  elements.stage.classList.toggle('is-match', !!match);
+  if (!match) return;
+  const left = unplaced(match.people, match.faces);
+  const noFace = !match.selected;
+  elements.matchNames.replaceChildren(...left.map((person) => matchChip(person, who(person), noFace)));
+  elements.matchRemove.hidden = noFace;
+  elements.matchDone.disabled = scanning;
+  elements.hint.textContent = matchHint(match, left.length);
 }
 
 function render() {
@@ -324,15 +365,16 @@ function render() {
   elements.noPhoto.hidden = started;
   elements.stageWrap.hidden = !started;
   elements.scanning.hidden = !scanning;
-  elements.openHistory.disabled = scanning || creating;
+  elements.openHistory.disabled = isLocked() || creating;
   elements.newGameTop.hidden = !started;
-  elements.newGameTop.disabled = scanning || creating;
-  elements.download.disabled = scanning || !started;
-  elements.share.disabled = scanning || !started;
+  elements.newGameTop.disabled = isLocked() || creating;
+  elements.download.disabled = isLocked() || !started;
+  elements.share.disabled = isLocked() || !started;
   elements.blockedBar.hidden = state.blocked.length === 0;
   elements.blockedList.textContent = state.blocked.join(' ');
   renderStage();
   renderFaces();
+  renderMatch();
   renderGameCard();
   renderProgress();
   renderLink();
@@ -353,10 +395,10 @@ function announce(text: string) {
   elements.announce.textContent = text;
 }
 
-async function detect() {
+async function detect(takenEmojis: string[] = []) {
   const boxes = await detectFaces(elements.photo);
   const aspectRatio = elements.photo.naturalWidth / elements.photo.naturalHeight;
-  return boxesToFaces(boxes, aspectRatio, pickEmojis(boxes.length, [], state.blocked));
+  return boxesToFaces(boxes, aspectRatio, pickEmojis(boxes.length, takenEmojis, state.blocked));
 }
 
 function makeThumb(image: string) {
@@ -367,13 +409,17 @@ function makeThumb(image: string) {
   );
 }
 
-function startScan(image: string) {
-  scanning = true;
+function setPhoto(image: string, faces: State['faces']) {
   setPeek(false);
   setSync(state.share ? es.share.newPhotoNeedsLink : '');
-  update({ image, faces: [], share: null, thumb: null });
+  update({ image, faces, share: null, thumb: null });
   setMode('pay');
   makeThumb(image);
+}
+
+function startScan(image: string) {
+  scanning = true;
+  setPhoto(image, []);
 }
 
 function finishScan(faces: State['faces'], failed = false) {
@@ -384,20 +430,108 @@ function finishScan(faces: State['faces'], failed = false) {
   elements.hint.textContent = failed ? es.upload.detectFailed : es.upload.noFaces;
 }
 
+async function detectForMatch(people: State['faces']) {
+  try {
+    await elements.photo.decode();
+    return await detect(people.map((person) => person.emoji));
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
+}
+
+// The faces stay uncovered and the game untouched until every name has found its face.
+async function startMatch(image: string) {
+  const draft: Match = { image, faces: [], people: peopleToPlace(state.faces), selected: '' };
+  match = draft;
+  scanning = true;
+  setPeek(true);
+  setMode('pay');
+  render();
+  const faces = await detectForMatch(draft.people);
+  if (match !== draft) return;
+  scanning = false;
+  draft.faces = faces.sort((first, second) => first.x - second.x);
+  draft.selected = nextFreeFace(draft.faces, draft.people);
+  render();
+}
+
+// Markers only ever get appended, so leaving the draft rebuilds them in the game's order.
+function leaveMatch() {
+  match = null;
+  elements.faces.replaceChildren();
+  faceMarkers.clear();
+}
+
+function closeMatch() {
+  leaveMatch();
+  scanning = false;
+  setPeek(false);
+  setMode('pay');
+  render();
+}
+
+function finishMatch(draft: Match) {
+  const aspectRatio = elements.photo.naturalWidth / elements.photo.naturalHeight;
+  leaveMatch();
+  setPhoto(draft.image, seatAtBottom(draft.faces, unplaced(draft.people, draft.faces), aspectRatio));
+}
+
+function pickMatchFace(draft: Match, faceId: string) {
+  const index = draft.faces.findIndex((face) => face.id === faceId);
+  if (draft.people.some((person) => person.id === faceId)) draft.faces = freeFace(draft.faces, faceId);
+  draft.selected = draft.faces[index].id;
+  render();
+}
+
+function placeInMatch(draft: Match, personId: string) {
+  const person = draft.people.find((candidate) => candidate.id === personId)!;
+  draft.faces = placePerson(draft.faces, draft.selected, person);
+  draft.selected = nextFreeFace(draft.faces, draft.people);
+  render();
+  announce(es.match.placed(who(person)));
+  elements.matchNames.querySelector('button')?.focus();
+}
+
+function addMatchFace(draft: Match, event: MouseEvent) {
+  draft.faces = faceAtClick(draft.faces, event);
+  draft.selected = draft.faces[draft.faces.length - 1].id;
+  render();
+}
+
+elements.matchNames.addEventListener('click', (event) => {
+  const chip = (event.target as HTMLElement).closest<HTMLButtonElement>('.match-name');
+  if (chip && match) placeInMatch(match, chip.dataset.id!);
+});
+
+elements.matchRemove.addEventListener('click', () => {
+  if (!match) return;
+  match.faces = removeFace(match.faces, match.selected);
+  match.selected = nextFreeFace(match.faces, match.people);
+  render();
+});
+
+elements.matchCancel.addEventListener('click', closeMatch);
+elements.matchDone.addEventListener('click', () => match && finishMatch(match));
+
 async function handleFile(file: File | undefined) {
   if (!file?.type.startsWith('image/')) {
     elements.exportMsg.textContent = file ? es.upload.notImage : '';
     return;
   }
   const gameId = state.id;
+  const hasNames = state.faces.some((face) => face.name);
   try {
-    startScan(await fileToDataUrl(file));
+    const image = await fileToDataUrl(file);
+    if (hasNames) return await startMatch(image);
+    startScan(image);
     await elements.photo.decode();
     const faces = await detect();
     if (state.id === gameId) finishScan(faces);
   } catch (error) {
     console.error(error);
-    if (state.id === gameId) finishScan([], true);
+    if (hasNames) elements.exportMsg.textContent = es.upload.notImage;
+    else if (state.id === gameId) finishScan([], true);
   }
 }
 
@@ -486,8 +620,8 @@ elements.peopleList.addEventListener('paste', (event) => {
 });
 
 elements.newPhoto.addEventListener('click', () => {
-  const wouldLoseWork = state.faces.some((face) => face.paid || face.name);
-  if (!wouldLoseWork || confirm(es.upload.changePhotoConfirm)) elements.file.click();
+  const wouldLosePayments = state.faces.some((face) => face.paid) && !state.faces.some((face) => face.name);
+  if (!wouldLosePayments || confirm(es.upload.changePhotoConfirm)) elements.file.click();
 });
 
 const faceTarget = (event: Event) => (event.target as HTMLElement).closest<HTMLElement>('.face');
@@ -500,17 +634,22 @@ function onFaceClick(faceId: string) {
   announce(es.faces.announce(personName(state.faces[index], index), state.faces[index].paid, totals.paid, totals.people));
 }
 
-function onEmptyClick(event: MouseEvent) {
+function faceAtClick(faces: State['faces'], event: MouseEvent) {
   const rect = elements.faces.getBoundingClientRect();
   const centerX = (event.clientX - rect.left) / rect.width;
   const centerY = (event.clientY - rect.top) / rect.height;
-  update({ faces: addFaceAt(state.faces, centerX, centerY, rect.width / rect.height, state.blocked) });
+  return addFaceAt(faces, centerX, centerY, rect.width / rect.height, state.blocked);
 }
+
+const onEmptyClick = (event: MouseEvent) => update({ faces: faceAtClick(state.faces, event) });
 
 elements.faces.addEventListener('click', (event) => {
   if (scanning) return;
   const target = faceTarget(event);
-  if (target) onFaceClick(target.dataset.id!);
+  if (match) {
+    if (target) pickMatchFace(match, target.dataset.id!);
+    else addMatchFace(match, event);
+  } else if (target) onFaceClick(target.dataset.id!);
   else if (mode === 'edit') onEmptyClick(event);
 });
 
@@ -528,7 +667,7 @@ function isRepeatedBlock(faceId: string) {
 }
 
 function blockEmojiOf(faceId: string) {
-  if (isRepeatedBlock(faceId)) return;
+  if (match || isRepeatedBlock(faceId)) return;
   const result = blockEmoji(state, faceId);
   if (!result.ok) {
     if (result.reason === 'too-few') elements.hint.textContent = es.hints.tooFewEmojis;
@@ -835,6 +974,7 @@ async function renderHistoryList() {
 async function switchTo(game: Game) {
   await flush();
   scanning = false;
+  match = null;
   clearTimeout(syncTimer);
   syncPending = false;
   payNeedsSync = false;

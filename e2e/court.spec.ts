@@ -83,6 +83,27 @@ test('a game without photo starts from the group list, charges a fixed share and
   await expect(viewer.locator('#panel')).not.toContainText('100');
 });
 
+test('a photo for a named list waits for "Listo" with each name on its face', async ({ page }) => {
+  // Face detection runs on the CI CPU and can take most of the default 30s on its own.
+  test.slow();
+  await page.goto('/');
+  await page.locator('#startPeople').fill('1. Juan\n2. Pedro');
+  await page.getByRole('button', { name: 'Empezar sin foto' }).click();
+  await page.locator('#file').setInputFiles({ name: 'team.jpg', mimeType: 'image/jpeg', buffer: await teamPhoto(page) });
+  await expect(page.locator('#matcher')).toBeVisible();
+  await expect(page.locator('#scanning')).toBeHidden({ timeout: 60_000 });
+
+  const stage = page.locator('#stage');
+  const box = (await stage.boundingBox())!;
+  await stage.click({ position: { x: box.width * 0.3, y: box.height * 0.4 } });
+  await page.getByRole('button', { name: /Juan/ }).click();
+  await page.locator('#matchDone').click();
+
+  await expect(page.locator('#matcher')).toBeHidden();
+  await expect(page.locator('#stageArea')).not.toHaveClass(/is-grid/);
+  await expect(page.locator('#faces .face-name')).toHaveText(['Juan', 'Pedro']);
+});
+
 test('footer shows the app version and the court keeps its colors', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(35, 64, 200)');

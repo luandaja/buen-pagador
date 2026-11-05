@@ -65,6 +65,42 @@ export function fillNames(faces: Face[], start: number, names: string[], blocked
   return people.map((face, index) => (index >= start && index < start + names.length ? named(face, names[index - start]) : face));
 }
 
+// A photo for people who already have a name: who still needs a face, and how they take one.
+export const peopleToPlace = (faces: Face[]): Face[] => faces.filter((face) => face.name || face.paid);
+
+export const unplaced = (people: Face[], faces: Face[]): Face[] =>
+  people.filter((person) => !faces.some((face) => face.id === person.id));
+
+export const nextFreeFace = (faces: Face[], people: Face[]): string => unplaced(faces, people)[0]?.id ?? '';
+
+export const placePerson = (faces: Face[], faceId: string, person: Face): Face[] =>
+  faces.map((face) => (face.id === faceId ? { ...person, x: face.x, y: face.y, w: face.w, h: face.h } : face));
+
+export const freeFace = (faces: Face[], faceId: string): Face[] =>
+  faces.map((face) => (face.id === faceId ? { ...face, id: createId(), name: undefined, paid: false } : face));
+
+const SEAT_STEP = 1.5;
+const SEAT_ROW = 1.6;
+
+// Nobody leaves the game for not being on the photo: they line up along its bottom edge, with room for their names.
+export function seatAtBottom(faces: Face[], people: Face[], aspectRatio: number): Face[] {
+  const perRow = (size: number) => Math.max(1, Math.floor(1 / (size * SEAT_STEP)));
+  const rowsHeight = (size: number) => Math.ceil(people.length / perRow(size)) * size * aspectRatio * SEAT_ROW;
+  let width = defaultFaceSize(faces);
+  while (rowsHeight(width) > 1) width *= 0.9;
+  const height = width * aspectRatio;
+  const step = width * SEAT_STEP;
+  const columns = perRow(width);
+  const seated = people.map((person, index) => ({
+    ...person,
+    x: (index % columns) * step + (step - width) / 2,
+    y: 1 - height * SEAT_ROW * (Math.floor(index / columns) + 1),
+    w: width,
+    h: height,
+  }));
+  return [...faces, ...seated];
+}
+
 const LIST_MARKER = /^\s*(?:\d+\s*[.)\-:]+|[-–•·*]\s)\s*/;
 const NOISE = /[\u2705\u2714\u2611\u2713\uFE0F*_]/gu;
 
