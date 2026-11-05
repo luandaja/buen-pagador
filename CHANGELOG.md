@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.18.1](https://github.com/luandaja/buen-pagador/compare/v1.17.1...v1.18.1) (2026-11-05)
+
+### Features
+
+* match names to faces before a photo replaces the list ([ba35ffc](https://github.com/luandaja/buen-pagador/commit/ba35ffc8f493dd2f48479fd23e03e324a1a3b296))
+
+### Other Changes
+
+* find the next free face with unplaced ([ad3a3e2](https://github.com/luandaja/buen-pagador/commit/ad3a3e2202b7e8fc9b1276376dcb3dd10a3cd670))
+
 ## [1.17.1](https://github.com/luandaja/buen-pagador/compare/v1.16.2...v1.17.1) (2026-10-22)
 
 ### Features
