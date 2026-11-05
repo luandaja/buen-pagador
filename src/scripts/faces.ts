@@ -71,8 +71,7 @@ export const peopleToPlace = (faces: Face[]): Face[] => faces.filter((face) => f
 export const unplaced = (people: Face[], faces: Face[]): Face[] =>
   people.filter((person) => !faces.some((face) => face.id === person.id));
 
-export const nextFreeFace = (faces: Face[], people: Face[]): string =>
-  faces.find((face) => !people.some((person) => person.id === face.id))?.id ?? '';
+export const nextFreeFace = (faces: Face[], people: Face[]): string => unplaced(faces, people)[0]?.id ?? '';
 
 export const placePerson = (faces: Face[], faceId: string, person: Face): Face[] =>
   faces.map((face) => (face.id === faceId ? { ...person, x: face.x, y: face.y, w: face.w, h: face.h } : face));
