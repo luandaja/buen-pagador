@@ -209,7 +209,7 @@ describe('parseNames', () => {
 
 describe('labels', () => {
   it('labels each face by mode', () => {
-    expect(faceLabel(make('a', '🐸'), 0, 'edit')).toBe(es.faces.remove(es.faces.person(1)));
+    expect(faceLabel(make('a', '🐸'), 0, 'edit')).toBe(es.faces.rename(es.faces.person(1)));
     expect(faceLabel(make('a', '🐸', true), 1, 'pay')).toBe(es.faces.paidUndo(es.faces.person(2)));
     expect(faceLabel({ ...make('a', '🐸'), name: 'Juan' }, 2, 'pay')).toBe(es.faces.owesMark('Juan'));
   });

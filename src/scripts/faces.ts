@@ -154,7 +154,7 @@ export function blockEmoji(state: Pick<State, 'faces' | 'blocked'>, faceId: stri
 
 export function faceLabel(face: Face, index: number, mode: Mode): string {
   const who = personName(face, index);
-  if (mode === 'edit') return es.faces.remove(who);
+  if (mode === 'edit') return es.faces.rename(who);
   return face.paid ? es.faces.paidUndo(who) : es.faces.owesMark(who);
 }
 
